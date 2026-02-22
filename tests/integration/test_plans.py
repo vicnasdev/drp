@@ -493,7 +493,7 @@ def _delete_all_collections(session):
                 csrf = get_csrf(HOST, session)
                 session.post(
                     f'{HOST}/collections/{col_id}/delete/',
-                    headers={'X-CSRFToken': csrf},
+                    headers={'X-CSRFToken': csrf, 'Referer': HOST + '/'},
                 )
 
 
