@@ -8,6 +8,10 @@
   <div class="account-header">
     <h1>account</h1>
     <p class="muted">{{ user.email }}</p>
+    <p class="muted" style="font-size:.85rem">
+      @{{ user.username }} ·
+      <a href="/@{{ user.username }}/">your collections</a>
+    </p>
   </div>
 
   {% if not profile.email_verified %}
@@ -142,6 +146,11 @@
         <li>♻️ renewable drops</li>
         <li>📅 explicit expiry dates</li>
         <li>📦 {{ plan_limits.max_file_mb }}MB per file · {{ plan_limits.storage_gb }}GB total</li>
+        <li>📁
+          {% if plan_limits.max_collections %}up to {{ plan_limits.max_collections }} collections
+          {% else %}unlimited collections{% endif %}
+          · <a href="/@{{ user.username }}/">view yours</a>
+        </li>
       </ul>
     </div>
     <a href="/billing/portal/" class="btn-sm">manage subscription →</a>
@@ -166,6 +175,7 @@
           <li>Drops locked to your account</li>
           <li>Renewable drops</li>
           <li>🔑 Password-protect drops</li>
+          <li>📁 Up to 10 collections</li>
         </ul>
         <a href="/billing/checkout/starter/"
            class="btn" style="margin-top:1rem;display:block;text-align:center">upgrade →</a>
@@ -180,6 +190,7 @@
           <li>Drops locked to your account</li>
           <li>Renewable drops</li>
           <li>🔑 Password-protect drops</li>
+          <li>📁 Unlimited collections</li>
         </ul>
         <a href="/billing/checkout/pro/"
            class="btn" style="margin-top:1rem;display:block;text-align:center">upgrade →</a>
@@ -191,17 +202,31 @@
   <div class="account-section">
     <h2>notifications</h2>
     <p class="muted" style="font-size:.85rem;margin-bottom:1rem">
-      Control which emails drp sends you.
+      Control which emails drp sends you. Transactional emails (password resets, email verification) are always sent.
     </p>
-    <form method="post" action="{% url 'account_settings' %}" style="margin:0">
+    <form method="post" action="{% url 'account_settings' %}" style="margin:0;display:flex;flex-direction:column;gap:.75rem">
       {% csrf_token %}
+      <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;font-size:.9rem">
+        <input type="checkbox" name="notify_product_updates" value="1"
+               {% if profile.notify_product_updates %}checked{% endif %}
+               style="width:1rem;height:1rem;accent-color:var(--accent);flex-shrink:0"/>
+        <span>Product updates &amp; announcements</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;font-size:.9rem">
+        <input type="checkbox" name="notify_billing" value="1"
+               {% if profile.notify_billing %}checked{% endif %}
+               style="width:1rem;height:1rem;accent-color:var(--accent);flex-shrink:0"/>
+        <span>Billing notices (receipts, failed charges, plan changes)</span>
+      </label>
       <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;font-size:.9rem">
         <input type="checkbox" name="notify_bug_fix" value="1"
                {% if profile.notify_bug_fix %}checked{% endif %}
-               style="width:1rem;height:1rem;accent-color:var(--accent);flex-shrink:0"
-               onchange="this.form.submit()"/>
+               style="width:1rem;height:1rem;accent-color:var(--accent);flex-shrink:0"/>
         <span>Email me when a bug I reported is fixed</span>
       </label>
+      <div style="margin-top:.25rem">
+        <button type="submit" class="btn-sm">save preferences</button>
+      </div>
     </form>
   </div>
 

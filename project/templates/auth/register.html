@@ -12,8 +12,16 @@
   <form method="post" class="auth-form" id="registerForm">
     {% csrf_token %}
     <div class="field">
+      <label for="username">Username</label>
+      <input type="text" name="username" id="username" required autofocus
+             placeholder="alice"
+             pattern="[a-zA-Z0-9_\-]{1,30}"
+             title="Letters, numbers, hyphens and underscores only (max 30 chars)"/>
+      <p class="field-hint muted">Used in collection URLs: /@alice/my-collection/</p>
+    </div>
+    <div class="field">
       <label for="email">Email</label>
-      <input type="email" name="email" id="email" required autofocus placeholder="you@example.com"/>
+      <input type="email" name="email" id="email" required placeholder="you@example.com"/>
     </div>
     <div class="field">
       <label for="password">Password</label>
@@ -83,6 +91,7 @@
 .plan-option-price span { font-size: .78rem; font-weight: 400; color: var(--muted); }
 .plan-option-detail { font-size: .72rem; color: var(--muted); margin-top: .15rem; }
 @media (max-width: 400px) { .plan-picker { grid-template-columns: 1fr; } }
+.field-hint { font-size: .72rem; margin-top: .2rem; }
 </style>
 
 <script>

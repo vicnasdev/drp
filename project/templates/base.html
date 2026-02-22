@@ -23,7 +23,7 @@
       {% if user.is_authenticated %}
         <a href="/auth/account/">
           {% if user.profile.is_paid %}<span class="plan-badge">{{ user.profile.plan }}</span> {% endif %}
-          {{ user.email }}
+          @{{ user.username }}
         </a>
         <a href="/auth/logout/">log out</a>
       {% else %}

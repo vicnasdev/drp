@@ -69,9 +69,39 @@
         <button class="btn-sm" onclick="copyContent()">copy text</button>
         <button class="btn-sm" onclick="downloadText()">download .txt</button>
         {% if can_edit %}<button class="btn-sm" onclick="toggleEdit()">edit</button>{% endif %}
+        <button class="btn-sm" id="compareBtn" onclick="toggleCompare()">compare</button>
         {% load drop_tags %}
         {% include "partials/bookmark_btn.html" with drop=drop ns=drop.ns key=drop.key %}
       </div>
+    </div>
+
+    <!-- Compare panel -->
+    <div id="comparePanel" style="display:none;margin-top:1rem">
+      <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.6rem">
+        <input id="compareKeyInput" type="text" placeholder="compare with key…"
+               style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:.9rem;padding:.4rem .7rem;outline:none"
+               onkeydown="if(event.key==='Enter')runCompare()"/>
+        <button class="btn-sm" onclick="runCompare()">diff</button>
+        <button class="btn-sm" onclick="toggleCompare()">✕</button>
+      </div>
+      <!-- Password prompts (shown reactively on 401) -->
+      <div id="comparePwA" style="display:none;margin-bottom:.4rem">
+        <label style="font-size:.82rem;color:var(--muted)">password for /{{ drop.key }}/</label>
+        <div style="display:flex;gap:.5rem;margin-top:.25rem">
+          <input id="comparePwAInput" type="password" placeholder="password…"
+                 style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:.9rem;padding:.4rem .7rem;outline:none"
+                 onkeydown="if(event.key==='Enter')runCompare()"/>
+        </div>
+      </div>
+      <div id="comparePwB" style="display:none;margin-bottom:.4rem">
+        <label id="comparePwBLabel" style="font-size:.82rem;color:var(--muted)">password for key</label>
+        <div style="display:flex;gap:.5rem;margin-top:.25rem">
+          <input id="comparePwBInput" type="password" placeholder="password…"
+                 style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:.9rem;padding:.4rem .7rem;outline:none"
+                 onkeydown="if(event.key==='Enter')runCompare()"/>
+        </div>
+      </div>
+      <div id="diffOutput"></div>
     </div>
     {% if can_edit %}
     <form id="editForm" class="clip-form hidden" style="margin-top:1rem">
@@ -93,8 +123,16 @@
         <div class="fname">{{ drop.filename }}</div>
         <div class="fsize muted">{{ drop.filesize|filesizeformat }}</div>
       </div>
-      <a href="/f/{{ drop.key }}/download/" class="btn">↓ download</a>
+      <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+        <a href="/f/{{ drop.key }}/download/" class="btn">↓ download</a>
+        {% with ext=drop.filename|lower %}
+        {% if '.md' in ext or '.py' in ext or '.js' in ext or '.ts' in ext or '.json' in ext or '.yaml' in ext or '.yml' in ext or '.html' in ext or '.css' in ext or '.sh' in ext or '.txt' in ext or '.go' in ext or '.rs' in ext or '.rb' in ext or '.java' in ext or '.c' in ext or '.cpp' in ext or '.toml' in ext or '.xml' in ext or '.csv' in ext %}
+        <button class="btn-sm" id="renderBtn" onclick="toggleRender()">render</button>
+        {% endif %}
+        {% endwith %}
+      </div>
     </div>
+    <div id="renderPane" class="render-pane" style="display:none"></div>
     <div class="clip-actions">
       {% load drop_tags %}
       {% include "partials/bookmark_btn.html" with drop=drop ns=drop.ns key=drop.key %}
@@ -149,6 +187,18 @@
 {% if drop.kind == 'text' %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/diff2html/3.4.47/bundles/css/diff2html.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/diff2html/3.4.47/bundles/js/diff2html-ui.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.1.0/diff.min.js"></script>
+{% endif %}
+{% if drop.kind == 'file' %}
+{% with ext=drop.filename|lower %}
+{% if '.md' in ext or '.py' in ext or '.js' in ext or '.ts' in ext or '.json' in ext or '.yaml' in ext or '.yml' in ext or '.html' in ext or '.css' in ext or '.sh' in ext or '.txt' in ext or '.go' in ext or '.rs' in ext or '.rb' in ext or '.java' in ext or '.c' in ext or '.cpp' in ext or '.toml' in ext or '.xml' in ext or '.csv' in ext %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+{% endif %}
+{% endwith %}
 {% endif %}
 
 <script>
@@ -378,6 +428,198 @@ async function removePassword() {
     setTimeout(() => location.reload(), 800);
   } else {
     showToast(data.error || 'Failed.');
+  }
+}
+
+// ── Web diff ──────────────────────────────────────────────────────────────────
+
+let _compareOpen = false;
+
+function toggleCompare() {
+  const panel = document.getElementById('comparePanel');
+  const btn   = document.getElementById('compareBtn');
+  if (!panel || !btn) return;
+  _compareOpen = !_compareOpen;
+  panel.style.display = _compareOpen ? 'block' : 'none';
+  btn.textContent = _compareOpen ? 'close' : 'compare';
+  if (_compareOpen) {
+    document.getElementById('compareKeyInput')?.focus();
+    document.getElementById('diffOutput').innerHTML = '';
+    document.getElementById('comparePwA').style.display = 'none';
+    document.getElementById('comparePwB').style.display = 'none';
+  }
+}
+
+async function _fetchDrop(key, ns, password) {
+  const url = ns === 'f' ? `${BASE}/f/${key}/` : `${BASE}/${key}/`;
+  const headers = { 'Accept': 'application/json' };
+  if (password) headers['X-Drop-Password'] = password;
+  const res = await fetch(url, { headers });
+  return res;
+}
+
+async function runCompare() {
+  const keyB = document.getElementById('compareKeyInput')?.value?.trim();
+  if (!keyB) return;
+
+  const output  = document.getElementById('diffOutput');
+  const pwAEl   = document.getElementById('comparePwA');
+  const pwBEl   = document.getElementById('comparePwB');
+  const pwAInput = document.getElementById('comparePwAInput');
+  const pwBInput = document.getElementById('comparePwBInput');
+
+  output.innerHTML = '<span style="color:var(--muted);font-size:.85rem">fetching…</span>';
+
+  const pwA = pwAInput?.value || '';
+  const pwB = pwBInput?.value || '';
+
+  // Fetch both drops
+  let resA, resB;
+  try {
+    [resA, resB] = await Promise.all([
+      _fetchDrop(KEY, NS, pwA),
+      _fetchDrop(keyB, 'c', pwB),
+    ]);
+  } catch (e) {
+    output.innerHTML = `<span style="color:var(--danger)">✗ network error: ${e.message}</span>`;
+    return;
+  }
+
+  // Handle 401s reactively
+  let needsRetry = false;
+  if (resA.status === 401) {
+    pwAEl.style.display = 'block';
+    pwAInput?.focus();
+    needsRetry = true;
+  }
+  if (resB.status === 401) {
+    document.getElementById('comparePwBLabel').textContent = `password for /${keyB}/`;
+    pwBEl.style.display = 'block';
+    if (!needsRetry) pwBInput?.focus();
+    needsRetry = true;
+  }
+  if (needsRetry) {
+    output.innerHTML = '<span style="color:var(--muted);font-size:.85rem">enter password(s) above and click diff again.</span>';
+    return;
+  }
+
+  // Parse responses
+  let dataA, dataB;
+  try { dataA = await resA.json(); } catch { dataA = null; }
+  try { dataB = await resB.json(); } catch { dataB = null; }
+
+  if (!resA.ok || !dataA) {
+    output.innerHTML = `<span style="color:var(--danger)">✗ /${KEY}/ not found or not accessible (${resA.status})</span>`;
+    return;
+  }
+  if (!resB.ok || !dataB) {
+    output.innerHTML = `<span style="color:var(--danger)">✗ /${keyB}/ not found or not accessible (${resB.status})</span>`;
+    return;
+  }
+  if (dataA.kind !== 'text') {
+    output.innerHTML = `<span style="color:var(--danger)">✗ /${KEY}/ is a file drop — diff not supported</span>`;
+    return;
+  }
+  if (dataB.kind !== 'text') {
+    output.innerHTML = `<span style="color:var(--danger)">✗ /${keyB}/ is a file drop — diff not supported</span>`;
+    return;
+  }
+
+  // Hide password inputs now that we have the content
+  pwAEl.style.display = 'none';
+  pwBEl.style.display = 'none';
+  pwAInput.value = '';
+  pwBInput.value = '';
+
+  const contentA = dataA.content || '';
+  const contentB = dataB.content || '';
+
+  if (contentA === contentB) {
+    output.innerHTML = `<p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">✓ /${KEY}/ and /${keyB}/ are identical.</p>`;
+    return;
+  }
+
+  // Build unified diff string using jsdiff
+  const patch = Diff.createPatch(`/${KEY}/`, contentA, contentB, `/${KEY}/`, `/${keyB}/`);
+
+  // Render with diff2html
+  output.innerHTML = '';
+  const diff2htmlUi = new Diff2HtmlUI(output, patch, {
+    drawFileList:    false,
+    matching:        'lines',
+    outputFormat:    'line-by-line',
+    highlight:       true,
+    renderNothingWhenEmpty: false,
+  });
+  diff2htmlUi.draw();
+  diff2htmlUi.highlightCode();
+}
+
+
+const RENDERABLE_EXT = /\.(md|markdown|py|js|ts|jsx|tsx|json|yaml|yml|html|css|sh|bash|txt|go|rs|rb|java|c|cpp|h|toml|xml|csv)$/i;
+const MD_EXT         = /\.(md|markdown)$/i;
+
+let _rendered = false;
+let _renderContent = null;
+
+async function toggleRender() {
+  const pane = document.getElementById('renderPane');
+  const btn  = document.getElementById('renderBtn');
+  if (!pane || !btn) return;
+
+  if (_rendered) {
+    pane.style.display = 'none';
+    btn.textContent = 'render';
+    _rendered = false;
+    return;
+  }
+
+  btn.textContent = 'loading…';
+  btn.disabled = true;
+
+  try {
+    if (!_renderContent) {
+      // Fetch presigned URL then content
+      const meta = await fetch(window.location.pathname, {
+        headers: { Accept: 'application/json' },
+      });
+      const data = await meta.json();
+      const fileUrl = data.presigned_url || data.file_url;
+      if (!fileUrl) throw new Error('No file URL available');
+      const resp = await fetch(fileUrl);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      _renderContent = await resp.text();
+    }
+
+    const filename = document.querySelector('.fname')?.textContent?.trim() || '';
+    pane.innerHTML = '';
+
+    if (MD_EXT.test(filename) && typeof marked !== 'undefined') {
+      pane.innerHTML = marked.parse(_renderContent);
+      pane.className = 'render-pane render-pane--md';
+    } else {
+      // Code: wrap in <pre><code> and highlight
+      const pre  = document.createElement('pre');
+      const code = document.createElement('code');
+      code.textContent = _renderContent;
+      // Guess language from extension
+      const ext = filename.split('.').pop().toLowerCase();
+      if (ext) code.className = `language-${ext}`;
+      pre.appendChild(code);
+      pane.innerHTML = '';
+      pane.appendChild(pre);
+      pane.className = 'render-pane render-pane--code';
+      if (typeof hljs !== 'undefined') hljs.highlightElement(code);
+    }
+
+    pane.style.display = 'block';
+    btn.textContent = 'source';
+    _rendered = true;
+  } catch (e) {
+    showToast('Could not fetch file content.');
+    btn.textContent = 'render';
+  } finally {
+    btn.disabled = false;
   }
 }
 </script>

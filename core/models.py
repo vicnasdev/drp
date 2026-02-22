@@ -31,6 +31,7 @@ class Plan:
             "storage_gb":                 None,
             "renewals":                   0,
             "password_protection":        False,
+            "max_collections":            0,
         },
         FREE: {
             "label":                      "Free",
@@ -45,6 +46,7 @@ class Plan:
             "storage_gb":                 None,
             "renewals":                   0,
             "password_protection":        False,
+            "max_collections":            0,
         },
         STARTER: {
             "label":                      "Starter",
@@ -57,6 +59,7 @@ class Plan:
             "storage_gb":                 5,
             "renewals":                   None,   # unlimited
             "password_protection":        True,
+            "max_collections":            10,
         },
         PRO: {
             "label":                      "Pro",
@@ -69,12 +72,91 @@ class Plan:
             "storage_gb":                 20,
             "renewals":                   None,   # unlimited
             "password_protection":        True,
+            "max_collections":            None,   # unlimited
         },
     }
 
     @classmethod
     def get(cls, plan_key, field):
-        return cls.LIMITS.get(plan_key, cls.LIMITS[cls.ANON])[field]
+        """Read a plan limit. Checks DB first (with in-process cache), falls back to LIMITS dict."""
+        return PlanLimit.get(plan_key, field)
+
+
+# ── PlanLimit (DB-backed limits) ──────────────────────────────────────────────
+
+_plan_limit_cache: dict = {}
+
+
+class PlanLimit(models.Model):
+    """
+    One row per plan. Limits that were hardcoded in Plan.LIMITS are now rows here.
+    Edit via Django admin or data migrations — no code deploy needed.
+    """
+    plan = models.CharField(max_length=16, unique=True)
+
+    label         = models.CharField(max_length=64)
+    price_monthly = models.PositiveIntegerField(default=0)
+
+    max_file_mb                = models.PositiveIntegerField(null=True, blank=True)
+    max_text_kb                = models.PositiveIntegerField(null=True, blank=True)
+    max_expiry_days            = models.PositiveIntegerField(null=True, blank=True)
+    clipboard_idle_hours       = models.PositiveIntegerField(null=True, blank=True)
+    clipboard_max_lifetime_days = models.PositiveIntegerField(null=True, blank=True)
+    storage_gb                 = models.PositiveIntegerField(null=True, blank=True)
+    renewals                   = models.PositiveIntegerField(null=True, blank=True,
+                                     help_text="null = unlimited, 0 = none")
+    password_protection        = models.BooleanField(default=False)
+    max_collections            = models.PositiveIntegerField(null=True, blank=True,
+                                     help_text="null = unlimited, 0 = none")
+
+    class Meta:
+        ordering = ["price_monthly"]
+
+    def __str__(self):
+        return f"{self.plan} (${self.price_monthly}/mo)"
+
+    def as_dict(self) -> dict:
+        return {
+            "label":                       self.label,
+            "price_monthly":               self.price_monthly,
+            "max_file_mb":                 self.max_file_mb,
+            "max_text_kb":                 self.max_text_kb,
+            "max_expiry_days":             self.max_expiry_days,
+            "clipboard_idle_hours":        self.clipboard_idle_hours,
+            "clipboard_max_lifetime_days": self.clipboard_max_lifetime_days,
+            "storage_gb":                  self.storage_gb,
+            "renewals":                    self.renewals,
+            "password_protection":         self.password_protection,
+            "max_collections":             self.max_collections,
+        }
+
+    @classmethod
+    def _load_cache(cls):
+        global _plan_limit_cache
+        try:
+            _plan_limit_cache = {row.plan: row.as_dict() for row in cls.objects.all()}
+        except Exception:
+            # Table may not exist yet during first migrate — fall back to hardcoded dict
+            _plan_limit_cache = dict(Plan.LIMITS)
+
+    @classmethod
+    def invalidate_cache(cls):
+        global _plan_limit_cache
+        _plan_limit_cache = {}
+
+    @classmethod
+    def get(cls, plan_key, field):
+        if not _plan_limit_cache:
+            cls._load_cache()
+        limits = _plan_limit_cache.get(plan_key, _plan_limit_cache.get(Plan.ANON, {}))
+        return limits.get(field)
+
+    @classmethod
+    def all_as_dicts(cls) -> dict:
+        """Return {plan_key: {field: value}} — used by the help page."""
+        if not _plan_limit_cache:
+            cls._load_cache()
+        return dict(_plan_limit_cache)
 
 
 # ── UserProfile ───────────────────────────────────────────────────────────────
@@ -102,6 +184,14 @@ class UserProfile(models.Model):
     notify_bug_fix = models.BooleanField(
         default=True,
         help_text="Send an email when a bug the user reported is fixed (GitHub issue closed).",
+    )
+    notify_product_updates = models.BooleanField(
+        default=True,
+        help_text="Changelog, new features, and product announcements.",
+    )
+    notify_billing = models.BooleanField(
+        default=True,
+        help_text="Payment receipts, failed charges, and plan change confirmations.",
     )
 
     is_test = models.BooleanField(default=False, db_index=True,
@@ -361,6 +451,62 @@ def update_storage_on_delete(sender, instance, **kwargs):
                 "update_storage_on_delete: failed to update storage for user_id=%s",
                 instance.owner_id,
             )
+
+
+@receiver(post_delete, sender=Drop)
+def cleanup_collection_memberships(sender, instance, **kwargs):
+    """Remove any CollectionMembership rows pointing at a deleted drop."""
+    # Import here to avoid circular reference at module load time
+    from core.models import CollectionMembership
+    CollectionMembership.objects.filter(ns=instance.ns, key=instance.key).delete()
+
+
+# ── Collection ────────────────────────────────────────────────────────────────
+
+class Collection(models.Model):
+    owner      = models.ForeignKey(User, on_delete=models.CASCADE, related_name="collections")
+    slug       = models.SlugField(max_length=60)
+    name       = models.CharField(max_length=120)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("owner", "slug")]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"@{self.owner.username}/{self.slug}"
+
+    @property
+    def url_path(self):
+        return f"/@{self.owner.username}/{self.slug}/"
+
+    def can_edit(self, user):
+        return getattr(user, "is_authenticated", False) and self.owner_id == user.pk
+
+
+class CollectionMembership(models.Model):
+    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, related_name="memberships")
+    ns         = models.CharField(max_length=1, choices=Drop.NS_CHOICES)
+    key        = models.CharField(max_length=120)
+    added_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("collection", "ns", "key")]
+        ordering = ["-added_at"]
+
+    def __str__(self):
+        prefix = "f/" if self.ns == Drop.NS_FILE else ""
+        return f"{self.collection} → /{prefix}{self.key}/"
+
+    @property
+    def drop(self):
+        return Drop.objects.filter(ns=self.ns, key=self.key).first()
+
+    @property
+    def url_path(self):
+        if self.ns == Drop.NS_FILE:
+            return f"/f/{self.key}/"
+        return f"/{self.key}/"
 
 
 # ── SavedDrop ─────────────────────────────────────────────────────────────────

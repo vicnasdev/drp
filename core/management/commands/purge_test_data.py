@@ -12,7 +12,7 @@ Run in the deploy entrypoint BEFORE gunicorn starts. Safe to run manually:
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
-from core.models import Drop
+from core.models import Drop, Collection
 
 User = get_user_model()
 
@@ -26,6 +26,9 @@ class Command(BaseCommand):
         # Delete them first so SET_NULL on owner FK never produces orphans.
         drop_count, _ = Drop.objects.filter(is_test=True).delete()
 
+        # Purge collections owned by test users (memberships cascade automatically).
+        col_count, _ = Collection.objects.filter(owner__profile__is_test=True).delete()
+
         test_user_ids = list(
             User.objects.filter(profile__is_test=True).values_list('id', flat=True)
         )
@@ -33,6 +36,6 @@ class Command(BaseCommand):
         User.objects.filter(id__in=test_user_ids).delete()
 
         self.stdout.write(
-            f"purge_test_data: removed {user_count} test user(s) "
-            f"and {drop_count} test drop(s)."
+            f"purge_test_data: removed {user_count} test user(s), "
+            f"{drop_count} test drop(s), and {col_count} test collection(s)."
         )

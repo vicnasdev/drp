@@ -7,9 +7,13 @@ from .auth import register_view, login_view, logout_view, account_view, export_d
 from .bookmarks import save_bookmark, unsave_bookmark
 from .bug_report import report_bug_view
 from .legal import privacy_view, terms_view
-
 from .verify import resend_verification_view, verify_email_view
 from .mobile_blueprint import mobile_blueprint
+from .collections import (
+    user_collections, collection_view,
+    create_collection, add_to_collection, remove_from_collection,
+    rename_collection, delete_collection,
+)
 
 __all__ = [
     "home", "check_key", "save_drop", "clipboard_view", "file_view", "download_drop",
@@ -23,4 +27,7 @@ __all__ = [
     "resend_verification_view",
     "verify_email_view",
     "mobile_blueprint",
+    "user_collections", "collection_view",
+    "create_collection", "add_to_collection", "remove_from_collection",
+    "rename_collection", "delete_collection",
 ]

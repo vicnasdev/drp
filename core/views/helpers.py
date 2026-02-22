@@ -77,11 +77,36 @@ def max_lifetime_secs(user, ns):
     return None
 
 
+# ── Username validation ───────────────────────────────────────────────────────
+
+import re
+
+_USERNAME_RE = re.compile(r'^[a-zA-Z0-9_-]{1,30}$')
+
+
+def validate_username(username: str) -> str | None:
+    """
+    Validate a prospective username.
+    Returns an error string if invalid, None if OK.
+    """
+    if not username:
+        return 'Username is required.'
+    if not _USERNAME_RE.match(username):
+        return 'Username may only contain letters, numbers, hyphens and underscores (max 30 chars).'
+    return None
+
+
 # ── Key generation ────────────────────────────────────────────────────────────
+
+def is_valid_drop_key(key: str) -> bool:
+    """Drop keys must not start with @ (reserved for user namespaces)."""
+    return bool(key) and not key.startswith('@')
+
 
 def gen_key(ns):
     key = secrets.token_urlsafe(6)
-    while Drop.objects.filter(ns=ns, key=key).exists():
+    # token_urlsafe never produces @, but be explicit for safety
+    while Drop.objects.filter(ns=ns, key=key).exists() or not is_valid_drop_key(key):
         key = secrets.token_urlsafe(6)
     return key
 

@@ -61,12 +61,42 @@ def any_key_completer(prefix, parsed_args, **kwargs):
     return _complete(prefix, ns=None)
 
 
+def collection_slug_completer(prefix, parsed_args, **kwargs):
+    """Complete collection slugs from the account endpoint (via cache)."""
+    return _complete_collection_slugs(prefix)
+
+
 # ── Core ──────────────────────────────────────────────────────────────────────
 
 def _complete(prefix: str, ns: str | None) -> list[str]:
     keys = _read_cache(ns, prefix)
     _trigger_background_refresh()
     return keys
+
+
+def _complete_collection_slugs(prefix: str) -> list[str]:
+    """
+    Return collection slugs matching prefix.
+    Reads from a local collection slug cache (~/.config/drp/collections.json),
+    then triggers a background refresh so the next tab is up to date.
+    """
+    slugs = _read_collection_cache(prefix)
+    _trigger_background_refresh()
+    return slugs
+
+
+def _read_collection_cache(prefix: str) -> list[str]:
+    """Read collections.json and return matching slugs. Never raises."""
+    try:
+        from cli import config
+        cache_file = config.CONFIG_DIR / 'collections.json'
+        if not cache_file.exists():
+            return []
+        import json
+        data = json.loads(cache_file.read_text())
+        return [s for s in data if isinstance(s, str) and s.startswith(prefix)]
+    except Exception:
+        return []
 
 
 def _read_cache(ns: str | None, prefix: str) -> list[str]:
@@ -247,3 +277,12 @@ def _do_refresh(config, SESSION_FILE) -> None:
         reverse=True,
     )
     config.save_local_drops(merged)
+
+    # Also persist collection slugs for tab completion.
+    try:
+        import json
+        slugs = [col.get('slug', '') for col in data.get('collections', []) if col.get('slug')]
+        cache_file = config.CONFIG_DIR / 'collections.json'
+        cache_file.write_text(json.dumps(slugs))
+    except Exception:
+        pass

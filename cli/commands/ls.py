@@ -1,5 +1,5 @@
 """
-drp ls — list drops.
+drp ls — list drops and collections.
 
   drp ls             list keys (clipboards + files + saved)
   drp ls -l          long format with size, time, expiry (human-readable sizes)
@@ -7,7 +7,8 @@ drp ls — list drops.
   drp ls -t c        only clipboards
   drp ls -t f        only files
   drp ls -t s        only saved (bookmarked) drops
-  drp ls --export    export as JSON (includes saved)
+  drp ls --col       show collections instead
+  drp ls --export    export as JSON (includes saved and collections)
 """
 
 import json
@@ -80,6 +81,7 @@ def cmd_ls(args):
         sys.exit(1)
 
     from cli.spinner import Spinner
+    from cli.format import dim, green, cyan, yellow, magenta, blue, grey, bold
 
     try:
         with Spinner('loading'):
@@ -94,8 +96,23 @@ def cmd_ls(args):
         print(f'  ✗ Could not fetch drops: {e}')
         sys.exit(1)
 
-    drops = data.get('drops', [])
-    saved = data.get('saved', [])
+    drops       = data.get('drops', [])
+    saved       = data.get('saved', [])
+    collections = data.get('collections', [])
+
+    # ── Collections mode ──────────────────────────────────────────────────────
+    if getattr(args, 'col', False):
+        if not collections:
+            print(dim('  (no collections)'))
+            return
+        username = cfg.get('username', '')
+        for col in collections:
+            slug       = col.get('slug', '')
+            name       = col.get('name', slug)
+            drop_count = len(col.get('drops', []))
+            prefix     = f'@{username}/' if username else ''
+            print(f'  {magenta(prefix + slug):<32}  {dim(name)}  {grey(str(drop_count) + " drops")}')
+        return
 
     # ── Filter ────────────────────────────────────────────────────────────────
     ns_filter = getattr(args, 'type', None)
@@ -124,7 +141,7 @@ def cmd_ls(args):
 
     # ── Export ────────────────────────────────────────────────────────────────
     if getattr(args, 'export', False):
-        out = {'drops': drops, 'saved': saved}
+        out = {'drops': drops, 'saved': saved, 'collections': collections}
         json.dump(out, sys.stdout, indent=2)
         print()
         return
@@ -132,65 +149,71 @@ def cmd_ls(args):
     long_fmt = getattr(args, 'long', False)
     raw_bytes = getattr(args, 'bytes', False)
 
-    # ── Print ─────────────────────────────────────────────────────────────────
+    # ── Short format ──────────────────────────────────────────────────────────
     all_empty = not drops and not saved
     if all_empty:
-        print('  (no drops)')
+        print(dim('  (no drops)'))
         return
 
     if not long_fmt:
         for d in drops:
-            kind = 'file' if d['ns'] == 'f' else 'text'
-            print(f'{d["key"]}  [{kind}]')
+            key_str = cyan(d['key']) if d['ns'] == 'c' else blue('f/' + d['key'])
+            lock    = yellow(' 🔒') if d.get('locked') else ''
+            print(f'  {key_str}{lock}')
+        if drops and saved:
+            print()
         for s in saved:
-            kind = 'file' if s['ns'] == 'f' else 'text'
-            print(f'{s["key"]}  [{kind}] [saved]')
+            key_str = cyan(s['key']) if s['ns'] == 'c' else blue('f/' + s['key'])
+            print(f'  {key_str}  {dim("[saved]")}')
         return
 
+    # ── Long format ───────────────────────────────────────────────────────────
     def fmt_size(n):
         if n == 0:
             return '—'
         return str(n) if raw_bytes else _human(n)
 
     rows = []
-
     for d in drops:
-        kind    = '📎' if d['kind'] == 'file' else '📋'
-        ns_hint = '[file]' if d['ns'] == 'f' else '[text]'
+        is_file = d['ns'] == 'f'
+        key_col = blue(f'f/{d["key"]}') if is_file else cyan(d['key'])
         size    = fmt_size(d['filesize']) if d['kind'] == 'file' else '—'
         created = _since(d.get('created_at'))
-        expires = _until(d.get('expires_at')) if d.get('expires_at') else 'idle-based'
-        locked  = '🔒' if d.get('locked') else '  '
-        rows.append((kind, locked, d['key'], ns_hint, size, created, expires, ''))
+        expires = _until(d.get('expires_at')) if d.get('expires_at') else grey('idle')
+        lock    = yellow('🔒') if d.get('locked') else '  '
+        rows.append((lock, key_col, d['key'], size, created, expires, ''))
 
     if drops and saved:
-        rows.append(('', '', '', '', '', '', '', ''))
+        rows.append(None)  # separator
 
     for s in saved:
-        kind    = '📎' if s['ns'] == 'f' else '📋'
-        ns_hint = '[file]' if s['ns'] == 'f' else '[text]'
+        is_file = s['ns'] == 'f'
+        key_col = blue(f'f/{s["key"]}') if is_file else cyan(s['key'])
         saved_at = _since(s.get('saved_at'))
-        rows.append(('🔖', '  ', s['key'], ns_hint, '—', saved_at, '—', '[saved]'))
+        rows.append(('🔖', key_col, s['key'], '—', saved_at, '—', dim('[saved]')))
 
     if not rows:
-        print('  (no drops)')
+        print(dim('  (no drops)'))
         return
 
-    key_w     = max((len(r[2]) for r in rows if r[2]), default=4)
-    size_w    = max((len(r[4]) for r in rows if r[4]), default=4)
-    created_w = max((len(r[5]) for r in rows if r[5]), default=7)
-    exp_w     = max((len(r[6]) for r in rows if r[6]), default=10)
+    # Calculate widths from raw key strings (not colour-escaped)
+    key_w     = max((len(r[2]) + (2 if r[2] == r[2] else 0) for r in rows if r), default=4)
+    size_w    = max((len(r[3]) for r in rows if r), default=4)
+    created_w = max((len(r[4]) for r in rows if r), default=7)
 
-    for kind, lock, key, ns_hint, size, created, exp, tag in rows:
-        if not key:
+    for row in rows:
+        if row is None:
             print()
             continue
+        lock, key_col, raw_key, size, created, expires, tag = row
+        # Pad based on raw key length to keep columns aligned despite ANSI codes
+        is_file = raw_key.startswith('f/') or False
+        display_len = len(raw_key) + (2 if 'f/' not in raw_key[:2] else 0)
+        padding = ' ' * max(0, key_w - len(raw_key))
         print(
-            f'{kind} {lock}  '
-            f'{key:<{key_w}}  '
-            f'{ns_hint:<6}  '
-            f'{size:>{size_w}}  '
-            f'{created:>{created_w}}  '
-            f'{exp:<{exp_w}}'
+            f'  {lock}  {key_col}{padding}  '
+            f'{grey(size):>{size_w + 15}}  '
+            f'{grey(created):>{created_w + 15}}  '
+            f'{dim(expires)}'
             + (f'  {tag}' if tag else '')
         )

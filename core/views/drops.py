@@ -28,7 +28,7 @@ from core.views.b2 import object_key as b2_object_key
 from core.models import Drop, Plan, SavedDrop
 from .helpers import (
     user_plan, max_file_bytes, max_text_bytes, storage_ok,
-    is_paid_user, max_lifetime_secs, gen_key,
+    is_paid_user, max_lifetime_secs, gen_key, is_valid_drop_key,
     upload_to_b2, delete_from_b2, add_storage,
 )
 
@@ -82,6 +82,7 @@ def home(request):
     claimed = request.session.pop("claimed_drops", 0)
     server_drops = []
     saved_drops = []
+    collections = []
     if request.user.is_authenticated:
         server_drops = (
             Drop.objects
@@ -93,9 +94,15 @@ def home(request):
             .filter(user=request.user)
             .order_by("-saved_at")[:50]
         )
+        collections = (
+            request.user.collections
+            .prefetch_related("memberships")
+            .order_by("-created_at")[:50]
+        )
     return render(request, "home.html", {
         "server_drops": server_drops,
         "saved_drops": saved_drops,
+        "collections": collections,
         "claimed": claimed,
     })
 
@@ -107,6 +114,8 @@ def check_key(request):
     ns  = request.GET.get("ns", Drop.NS_CLIPBOARD)
     if not key:
         return JsonResponse({"error": "Key required."}, status=400)
+    if not is_valid_drop_key(key):
+        return JsonResponse({"available": False, "reserved": True, "ns": ns, "key": key})
     if key in _get_reserved_keys():
         return JsonResponse({"available": False, "reserved": True, "ns": ns, "key": key})
     taken = Drop.objects.filter(ns=ns, key=key).exists()
@@ -125,6 +134,9 @@ def save_drop(request):
 
     if key in _get_reserved_keys():
         return JsonResponse({"error": f'"{key}" is a reserved key.'}, status=400)
+
+    if not is_valid_drop_key(key):
+        return JsonResponse({"error": 'Keys cannot start with "@".'}, status=400)
 
     existing = Drop.objects.filter(ns=ns, key=key).first()
     if existing and existing.is_expired():
@@ -321,6 +333,9 @@ def upload_prepare(request):
 
     if key in _get_reserved_keys():
         return JsonResponse({"error": f'"{key}" is a reserved key.'}, status=400)
+
+    if not is_valid_drop_key(key):
+        return JsonResponse({"error": 'Keys cannot start with "@".'}, status=400)
 
     if size > max_file_bytes(request.user):
         limit = Plan.get(user_plan(request.user), "max_file_mb")

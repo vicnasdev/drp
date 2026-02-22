@@ -7,7 +7,7 @@ from django.shortcuts import render, redirect
 from django.urls import path
 from django.utils.html import format_html
 
-from .models import UserProfile, Drop, BugReport, EmailVerification
+from .models import UserProfile, Drop, BugReport, EmailVerification, Collection, CollectionMembership, PlanLimit
 
 
 # ── Broadcast email form ──────────────────────────────────────────────────────
@@ -211,3 +211,43 @@ class EmailVerificationAdmin(admin.ModelAdmin):
     list_display  = ('user', 'created_at', 'is_expired')
     search_fields = ('user__email',)
     readonly_fields = ('user', 'token', 'created_at')
+
+
+# ── Collection admin ──────────────────────────────────────────────────────────
+
+class CollectionMembershipInline(admin.TabularInline):
+    model = CollectionMembership
+    extra = 0
+    fields = ('ns', 'key', 'added_at')
+    readonly_fields = ('added_at',)
+
+
+@admin.register(Collection)
+class CollectionAdmin(admin.ModelAdmin):
+    list_display  = ('__str__', 'owner', 'slug', 'member_count', 'created_at')
+    list_filter   = ('owner__profile__plan',)
+    search_fields = ('slug', 'name', 'owner__username', 'owner__email')
+    readonly_fields = ('created_at',)
+    raw_id_fields = ('owner',)
+    inlines = (CollectionMembershipInline,)
+
+    @admin.display(description='drops')
+    def member_count(self, obj):
+        return obj.memberships.count()
+
+@admin.register(PlanLimit)
+class PlanLimitAdmin(admin.ModelAdmin):
+    list_display = (
+        'plan', 'label', 'price_monthly',
+        'max_file_mb', 'max_text_kb', 'storage_gb',
+        'max_collections', 'password_protection',
+    )
+    ordering = ('price_monthly',)
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        PlanLimit.invalidate_cache()
+
+    def delete_model(self, request, obj):
+        super().delete_model(request, obj)
+        PlanLimit.invalidate_cache()

@@ -20,7 +20,7 @@ class TestPlanLimitsSchema(TestCase):
     REQUIRED_FIELDS = [
         "label", "price_monthly", "max_file_mb", "max_text_kb",
         "max_expiry_days", "clipboard_idle_hours", "clipboard_max_lifetime_days",
-        "storage_gb", "renewals", "password_protection",
+        "storage_gb", "renewals", "password_protection", "max_collections",
     ]
 
     def _plan(self, key):
@@ -187,3 +187,157 @@ class TestUserProfileProperties(TestCase):
         u.profile.refresh_from_db()
         available = u.profile.storage_available_bytes()
         self.assertEqual(available, 4 * 1024 ** 3)
+
+
+# ── PlanLimit DB model ────────────────────────────────────────────────────────
+
+class TestPlanLimitModel(TestCase):
+    """PlanLimit rows in DB should match the hardcoded LIMITS dict exactly."""
+
+    def setUp(self):
+        # Seed rows the same way migration 0006 does
+        from core.models import PlanLimit
+        for plan_key, data in Plan.LIMITS.items():
+            PlanLimit.objects.update_or_create(plan=plan_key, defaults={
+                k: v for k, v in data.items() if k != 'label' or True
+            })
+        # Force cache reload
+        PlanLimit.invalidate_cache()
+
+    def test_all_four_plans_seeded(self):
+        from core.models import PlanLimit
+        self.assertEqual(PlanLimit.objects.count(), 4)
+
+    def test_plan_get_reads_from_db_not_dict(self):
+        """Plan.get() should now return values from PlanLimit, not LIMITS."""
+        from core.models import PlanLimit
+        # Change a DB value
+        PlanLimit.objects.filter(plan=Plan.STARTER).update(max_file_mb=9999)
+        PlanLimit.invalidate_cache()
+        self.assertEqual(Plan.get(Plan.STARTER, 'max_file_mb'), 9999)
+
+    def test_invalidate_cache_forces_reload(self):
+        from core.models import PlanLimit
+        PlanLimit.objects.filter(plan=Plan.PRO).update(storage_gb=99)
+        PlanLimit.invalidate_cache()
+        self.assertEqual(Plan.get(Plan.PRO, 'storage_gb'), 99)
+
+    def test_all_as_dicts_returns_all_plans(self):
+        from core.models import PlanLimit
+        PlanLimit.invalidate_cache()
+        d = PlanLimit.all_as_dicts()
+        self.assertIn(Plan.ANON, d)
+        self.assertIn(Plan.FREE, d)
+        self.assertIn(Plan.STARTER, d)
+        self.assertIn(Plan.PRO, d)
+
+    def test_as_dict_has_all_required_fields(self):
+        from core.models import PlanLimit
+        PlanLimit.invalidate_cache()
+        d = PlanLimit.all_as_dicts()
+        required = [
+            'label', 'price_monthly', 'max_file_mb', 'max_text_kb',
+            'max_expiry_days', 'clipboard_idle_hours', 'clipboard_max_lifetime_days',
+            'storage_gb', 'renewals', 'password_protection', 'max_collections',
+        ]
+        for plan_key in (Plan.ANON, Plan.FREE, Plan.STARTER, Plan.PRO):
+            for field in required:
+                self.assertIn(field, d[plan_key], msg=f"{plan_key} missing {field} in PlanLimit")
+
+    def test_unknown_plan_falls_back_to_anon(self):
+        from core.models import PlanLimit
+        PlanLimit.invalidate_cache()
+        val = PlanLimit.get('nonexistent', 'max_file_mb')
+        self.assertEqual(val, Plan.LIMITS[Plan.ANON]['max_file_mb'])
+
+    def test_max_collections_starter(self):
+        from core.models import PlanLimit
+        PlanLimit.invalidate_cache()
+        self.assertEqual(Plan.get(Plan.STARTER, 'max_collections'), 10)
+
+    def test_max_collections_pro_unlimited(self):
+        from core.models import PlanLimit
+        PlanLimit.invalidate_cache()
+        self.assertIsNone(Plan.get(Plan.PRO, 'max_collections'))
+
+    def test_max_collections_free_zero(self):
+        from core.models import PlanLimit
+        PlanLimit.invalidate_cache()
+        self.assertEqual(Plan.get(Plan.FREE, 'max_collections'), 0)
+
+
+# ── Email preferences ─────────────────────────────────────────────────────────
+
+class TestEmailPreferences(TestCase):
+    def _make_user(self, plan=Plan.FREE):
+        u = User.objects.create_user('emailpref_user', password='pw')
+        UserProfile.objects.filter(user=u).update(plan=plan)
+        u.refresh_from_db()
+        return u
+
+    def test_notify_product_updates_default_true(self):
+        u = self._make_user()
+        self.assertTrue(u.profile.notify_product_updates)
+
+    def test_notify_billing_default_true(self):
+        u = self._make_user()
+        self.assertTrue(u.profile.notify_billing)
+
+    def test_notify_bug_fix_default_true(self):
+        u = self._make_user()
+        self.assertTrue(u.profile.notify_bug_fix)
+
+    def test_can_opt_out_product_updates(self):
+        u = self._make_user()
+        UserProfile.objects.filter(user=u).update(notify_product_updates=False)
+        u.profile.refresh_from_db()
+        self.assertFalse(u.profile.notify_product_updates)
+
+    def test_can_opt_out_billing(self):
+        u = self._make_user()
+        UserProfile.objects.filter(user=u).update(notify_billing=False)
+        u.profile.refresh_from_db()
+        self.assertFalse(u.profile.notify_billing)
+
+    def test_account_settings_saves_all_three_prefs(self):
+        from django.test import Client
+        u = self._make_user()
+        c = Client()
+        c.force_login(u)
+        # All three checked
+        res = c.post('/auth/account/settings/', {
+            'notify_bug_fix': '1',
+            'notify_product_updates': '1',
+            'notify_billing': '1',
+        })
+        self.assertIn(res.status_code, (200, 302))
+        u.profile.refresh_from_db()
+        self.assertTrue(u.profile.notify_bug_fix)
+        self.assertTrue(u.profile.notify_product_updates)
+        self.assertTrue(u.profile.notify_billing)
+
+    def test_account_settings_opt_out_all(self):
+        from django.test import Client
+        u = self._make_user()
+        c = Client()
+        c.force_login(u)
+        # No checkboxes submitted = all False
+        res = c.post('/auth/account/settings/', {})
+        self.assertIn(res.status_code, (200, 302))
+        u.profile.refresh_from_db()
+        self.assertFalse(u.profile.notify_bug_fix)
+        self.assertFalse(u.profile.notify_product_updates)
+        self.assertFalse(u.profile.notify_billing)
+
+    def test_account_settings_partial_opt_out(self):
+        from django.test import Client
+        u = self._make_user()
+        c = Client()
+        c.force_login(u)
+        # Only billing kept on
+        res = c.post('/auth/account/settings/', {'notify_billing': '1'})
+        self.assertIn(res.status_code, (200, 302))
+        u.profile.refresh_from_db()
+        self.assertFalse(u.profile.notify_bug_fix)
+        self.assertFalse(u.profile.notify_product_updates)
+        self.assertTrue(u.profile.notify_billing)

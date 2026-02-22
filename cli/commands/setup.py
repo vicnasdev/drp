@@ -87,9 +87,24 @@ def cmd_login(args):
     try:
         if api.login(host, session, email, password):
             cfg['email'] = email
+            # Fetch username from account endpoint
+            try:
+                res = session.get(
+                    f'{host}/auth/account/',
+                    headers={'Accept': 'application/json'},
+                    timeout=10,
+                )
+                if res.ok:
+                    account = res.json()
+                    username = account.get('username', '')
+                    if username:
+                        cfg['username'] = username
+            except Exception:
+                pass
             config.save(cfg)
             save_session(session)
-            print(f'  ✓ Logged in as {email}')
+            username_str = f' (@{cfg["username"]})' if cfg.get('username') else ''
+            print(f'  ✓ Logged in as {email}{username_str}')
         else:
             print('  ✗ Login failed — check your email and password.')
             sys.exit(1)

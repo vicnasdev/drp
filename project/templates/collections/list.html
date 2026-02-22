@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}drp — @{{ owner.username }}{% endblock %}
+{% block content %}
+<div class="collections-page">
+  <div class="collections-header">
+    <h1>@{{ owner.username }}</h1>
+    {% if is_own %}
+    <button class="btn-sm" id="newCollectionBtn">+ new collection</button>
+    {% endif %}
+  </div>
+
+  {% if is_own %}
+  <div id="newCollectionForm" class="new-collection-form hidden">
+    <input type="text" id="collectionName" placeholder="collection name" maxlength="120"/>
+    <input type="text" id="collectionSlug" placeholder="slug (auto)" maxlength="60"/>
+    <button class="btn-sm" id="createCollectionBtn">create</button>
+    <button class="btn-sm" id="cancelCollectionBtn">cancel</button>
+    <p id="collectionError" class="error hidden"></p>
+  </div>
+  {% endif %}
+
+  {% if collections %}
+  <div class="collection-list">
+    {% for col in collections %}
+    <div class="collection-item">
+      <a href="{{ col.url_path }}" class="collection-name">{{ col.name }}</a>
+      <span class="muted collection-meta">
+        {{ col.memberships.count }} drop{{ col.memberships.count|pluralize }}
+        · {{ col.slug }}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted empty">
+    {% if is_own %}no collections yet. create one above.{% else %}no public collections.{% endif %}
+  </p>
+  {% endif %}
+</div>
+
+<style>
+.collections-page { max-width: 640px; margin: 0 auto; }
+.collections-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+.collections-header h1 { margin: 0; }
+.new-collection-form { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+.new-collection-form input { flex: 1; min-width: 140px; }
+.collection-list { display: flex; flex-direction: column; gap: .5rem; }
+.collection-item { display: flex; align-items: baseline; gap: .6rem; padding: .5rem 0; border-bottom: 1px solid var(--border); }
+.collection-name { font-weight: 600; font-size: .95rem; }
+.collection-meta { font-size: .78rem; }
+</style>
+
+{% if is_own %}
+<script>
+const newBtn    = document.getElementById('newCollectionBtn');
+const form      = document.getElementById('newCollectionForm');
+const cancelBtn = document.getElementById('cancelCollectionBtn');
+const createBtn = document.getElementById('createCollectionBtn');
+const errEl     = document.getElementById('collectionError');
+
+newBtn.addEventListener('click', () => {
+  form.classList.remove('hidden');
+  newBtn.classList.add('hidden');
+  document.getElementById('collectionName').focus();
+});
+cancelBtn.addEventListener('click', () => {
+  form.classList.add('hidden');
+  newBtn.classList.remove('hidden');
+  errEl.classList.add('hidden');
+});
+createBtn.addEventListener('click', async () => {
+  const name = document.getElementById('collectionName').value.trim();
+  const slug = document.getElementById('collectionSlug').value.trim();
+  errEl.classList.add('hidden');
+  if (!name) { errEl.textContent = 'Name is required.'; errEl.classList.remove('hidden'); return; }
+  createBtn.disabled = true;
+  const res = await fetch('/collections/create/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+    body: JSON.stringify({ name, slug }),
+  });
+  const data = await res.json();
+  createBtn.disabled = false;
+  if (res.ok) {
+    window.location.href = data.url;
+  } else {
+    errEl.textContent = data.error || 'Failed to create.';
+    errEl.classList.remove('hidden');
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

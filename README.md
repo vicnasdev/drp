@@ -63,6 +63,96 @@ B2_BUCKET_NAME=drp-files
 B2_ENDPOINT_URL=https://s3.us-east-005.backblazeb2.com
 ```
 
+## Registration & accounts
+
+Signup requires a **username** (alphanumeric + hyphens, unique, case-insensitive) in addition to email and password. The username becomes the namespace for your public collection URLs: `/@alice/my-notes/`.
+
+Usernames are stored in `auth_User.username`. The email address is used for login and notifications — it is not the username.
+
+## CLI quick reference
+
+```bash
+# Setup
+drp setup              # configure host, login
+drp login / drp logout
+
+# Basic drops
+drp up "text"          # upload text to a new key
+drp up file.pdf        # upload a file
+drp get <key>          # fetch and print text drop
+drp get -f <key>       # download file drop
+drp rm <key>           # delete a drop
+drp cp <key> <new>     # copy a drop
+drp mv <key> <new>     # rename a drop
+
+# Listing
+drp ls                 # list your drops
+drp ls --col           # list your collections instead
+
+# Status
+drp status             # show config, session, server + local drop counts
+drp status <key>       # show view count and last-viewed for a specific drop
+
+# Collections (Starter and Pro plans)
+drp collection ls                    # list your collections
+drp collection new "My Notes"        # create a collection (slug auto-generated)
+drp collection add <slug> <key>      # add a text drop to a collection
+drp collection add <slug> -f <key>   # add a file drop to a collection
+drp collection rm <slug> <key>       # remove a drop from a collection
+drp collection open <slug>           # print the collection's public URL
+
+# Interactive shell
+drp shell              # open a REPL with ls, cat, rm, cp, mv, cd into collections
+
+# Utilities
+drp diff <key1> <key2> # diff two text drops
+drp serve <dir>        # upload every file in a directory as file drops
+drp load backup.json   # import a saved export
+```
+
+### drp shell
+
+`drp shell` opens an interactive REPL. Supported commands:
+
+| Command | Description |
+|---|---|
+| `ls` | list drops |
+| `ls --col` | list collections |
+| `cat <key>` | print text drop (prompts for password if protected) |
+| `rm <key>` | delete a drop |
+| `cp <key> <new>` | copy a drop |
+| `mv <key> <new>` | rename a drop |
+| `cd <slug>` | enter a collection (changes `ls` scope) |
+| `cd ..` | exit collection back to root |
+| `exit` / `quit` | leave the shell |
+
+Password-protected drops: `cat` will automatically prompt for the password when the server returns 401, then retry. This matches the behaviour of `drp get`.
+
+### Tab completion
+
+```bash
+# Bash
+eval "$(register-python-argcomplete drp)"
+
+# Zsh
+eval "$(register-python-argcomplete drp)"
+
+# Fish
+register-python-argcomplete --shell fish drp | source
+```
+
+Drop keys and collection slugs complete from a local cache refreshed in the background every 30 seconds.
+
+## Plan limits
+
+Plan limits (max file size, storage quota, collection count, etc.) are stored in the `PlanLimit` database table — not hardcoded in the application. To change a limit:
+
+1. Open Django admin → Plan limits
+2. Edit the row for the relevant plan
+3. Save — the change takes effect on the next request (no deploy needed)
+
+The in-process cache is invalidated automatically on each admin save.
+
 ## License
 
 Server: source-available, personal/internal use only.  

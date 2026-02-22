@@ -9,15 +9,17 @@
 
 <div class="plan-grid">
 
+{% for plan_key, lim in plans %}
+  {% if plan_key == 'anon' %}
   <div class="plan-col plan-col--free">
     <div class="plan-col-head">
       <span class="plan-name">Anonymous</span>
       <span class="plan-price">free</span>
     </div>
     <ul class="plan-features">
-      <li>Text up to <strong>500 KB</strong></li>
-      <li>Files up to <strong>200 MB</strong></li>
-      <li>Clipboard: 24 h idle · 7 d max</li>
+      <li>Text up to <strong>{{ lim.max_text_kb }} KB</strong></li>
+      <li>Files up to <strong>{{ lim.max_file_mb }} MB</strong></li>
+      <li>Clipboard: {{ lim.clipboard_idle_hours }} h idle · {{ lim.clipboard_max_lifetime_days }} d max</li>
       <li>Files: 90 days from upload</li>
       <li class="plan-no">No account required — but no sync</li>
       <li class="plan-no">No custom expiry</li>
@@ -26,57 +28,69 @@
     </ul>
   </div>
 
+  {% elif plan_key == 'free' %}
   <div class="plan-col plan-col--free">
     <div class="plan-col-head">
       <span class="plan-name">Free account</span>
       <span class="plan-price">free</span>
     </div>
     <ul class="plan-features">
-      <li>Text up to <strong>500 KB</strong></li>
-      <li>Files up to <strong>200 MB</strong></li>
-      <li>Clipboard: 48 h idle · 30 d max</li>
+      <li>Text up to <strong>{{ lim.max_text_kb }} KB</strong></li>
+      <li>Files up to <strong>{{ lim.max_file_mb }} MB</strong></li>
+      <li>Clipboard: {{ lim.clipboard_idle_hours }} h idle · {{ lim.clipboard_max_lifetime_days }} d max</li>
       <li>Files: 90 days from upload</li>
       <li>Bookmarks &amp; cross-device sync</li>
       <li>Export / import</li>
       <li class="plan-no">No custom expiry</li>
       <li class="plan-no">No locked drops</li>
       <li class="plan-no">No password protection</li>
+      <li class="plan-no">No collections</li>
     </ul>
   </div>
 
+  {% elif plan_key == 'starter' %}
   <div class="plan-col plan-col--paid">
     <div class="plan-col-head">
       <span class="plan-name">Starter</span>
-      <span class="plan-price">$3 <small>/mo</small></span>
+      <span class="plan-price">${{ lim.price_monthly }} <small>/mo</small></span>
     </div>
     <ul class="plan-features">
-      <li>Text up to <strong>2 MB</strong></li>
-      <li>Files up to <strong>1 GB</strong></li>
-      <li><strong>5 GB</strong> storage quota</li>
-      <li>Explicit expiry up to <strong>1 year</strong></li>
+      <li>Text up to <strong>{% widthratio lim.max_text_kb 1024 1 %} MB</strong></li>
+      <li>Files up to <strong>{% widthratio lim.max_file_mb 1024 1 %} GB</strong></li>
+      <li><strong>{{ lim.storage_gb }} GB</strong> storage quota</li>
+      <li>Explicit expiry up to <strong>{% widthratio lim.max_expiry_days 365 1 %} year</strong></li>
       <li>Drops locked to your account</li>
       <li>Password-protected drops</li>
       <li>Unlimited renewals</li>
       <li>Bookmarks, export / import</li>
+      <li>Up to <strong>{{ lim.max_collections }} collections</strong></li>
     </ul>
   </div>
 
+  {% elif plan_key == 'pro' %}
   <div class="plan-col plan-col--paid plan-col--highlight">
     <div class="plan-col-head">
       <span class="plan-name">Pro</span>
-      <span class="plan-price">$8 <small>/mo</small></span>
+      <span class="plan-price">${{ lim.price_monthly }} <small>/mo</small></span>
     </div>
     <ul class="plan-features">
-      <li>Text up to <strong>10 MB</strong></li>
-      <li>Files up to <strong>5 GB</strong></li>
-      <li><strong>20 GB</strong> storage quota</li>
-      <li>Explicit expiry up to <strong>3 years</strong></li>
+      <li>Text up to <strong>{% widthratio lim.max_text_kb 1024 1 %} MB</strong></li>
+      <li>Files up to <strong>{% widthratio lim.max_file_mb 1024 1 %} GB</strong></li>
+      <li><strong>{{ lim.storage_gb }} GB</strong> storage quota</li>
+      <li>Explicit expiry up to <strong>{% widthratio lim.max_expiry_days 365 1 %} years</strong></li>
       <li>Drops locked to your account</li>
       <li>Password-protected drops</li>
       <li>Unlimited renewals</li>
       <li>Bookmarks, export / import</li>
+      {% if lim.max_collections is None %}
+      <li><strong>Unlimited collections</strong></li>
+      {% else %}
+      <li><strong>{{ lim.max_collections }} collections</strong></li>
+      {% endif %}
     </ul>
   </div>
+  {% endif %}
+{% endfor %}
 
 </div>
 
@@ -94,6 +108,9 @@
 
 <h2>password protection</h2>
 <p>Paid accounts can add a password to any drop they own. Stored as a PBKDF2 hash — never in plain text. Browsers remember unlocked drops for the session. The CLI prompts automatically.</p>
+
+<h2>collections</h2>
+<p>Collections let you group drops under a shareable URL: <code>/@username/collection-name/</code>. Anyone can view a collection you share — individual password-protected drops still require their password when opened. Free accounts can view collections but cannot create them. Starter accounts get up to 10 collections; Pro accounts get unlimited.</p>
 
 <h2>billing</h2>
 <p>Paid plans bill monthly via <a href="https://www.lemonsqueezy.com" rel="noopener">Lemon Squeezy</a>. Upgrade from your <a href="/auth/account/">account page</a>. Cancelling returns you to the free plan at the end of the billing period — drops are not deleted, but paid-only limits no longer apply to new uploads. Manage or cancel anytime in the <a href="/billing/portal/">billing portal</a>.</p>

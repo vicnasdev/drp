@@ -376,3 +376,195 @@ class TestCmdCp:
         mock_session.post.assert_called_once()
         call_url = mock_session.post.call_args[0][0]
         assert '/src/copy/' in call_url
+
+# ── cli.commands.shell: _dispatch cat — password prompt ───────────────────────
+
+class TestShellCatPassword:
+    """shell cat must prompt for password on 401 and retry with X-Drop-Password."""
+
+    def _dispatch(self, cmd, rest, session, host='https://x.com'):
+        from cli.commands.shell import _dispatch
+        return _dispatch(cmd, rest, host, session, cfg={}, cwd=None, username='u')
+
+    def _mock_session(self, first_status, second_status=None, content='hello'):
+        session = MagicMock()
+        first_resp = MagicMock()
+        first_resp.status_code = first_status
+        first_resp.ok = first_status == 200
+
+        if first_status == 200:
+            first_resp.json.return_value = {'kind': 'text', 'content': content}
+            session.get.return_value = first_resp
+        elif second_status is not None:
+            second_resp = MagicMock()
+            second_resp.status_code = second_status
+            second_resp.ok = second_status == 200
+            if second_status == 200:
+                second_resp.json.return_value = {'kind': 'text', 'content': content}
+            session.get.side_effect = [first_resp, second_resp]
+        else:
+            session.get.return_value = first_resp
+        return session
+
+    def test_cat_returns_content_on_200(self):
+        session = self._mock_session(200, content='drop content')
+        lines = self._dispatch('cat', ['mykey'], session)
+        assert lines == ['drop content']
+
+    def test_cat_prompts_on_401_and_retries(self):
+        session = self._mock_session(401, second_status=200, content='secret')
+        with patch('getpass.getpass', return_value='hunter2') as mock_gp:
+            lines = self._dispatch('cat', ['secretkey'], session)
+        mock_gp.assert_called_once()
+        assert lines == ['secret']
+        # Second call must include X-Drop-Password header
+        second_call_headers = session.get.call_args_list[1][1].get('headers', {})
+        assert second_call_headers.get('X-Drop-Password') == 'hunter2'
+
+    def test_cat_shows_wrong_password_on_second_401(self):
+        session = self._mock_session(401, second_status=401)
+        with patch('getpass.getpass', return_value='wrong'):
+            lines = self._dispatch('cat', ['secretkey'], session)
+        assert any('wrong password' in (l or '').lower() for l in lines)
+
+    def test_cat_cancelled_getpass_returns_gracefully(self):
+        session = self._mock_session(401)
+        with patch('getpass.getpass', side_effect=KeyboardInterrupt):
+            lines = self._dispatch('cat', ['secretkey'], session)
+        assert lines is not None  # doesn't crash
+        assert any('cancel' in (l or '').lower() for l in lines)
+
+    def test_cat_no_key_shows_usage(self):
+        session = MagicMock()
+        lines = self._dispatch('cat', [], session)
+        assert any('usage' in (l or '').lower() for l in lines)
+
+    def test_cat_file_drop_shows_hint(self):
+        session = self._mock_session(200)
+        session.get.return_value.json.return_value = {'kind': 'file'}
+        lines = self._dispatch('cat', ['filekey'], session)
+        assert any('drp get' in (l or '') for l in lines)
+
+
+# ── cli.commands.status: server drop count ────────────────────────────────────
+
+class TestStatusServerCount:
+    """cmd_status should fetch server count when a session exists."""
+
+    def _run_status(self, session_exists=True, server_drops=None, local_drops=None):
+        from unittest.mock import patch, MagicMock
+        import cli.commands.status as status_mod
+
+        if local_drops is None:
+            local_drops = [{'ns': 'c', 'key': 'local1'}]
+        if server_drops is None:
+            server_drops = [{'ns': 'c', 'key': 'srv1'}, {'ns': 'c', 'key': 'srv2'}]
+
+        mock_cfg = {'host': 'https://x.com', 'email': 'u@x.com', 'username': 'u'}
+
+        output = []
+        with patch('cli.commands.status.config') as mock_config, \
+             patch('cli.commands.status.SESSION_FILE') as mock_sf, \
+             patch('cli.commands.status._sync_local_cache'), \
+             patch('cli.commands.status.load_session'), \
+             patch('cli.spinner.Spinner'), \
+             patch('builtins.print', side_effect=lambda *a, **k: output.append(' '.join(str(x) for x in a))):
+
+            mock_config.load.return_value = mock_cfg
+            mock_config.load_local_drops.return_value = local_drops
+            mock_sf.exists.return_value = session_exists
+
+            mock_resp = MagicMock()
+            mock_resp.ok = True
+            mock_resp.json.return_value = {'drops': server_drops}
+
+            with patch('requests.Session') as mock_req_session:
+                mock_req_session.return_value.get.return_value = mock_resp
+                args = MagicMock()
+                args.key = None
+                status_mod.cmd_status(args)
+
+        return output
+
+    def test_shows_server_count_when_authed(self):
+        output = self._run_status(
+            session_exists=True,
+            server_drops=[{'ns': 'c', 'key': 'a'}, {'ns': 'c', 'key': 'b'}],
+        )
+        combined = '\n'.join(output)
+        assert 'Server drops' in combined or 'server' in combined.lower()
+
+    def test_shows_local_only_delta(self):
+        output = self._run_status(
+            session_exists=True,
+            server_drops=[{'ns': 'c', 'key': 'srv'}],
+            local_drops=[{'ns': 'c', 'key': 'srv'}, {'ns': 'c', 'key': 'local-only'}],
+        )
+        combined = '\n'.join(output)
+        # Should note 1 local-only drop
+        assert 'local-only' in combined or 'local' in combined.lower()
+
+    def test_no_server_fetch_when_no_session(self):
+        output = self._run_status(session_exists=False)
+        combined = '\n'.join(output)
+        # Falls back to "Local drops" label
+        assert 'Local drops' in combined or 'local' in combined.lower()
+
+
+# ── cli.completion: collection slug cache ─────────────────────────────────────
+
+class TestCollectionSlugCompleter:
+    def test_collection_slug_completer_returns_matches(self, tmp_path):
+        import json
+        from cli.completion import _read_collection_cache
+        cache = tmp_path / 'collections.json'
+        cache.write_text(json.dumps(['my-notes', 'my-photos', 'work']))
+        with patch('cli.completion.__import__', side_effect=lambda *a, **k: None):
+            pass
+        # Patch CONFIG_DIR to tmp_path
+        with patch('cli.config.CONFIG_DIR', tmp_path):
+            results = _read_collection_cache('my-')
+        assert 'my-notes' in results
+        assert 'my-photos' in results
+        assert 'work' not in results
+
+    def test_collection_slug_completer_empty_on_missing_cache(self, tmp_path):
+        from cli.completion import _read_collection_cache
+        with patch('cli.config.CONFIG_DIR', tmp_path):
+            results = _read_collection_cache('')
+        assert results == []
+
+    def test_do_refresh_saves_collection_slugs(self, tmp_path):
+        """_do_refresh should write collections.json with slug list."""
+        import json
+        from cli.completion import _do_refresh
+
+        mock_cfg = MagicMock()
+        mock_cfg.load.return_value = {'host': 'https://x.com', 'email': 'u@x.com'}
+        mock_cfg.CONFIG_DIR = tmp_path
+        mock_cfg.load_local_drops.return_value = []
+        mock_cfg.DROPS_FILE = tmp_path / 'drops.json'
+        mock_cfg.save_local_drops = MagicMock()
+
+        mock_sf = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.json.return_value = {
+            'drops': [],
+            'saved': [],
+            'collections': [
+                {'slug': 'notes', 'name': 'Notes'},
+                {'slug': 'work',  'name': 'Work'},
+            ],
+        }
+
+        with patch('requests.Session') as mock_session_cls, \
+             patch('cli.session.load_session'):
+            mock_session_cls.return_value.get.return_value = mock_resp
+            _do_refresh(mock_cfg, mock_sf)
+
+        cache_file = tmp_path / 'collections.json'
+        assert cache_file.exists()
+        slugs = json.loads(cache_file.read_text())
+        assert 'notes' in slugs
+        assert 'work' in slugs

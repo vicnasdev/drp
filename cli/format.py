@@ -94,9 +94,12 @@ def _c(code: str, text: str, stream=None) -> str:
 # Brighter variants (bold+color) so output is visible on both dark and light
 # terminals without being garish. dim() stays subtle intentionally.
 
-def green(text, stream=None):  return _c('1;32', text, stream)   # bold green
-def red(text, stream=None):    return _c('1;31', text, stream)   # bold red
-def dim(text, stream=None):    return _c('2',    text, stream)   # faint/dim
-def bold(text, stream=None):   return _c('1',    text, stream)   # bold white
-def cyan(text, stream=None):   return _c('1;36', text, stream)   # bold cyan
-def yellow(text, stream=None): return _c('1;33', text, stream)   # bold yellow
+def green(text, stream=None):    return _c('1;32', text, stream)   # bold green
+def red(text, stream=None):      return _c('1;31', text, stream)   # bold red
+def dim(text, stream=None):      return _c('2',    text, stream)   # faint/dim
+def bold(text, stream=None):     return _c('1',    text, stream)   # bold white
+def cyan(text, stream=None):     return _c('1;36', text, stream)   # bold cyan
+def yellow(text, stream=None):   return _c('1;33', text, stream)   # bold yellow
+def magenta(text, stream=None):  return _c('1;35', text, stream)   # bold magenta (collections)
+def blue(text, stream=None):     return _c('1;34', text, stream)   # bold blue (files)
+def grey(text, stream=None):     return _c('38;5;245', text, stream) # mid-grey (metadata)

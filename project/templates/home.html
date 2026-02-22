@@ -167,6 +167,19 @@
       </div>
       {% endif %}
 
+      {% if collections %}
+      <h3 style="margin-top:1.2rem;margin-bottom:.4rem">collections</h3>
+      <div class="drop-list">
+        {% for col in collections %}
+        <div class="drop-item">
+          <span class="drop-icon">📂</span>
+          <a href="{{ col.url_path }}" class="drop-key">{{ col.slug }}</a>
+          <span class="drop-label muted">{{ col.memberships.count }} drop{{ col.memberships.count|pluralize }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
       {% if user.profile.is_paid %}
       <div class="storage-bar-wrap" style="margin-top:.8rem">
         <div class="storage-label muted">

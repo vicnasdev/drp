@@ -17,25 +17,29 @@ from cli.commands.edit import cmd_edit
 from cli.commands.cp import cmd_cp
 from cli.commands.diff import cmd_diff
 from cli.commands.serve import cmd_serve
+from cli.commands.shell import cmd_shell
+from cli.commands.collection import cmd_collection
 
 COMMANDS = [
-    ('setup',   cmd_setup,   'Configure host and log in'),
-    ('login',   cmd_login,   'Log in (session saved — no repeated prompts)'),
-    ('logout',  cmd_logout,  'Log out and clear saved session'),
-    ('ping',    cmd_ping,    'Check connectivity to the drp server'),
-    ('status',  cmd_status,  'Show config / view stats for a drop'),
-    ('up',      cmd_up,      'Upload clipboard text or a file'),
-    ('get',     cmd_get,     'Print clipboard or download file (no login needed)'),
-    ('edit',    cmd_edit,    'Open a clipboard drop in $EDITOR and re-upload'),
-    ('cp',      cmd_cp,      'Duplicate a drop under a new key'),
-    ('save',    cmd_save,    'Bookmark a drop to your account (requires login)'),
-    ('rm',      cmd_rm,      'Delete a drop'),
-    ('mv',      cmd_mv,      'Rename a key (blocked 24h after creation)'),
-    ('renew',   cmd_renew,   'Renew expiry (paid accounts only)'),
-    ('ls',      cmd_ls,      'List your drops'),
-    ('load',    cmd_load,    'Import a shared export as saved drops (requires login)'),
-    ('diff',    cmd_diff,    'Diff two clipboard drops'),
-    ('serve',   cmd_serve,   'Upload a directory or file list, print URL table'),
+    ('setup',      cmd_setup,       'Configure host and log in'),
+    ('login',      cmd_login,       'Log in (session saved — no repeated prompts)'),
+    ('logout',     cmd_logout,      'Log out and clear saved session'),
+    ('ping',       cmd_ping,        'Check connectivity to the drp server'),
+    ('status',     cmd_status,      'Show config / view stats for a drop'),
+    ('up',         cmd_up,          'Upload clipboard text or a file'),
+    ('get',        cmd_get,         'Print clipboard or download file (no login needed)'),
+    ('edit',       cmd_edit,        'Open a clipboard drop in $EDITOR and re-upload'),
+    ('cp',         cmd_cp,          'Duplicate a drop under a new key'),
+    ('save',       cmd_save,        'Bookmark a drop to your account (requires login)'),
+    ('rm',         cmd_rm,          'Delete a drop'),
+    ('mv',         cmd_mv,          'Rename a key (blocked 24h after creation)'),
+    ('renew',      cmd_renew,       'Renew expiry (paid accounts only)'),
+    ('ls',         cmd_ls,          'List your drops'),
+    ('load',       cmd_load,        'Import a shared export as saved drops (requires login)'),
+    ('diff',       cmd_diff,        'Diff two clipboard drops'),
+    ('serve',      cmd_serve,       'Upload a directory or file list, print URL table'),
+    ('collection', cmd_collection,  'Manage drop collections (paid accounts)'),
+    ('shell',      cmd_shell,       'Interactive shell with ls, rm, cp, cd and more'),
 ]
 
 # ── Shared display data ───────────────────────────────────────────────────────
@@ -45,9 +49,10 @@ COMMANDS = [
 COMMAND_GROUPS = [
     ('upload / download',  ['up', 'get', 'edit', 'serve']),
     ('manage',             ['rm', 'mv', 'cp', 'renew', 'diff']),
-    ('account',            ['save', 'ls', 'load']),
+    ('account',            ['save', 'ls', 'load', 'collection']),
     ('info',               ['status', 'ping']),
     ('setup',              ['setup', 'login', 'logout']),
+    ('shell',              ['shell']),
 ]
 
 # (command_prefix, argument, description)
@@ -77,8 +82,13 @@ EXAMPLES = [
     ('drp mv',      'q3 quarter3',                    'rename clipboard key'),
     ('drp mv',      '-f q3 quarter3',                'rename file key'),
     ('drp ls',      '-l',                             'list with sizes and times'),
+    ('drp ls',      '--col',                          'list your collections'),
     ('drp ls',      '--export > backup.json',         'export as JSON'),
     ('drp load',    'backup.json',                    'import shared export as saved drops'),
+    ('drp collection', 'ls',                          'list collections'),
+    ('drp collection', 'new "my notes"',              'create a collection'),
+    ('drp collection', 'add my-notes key',            'add drop to collection'),
+    ('drp shell',   '',                               'interactive shell (ls, rm, cd, …)'),
 ]
 
 
@@ -147,11 +157,13 @@ def _configure_subparsers(sub):
     try:
         from cli.completion import (
             key_completer, file_key_completer, clipboard_key_completer,
+            collection_slug_completer,
         )
         _completers = {
-            'key':       key_completer,
-            'file_key':  file_key_completer,
-            'clip_key':  clipboard_key_completer,
+            'key':              key_completer,
+            'file_key':         file_key_completer,
+            'clip_key':         clipboard_key_completer,
+            'collection_slug':  collection_slug_completer,
         }
     except Exception:
         _completers = {}
@@ -227,6 +239,7 @@ def _configure_subparsers(sub):
     p_ls.add_argument('--sort', choices=['time', 'size', 'name'], default=None)
     p_ls.add_argument('-r', '--reverse', action='store_true')
     p_ls.add_argument('--export', action='store_true')
+    p_ls.add_argument('--col', action='store_true', help='List collections instead of drops')
 
     p_load = sub._name_parser_map['load']
     p_load.add_argument('file')
@@ -240,6 +253,23 @@ def _configure_subparsers(sub):
                          help='Files, directories, or glob patterns')
     p_serve.add_argument('--expires', '-e', default=None, metavar='DURATION',
                          help='7d, 30d, 1y (paid only)')
+
+    # collection subcommand
+    p_col = sub._name_parser_map['collection']
+    col_sub = p_col.add_subparsers(dest='col_cmd')
+    col_sub.add_parser('ls',   help='List collections')
+    p_col_new = col_sub.add_parser('new',  help='Create a collection')
+    p_col_new.add_argument('name_parts', nargs='+', metavar='NAME')
+    p_col_add = col_sub.add_parser('add',  help='Add drop to collection')
+    _attach(p_col_add.add_argument('slug'), 'collection_slug')
+    _attach(p_col_add.add_argument('key'),  'key')
+    p_col_add.add_argument('-f', '--file', action='store_true')
+    p_col_rm  = col_sub.add_parser('rm',   help='Remove drop from collection')
+    _attach(p_col_rm.add_argument('slug'), 'collection_slug')
+    _attach(p_col_rm.add_argument('key'),  'key')
+    p_col_rm.add_argument('-f', '--file', action='store_true')
+    p_col_open = col_sub.add_parser('open', help='Print collection URL')
+    _attach(p_col_open.add_argument('slug'), 'collection_slug')
 
 
 _HANDLERS = {name: handler for name, handler, _ in COMMANDS}

@@ -20,7 +20,7 @@ def cmd_status(args):
         _drop_status(args, key)
         return
 
-    from cli.format import dim, green, bold
+    from cli.format import dim, green, bold, cyan
     from cli.spinner import Spinner
 
     cfg = config.load()
@@ -30,16 +30,52 @@ def cmd_status(args):
 
     local_count = len(config.load_local_drops())
 
+    # Fetch server drop count when authed
+    server_count = None
+    local_only   = None
+    session_active = SESSION_FILE.exists()
+    if session_active:
+        try:
+            import requests as req_lib
+            from cli.session import load_session
+            s = req_lib.Session()
+            load_session(s)
+            res = s.get(
+                f'{cfg.get("host", "")}/auth/account/',
+                headers={'Accept': 'application/json'},
+                timeout=6,
+            )
+            if res.ok:
+                data = res.json()
+                server_keys = {(d.get('ns'), d.get('key')) for d in data.get('drops', [])}
+                server_count = len(server_keys)
+                local_drops  = config.load_local_drops()
+                local_only   = sum(
+                    1 for d in local_drops
+                    if (d.get('ns'), d.get('key')) not in server_keys
+                )
+        except Exception:
+            pass
+
     print(bold('drp status'))
     print(dim('──────────'))
     print(f'  {dim("Host:")}        {cfg.get("host", "(not set)")}')
-    print(f'  {dim("Account:")}     {cfg.get("email", "anonymous")}')
 
-    session_active = SESSION_FILE.exists()
+    username = cfg.get('username', '')
+    email    = cfg.get('email', 'anonymous')
+    account_str = f'{cyan("@" + username)}  {dim(email)}' if username else dim(email)
+    print(f'  {dim("Account:")}     {account_str}')
+
     session_str = green('active') if session_active else dim('none')
     print(f'  {dim("Session:")}     {session_str}')
 
-    print(f'  {dim("Local drops:")} {local_count}')
+    if server_count is not None:
+        local_only_str = f'  {dim("(" + str(local_only) + " local-only)")}' if local_only else ''
+        print(f'  {dim("Server drops:")} {server_count}{local_only_str}')
+        print(f'  {dim("Local cache:")} {local_count}')
+    else:
+        print(f'  {dim("Local drops:")} {local_count}')
+
     print(f'  {dim("Config:")}      {config.CONFIG_FILE}')
     print(f'  {dim("Cache:")}       {config.DROPS_FILE}')
 

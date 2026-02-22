@@ -21,7 +21,16 @@ def expiry(request):
 
 
 def plans(request):
-    return render(request, 'help/plans.html')
+    from core.models import PlanLimit, Plan
+    limits = PlanLimit.all_as_dicts()
+    # Ensure consistent order: anon, free, starter, pro
+    ordered = [
+        (Plan.ANON,    limits.get(Plan.ANON,    {})),
+        (Plan.FREE,    limits.get(Plan.FREE,    {})),
+        (Plan.STARTER, limits.get(Plan.STARTER, {})),
+        (Plan.PRO,     limits.get(Plan.PRO,     {})),
+    ]
+    return render(request, 'help/plans.html', {'plans': ordered})
 
 
 @cache

@@ -13,7 +13,7 @@ from django.shortcuts import render, redirect
 from django.views.decorators.http import require_POST
 
 from core.models import Drop, Plan, SavedDrop
-from .helpers import check_signup_rate, user_plan, claim_anon_drops
+from .helpers import check_signup_rate, user_plan, claim_anon_drops, validate_username
 
 ANON_COOKIE = 'drp_anon'
 
@@ -28,12 +28,18 @@ def register_view(request):
             error = 'Too many signups from your location. Try again in an hour.'
         else:
             email = request.POST.get('email', '').strip().lower()
+            username = request.POST.get('username', '').strip()
             password = request.POST.get('password', '')
             password2 = request.POST.get('password2', '')
             plan_choice = request.POST.get('plan', 'free').strip().lower()
 
+            username_error = validate_username(username)
             if not email or not password:
                 error = 'Email and password are required.'
+            elif username_error:
+                error = username_error
+            elif User.objects.filter(username__iexact=username).exists():
+                error = 'That username is already taken.'
             elif password != password2:
                 error = 'Passwords do not match.'
             elif len(password) < 8:
@@ -41,7 +47,7 @@ def register_view(request):
             elif User.objects.filter(email=email).exists():
                 error = 'An account with that email already exists.'
             else:
-                user = User.objects.create_user(username=email, email=email, password=password)
+                user = User.objects.create_user(username=username, email=email, password=password)
                 login(request, user)
 
                 # Send email verification — fire and forget, never block signup
@@ -117,9 +123,19 @@ def account_view(request):
     plan_limits = Plan.LIMITS.get(profile.plan, Plan.LIMITS[Plan.FREE])
 
     if 'application/json' in request.headers.get('Accept', ''):
+        collections = request.user.collections.prefetch_related('memberships').order_by('-created_at')
         return JsonResponse({
+            'username': request.user.username,
             'drops': [_drop_dict(d) for d in drops],
             'saved': [_saved_dict(s) for s in saved],
+            'collections': [
+                {
+                    'name': col.name,
+                    'slug': col.slug,
+                    'drops': [{'ns': m.ns, 'key': m.key} for m in col.memberships.all()],
+                }
+                for col in collections
+            ],
         })
 
     return render(request, 'auth/account.html', {
@@ -136,8 +152,10 @@ def account_view(request):
 def update_account_settings(request):
     """Update user account notification preferences."""
     profile = request.user.profile
-    profile.notify_bug_fix = request.POST.get('notify_bug_fix') == '1'
-    profile.save(update_fields=['notify_bug_fix'])
+    profile.notify_bug_fix        = request.POST.get('notify_bug_fix')        == '1'
+    profile.notify_product_updates = request.POST.get('notify_product_updates') == '1'
+    profile.notify_billing         = request.POST.get('notify_billing')         == '1'
+    profile.save(update_fields=['notify_bug_fix', 'notify_product_updates', 'notify_billing'])
     return redirect('account')
 
 
@@ -145,6 +163,7 @@ def update_account_settings(request):
 def export_drops(request):
     drops = Drop.objects.filter(owner=request.user).order_by('-created_at')
     saved = SavedDrop.objects.filter(user=request.user).order_by('-saved_at')
+    collections = request.user.collections.prefetch_related('memberships').order_by('-created_at')
 
     owned_data = []
     for d in drops:
@@ -159,8 +178,21 @@ def export_drops(request):
 
     saved_data = [_saved_dict(s, host=settings.SITE_URL) for s in saved]
 
+    collections_data = [
+        {
+            'name': col.name,
+            'slug': col.slug,
+            'url':  f'{settings.SITE_URL}/@{request.user.username}/{col.slug}/',
+            'drops': [
+                {'ns': m.ns, 'key': m.key}
+                for m in col.memberships.all()
+            ],
+        }
+        for col in collections
+    ]
+
     response = JsonResponse(
-        {'drops': owned_data, 'saved': saved_data},
+        {'drops': owned_data, 'saved': saved_data, 'collections': collections_data},
         json_dumps_params={'indent': 2},
     )
     response['Content-Disposition'] = 'attachment; filename="drp-export.json"'
