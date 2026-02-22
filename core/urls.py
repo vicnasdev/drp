@@ -10,6 +10,7 @@ KEY = r"(?P<key>[^/\s]+)"
 
 urlpatterns = [
     path("api/report-error/",   report_error,          name="report_error"),
+    path("staff/mobile/", views.mobile_blueprint, name="mobile_blueprint"),
     path("api/github-webhook/", github_webhook,         name="github_webhook"),
     path("save/",               views.save_drop,        name="save_drop"),
     path("check-key/",          views.check_key,        name="check_key"),
