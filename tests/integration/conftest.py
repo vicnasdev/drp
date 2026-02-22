@@ -172,7 +172,7 @@ def cli_envs(cli_config_root, users):
         drp_dir = cli_config_root / name / 'drp'
         drp_dir.mkdir(parents=True, exist_ok=True)
         (drp_dir / 'config.json').write_text(json.dumps(
-            {'host': HOST, 'email': user.email, 'ansi': False}
+            {'host': HOST, 'email': user.email, 'username': user.email, 'ansi': False}
         ))
         (drp_dir / 'session.json').write_text(json.dumps(dict(user.session.cookies)))
         env = {**os.environ, **_env}

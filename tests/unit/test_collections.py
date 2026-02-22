@@ -287,11 +287,17 @@ class TestCollectionPublicViews(TestCase):
         res = self.client.get(self.col_url)
         self.assertContains(res, "deleteBtn")
 
-    def test_deleted_drop_shown_gracefully(self):
+    def test_deleted_drop_removes_membership_from_collection(self):
+        """
+        When a drop is deleted, the post_delete signal removes its CollectionMembership.
+        The collection page still loads (200) but no longer lists the deleted drop.
+        """
         self.drop.delete()
+        # Membership must be gone (signal fired)
+        self.assertFalse(CollectionMembership.objects.filter(key="pubdrop").exists())
+        # Collection page still renders fine
         res = self.client.get(self.col_url)
         self.assertEqual(res.status_code, 200)
-        self.assertContains(res, "deleted")
 
     def test_password_protected_drop_shown_with_lock_icon(self):
         from django.contrib.auth.hashers import make_password

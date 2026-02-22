@@ -478,7 +478,6 @@ class TestCollectionPlanRestrictions:
     """End-to-end: collection creation/limit enforcement via HTTP API."""
 
     def _create_col(self, session, name, slug=''):
-        from conftest import HOST
         from cli.api.auth import get_csrf
         csrf = get_csrf(HOST, session)
         return session.post(
@@ -488,9 +487,77 @@ class TestCollectionPlanRestrictions:
                      'Accept': 'application/json'},
         )
 
-    def _delete_all_collections(self, session, username):
-        """Cleanup helper: delete all collections owned by the user."""
-        from conftest import HOST
+    def _delete_all_collections(self, session):
+        """Delete every collection the user owns. Returns count deleted."""
+        from cli.api.auth import get_csrf
+        res = session.get(f'{HOST}/auth/account/', headers={'Accept': 'application/json'})
+        if not res.ok:
+            return 0
+        deleted = 0
+        for col in res.json().get('collections', []):
+            col_id = col.get('id')
+            if col_id:
+                csrf = get_csrf(HOST, session)
+                r = session.post(
+                    f'{HOST}/collections/{col_id}/delete/',
+                    headers={'X-CSRFToken': csrf},
+                )
+                if r.ok:
+                    deleted += 1
+        return deleted
+
+    def _current_count(self, session):
+        res = session.get(f'{HOST}/auth/account/', headers={'Accept': 'application/json'})
+        return len(res.json().get('collections', [])) if res.ok else 0
+
+    def test_free_cannot_create_collection(self, free_user):
+        res = self._create_col(free_user.session, unique_key('free-col'))
+        assert res.status_code == 403
+
+    def test_starter_can_create_collection(self, starter_user):
+        self._delete_all_collections(starter_user.session)
+        slug = unique_key('starter-col')[:30]
+        res = self._create_col(starter_user.session, 'Starter Col', slug)
+        assert res.status_code == 201
+        assert res.json().get('id')
+        self._delete_all_collections(starter_user.session)
+
+    def test_starter_capped_at_10_collections(self, starter_user):
+        # Start clean
+        self._delete_all_collections(starter_user.session)
+        assert self._current_count(starter_user.session) == 0
+
+        created = []
+        for i in range(10):
+            slug = unique_key(f'cap-{i}')[:30]
+            r = self._create_col(starter_user.session, f'Cap {i}', slug)
+            assert r.status_code == 201, f"Creation {i} failed: {r.status_code} {r.text}"
+            created.append(r.json().get('id'))
+
+        # 11th must be rejected
+        over = self._create_col(starter_user.session, 'Over Limit', unique_key('over')[:30])
+        assert over.status_code == 403
+        assert 'limit' in over.json().get('error', '').lower()
+
+        # Cleanup
+        self._delete_all_collections(starter_user.session)
+
+    def test_pro_unlimited_collections(self, pro_user):
+        self._delete_all_collections(pro_user.session)
+        for i in range(12):
+            slug = unique_key(f'pro-{i}')[:30]
+            r = self._create_col(pro_user.session, f'Pro {i}', slug)
+            assert r.status_code == 201
+        self._delete_all_collections(pro_user.session)
+
+
+# ── Collections — CLI commands ────────────────────────────────────────────────
+
+class TestCollectionCli:
+    """Smoke-test `drp collection` subcommands against a real server."""
+
+    def _api_delete_all(self, session):
+        """HTTP cleanup so CLI tests don't pollute each other."""
         from cli.api.auth import get_csrf
         res = session.get(f'{HOST}/auth/account/', headers={'Accept': 'application/json'})
         if not res.ok:
@@ -499,102 +566,79 @@ class TestCollectionPlanRestrictions:
             col_id = col.get('id')
             if col_id:
                 csrf = get_csrf(HOST, session)
-                session.post(
-                    f'{HOST}/collections/{col_id}/delete/',
-                    headers={'X-CSRFToken': csrf},
-                )
+                session.post(f'{HOST}/collections/{col_id}/delete/',
+                             headers={'X-CSRFToken': csrf})
 
-    def test_free_cannot_create_collection(self, free_user):
-        res = self._create_col(free_user.session, 'free-col-test')
-        assert res.status_code == 403
-
-    def test_starter_can_create_collection(self, starter_user):
-        res = self._create_col(starter_user.session, unique_key('starter-col'))
-        assert res.status_code == 201
-        col_id = res.json().get('id')
-        assert col_id
-
-    def test_starter_capped_at_10_collections(self, starter_user):
-        from conftest import HOST
+    def _api_create(self, session, slug):
+        """Create a collection via HTTP and return its slug (as created)."""
         from cli.api.auth import get_csrf
-        # Delete existing collections first to start from 0
-        self._delete_all_collections(starter_user.session, starter_user.email)
-
-        for i in range(10):
-            r = self._create_col(starter_user.session, f'col-limit-{i}', f'col-limit-{i}')
-            assert r.status_code == 201, f"Creation {i} failed: {r.status_code}"
-
-        # 11th should fail
-        over = self._create_col(starter_user.session, 'col-over-limit', 'col-over-limit')
-        assert over.status_code == 403
-        assert 'limit' in over.json().get('error', '').lower()
-
-        # Cleanup
-        self._delete_all_collections(starter_user.session, starter_user.email)
-
-    def test_pro_unlimited_collections(self, pro_user):
-        for i in range(12):
-            r = self._create_col(pro_user.session, f'pro-col-{i}', f'pro-col-unlimited-{i}')
-            assert r.status_code == 201
-        # Cleanup
-        self._delete_all_collections(pro_user.session, pro_user.email)
-
-
-# ── Collections — CLI commands ────────────────────────────────────────────────
-
-class TestCollectionCli:
-    """Smoke-test `drp collection` subcommands against a real server."""
-
-    def _col_slug(self, label=''):
-        return unique_key(f'col-cli-{label}')[:30]
-
-    def test_collection_new_creates_collection(self, starter_user, cli_envs):
-        from conftest import run_drp
-        slug = self._col_slug('new')
-        result = run_drp('collection', 'new', slug.replace('-', ' '), env=cli_envs['starter'])
-        assert result.returncode == 0
-        assert slug in result.stdout or 'created' in result.stdout.lower()
+        csrf = get_csrf(HOST, session)
+        r = session.post(
+            f'{HOST}/collections/create/',
+            json={'name': slug, 'slug': slug},
+            headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json',
+                     'Accept': 'application/json'},
+        )
+        assert r.status_code == 201, f"Setup failed: {r.status_code} {r.text}"
+        return r.json()['slug']
 
     def test_collection_ls_shows_collections(self, starter_user, cli_envs):
         from conftest import run_drp
-        # Create one first so there's always something to list
-        slug = self._col_slug('ls')
-        run_drp('collection', 'new', 'ls test col', env=cli_envs['starter'])
+        self._api_delete_all(starter_user.session)
+        slug = unique_key('ls')[:20]
+        self._api_create(starter_user.session, slug)
         result = run_drp('collection', 'ls', env=cli_envs['starter'])
         assert result.returncode == 0
+        assert slug in result.stdout
+        self._api_delete_all(starter_user.session)
+
+    def test_collection_new_creates_collection(self, starter_user, cli_envs):
+        from conftest import run_drp
+        self._api_delete_all(starter_user.session)
+        # Name becomes the slug (lowercased, spaces→hyphens) server-side
+        name = unique_key('new')[:20]
+        result = run_drp('collection', 'new', name, env=cli_envs['starter'])
+        assert result.returncode == 0, f"new failed: {result.stderr}"
+        assert 'created' in result.stdout.lower() or name.split('-')[0] in result.stdout
+        self._api_delete_all(starter_user.session)
 
     def test_collection_add_and_rm(self, starter_user, cli_envs):
         from conftest import run_drp
         from cli.api.text import upload_text
-        # Create collection
-        slug = self._col_slug('add')
-        run_drp('collection', 'new', 'add test', env=cli_envs['starter'])
+        self._api_delete_all(starter_user.session)
+
+        # Create collection via HTTP so we know the exact slug
+        slug = unique_key('addrm')[:20]
+        self._api_create(starter_user.session, slug)
 
         # Upload a drop
-        key = unique_key('col-add-drop')
+        key = unique_key('col-drop')
         upload_text(HOST, starter_user.session, 'in collection', key=key, is_test=True)
 
-        # Add drop to collection
+        # Add drop via CLI
         result = run_drp('collection', 'add', slug, key, env=cli_envs['starter'])
-        assert result.returncode == 0
+        assert result.returncode == 0, f"add failed: {result.stderr}"
 
-        # Remove it
+        # Remove drop via CLI
         result = run_drp('collection', 'rm', slug, key, env=cli_envs['starter'])
-        assert result.returncode == 0
+        assert result.returncode == 0, f"rm failed: {result.stderr}"
+
+        self._api_delete_all(starter_user.session)
 
     def test_collection_free_user_cannot_create(self, free_user, cli_envs):
         from conftest import run_drp
         result = run_drp('collection', 'new', 'should-fail', env=cli_envs['free'])
-        # CLI should report error (non-zero exit or error output)
-        assert result.returncode != 0 or 'error' in result.stdout.lower() or 'error' in result.stderr.lower()
+        assert result.returncode != 0 or 'error' in (result.stdout + result.stderr).lower()
 
     def test_collection_open_prints_url(self, starter_user, cli_envs):
         from conftest import run_drp
-        slug = self._col_slug('open')
-        run_drp('collection', 'new', 'open test', env=cli_envs['starter'])
+        self._api_delete_all(starter_user.session)
+        slug = unique_key('open')[:20]
+        self._api_create(starter_user.session, slug)
         result = run_drp('collection', 'open', slug, env=cli_envs['starter'])
-        assert result.returncode == 0
+        assert result.returncode == 0, f"open failed: {result.stderr}"
         assert '@' in result.stdout or 'http' in result.stdout
+        self._api_delete_all(starter_user.session)
 
 
 # ── drp status — server drop count ───────────────────────────────────────────

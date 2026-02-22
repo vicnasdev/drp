@@ -466,7 +466,7 @@ class TestStatusServerCount:
         with patch('cli.commands.status.config') as mock_config, \
              patch('cli.commands.status.SESSION_FILE') as mock_sf, \
              patch('cli.commands.status._sync_local_cache'), \
-             patch('cli.commands.status.load_session'), \
+             patch('cli.session.load_session'), \
              patch('cli.spinner.Spinner'), \
              patch('builtins.print', side_effect=lambda *a, **k: output.append(' '.join(str(x) for x in a))):
 
@@ -519,9 +519,6 @@ class TestCollectionSlugCompleter:
         from cli.completion import _read_collection_cache
         cache = tmp_path / 'collections.json'
         cache.write_text(json.dumps(['my-notes', 'my-photos', 'work']))
-        with patch('cli.completion.__import__', side_effect=lambda *a, **k: None):
-            pass
-        # Patch CONFIG_DIR to tmp_path
         with patch('cli.config.CONFIG_DIR', tmp_path):
             results = _read_collection_cache('my-')
         assert 'my-notes' in results
