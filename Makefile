@@ -34,7 +34,7 @@ set-domain: ## Swap default host: make set-domain NEW=drp.fyi
 	@test -n "$(NEW)" || (echo "  ✗ Usage: make set-domain NEW=drp.fyi" && exit 1)
 	old=$$(grep -oP "(?<=DEFAULT_HOST = 'https://).*(?=')" cli/__init__.py); \
 	sed -i "s|https://$$old|https://$(NEW)|g" cli/__init__.py pyproject.toml
-	link=$$(grep -oP '(?<=\*\*\[Live →\]\().*(?=\))' README.md); \
+	link=$$(grep -oP '(?<=# \[drp\]\().*(?=\) )' README.md); \
 	sed -i "s|$${link}|https://$(NEW)|g" README.md
 	@echo "  ✓ Code and README updated."
 	@{ \

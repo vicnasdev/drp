@@ -1,7 +1,6 @@
-# drp ![version](https://img.shields.io/github/v/tag/vicnasdev/drp)
+# [drp](https://drp.vicnas.me) ![version](https://img.shields.io/github/v/tag/vicnasdev/drp)
 
-Drop files or paste text, get a link instantly.  
-**[Live →](https://drp.vicnas.me)**
+Drop files or paste text, get a link instantly.
 
 ```bash
 pipx install drp-cli
