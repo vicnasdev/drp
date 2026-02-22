@@ -362,19 +362,6 @@ def update_storage_on_delete(sender, instance, **kwargs):
                 instance.owner_id,
             )
 
-@receiver(post_save, sender=Drop)
-def mark_test_drop(sender, instance, created, **kwargs):
-    """If the owning user is a test user, mark the drop as test too.
-    Ensures drops created during integration tests are caught by
-    purge_test_data even after SET_NULL orphans them on user delete."""
-    if not created or instance.is_test or not instance.owner_id:
-        return
-    try:
-        if instance.owner.profile.is_test:
-            Drop.objects.filter(pk=instance.pk).update(is_test=True)
-    except Exception:
-        pass
-
 
 # ── SavedDrop ─────────────────────────────────────────────────────────────────
 

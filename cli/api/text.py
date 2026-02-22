@@ -15,7 +15,7 @@ def _touch_session():
 
 
 def upload_text(host, session, text, key=None, timer=None, expiry_days=None,
-                burn=False, password=None):
+                burn=False, password=None, is_test=False):
     """
     Upload text content.
     Returns the key string on success, None on failure.
@@ -30,6 +30,8 @@ def upload_text(host, session, text, key=None, timer=None, expiry_days=None,
         data['expiry_days'] = expiry_days
     if burn:
         data['burn'] = '1'
+    if is_test:
+        data['is_test'] = '1'
     try:
         res = session.post(f'{host}/save/', data=data, timeout=30)
         if timer:

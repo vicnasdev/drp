@@ -31,7 +31,7 @@ def _touch_session():
 
 # ── Upload ────────────────────────────────────────────────────────────────────
 
-def upload_file(host, session, filepath, key=None, expiry_days=None, password=None):
+def upload_file(host, session, filepath, key=None, expiry_days=None, password=None, is_test=False):
     """
     Upload a file using the prepare → direct-PUT → confirm flow.
     Returns the drop key string on success, None on failure.
@@ -53,6 +53,8 @@ def upload_file(host, session, filepath, key=None, expiry_days=None, password=No
         payload["key"] = key
     if expiry_days:
         payload["expiry_days"] = expiry_days
+    if is_test:
+        payload["is_test"] = True
 
     try:
         csrf = get_csrf(host, session)
@@ -127,6 +129,8 @@ def upload_file(host, session, filepath, key=None, expiry_days=None, password=No
         confirm_payload["expiry_days"] = expiry_days
     if password:
         confirm_payload["password"] = password
+    if is_test:
+        confirm_payload["is_test"] = True
 
     try:
         csrf = get_csrf(host, session)

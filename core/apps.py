@@ -1,5 +1,3 @@
-import os
-
 from django.apps import AppConfig
 
 
@@ -16,15 +14,9 @@ class CoreConfig(AppConfig):
         except Exception:
             pass  # never block startup if B2 credentials are missing
 
-        # Purge test data once per deploy, not once per worker.
-        # RUN_MAIN=true is set by Django's dev reloader for the parent process.
-        # Under gunicorn it is not set at all — so we check for a PURGE_DONE
-        # sentinel file to ensure only one worker runs the purge.
-        sentinel = '/tmp/drp_purge_done'
-        if not os.path.exists(sentinel):
-            try:
-                open(sentinel, 'w').close()
-                from django.core.management import call_command
-                call_command('purge_test_data', verbosity=0)
-            except Exception:
-                pass  # never block startup
+        # NOTE: purge_test_data is intentionally NOT called here.
+        # It must be run as a standalone management command before the server
+        # starts (e.g. in the deploy entrypoint before gunicorn).
+        # Calling it inside ready() triggers a Django RuntimeWarning because
+        # ready() is invoked during collectstatic and migrate too, before the
+        # app is fully initialised.

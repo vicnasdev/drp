@@ -32,19 +32,19 @@ class TestBurn:
 
     def test_free_burn_upload(self, free_user):
         key = unique_key('burn-free')
-        assert upload_text(HOST, free_user.session, 'burn me', key=key, burn=True)
+        assert upload_text(HOST, free_user.session, 'burn me', key=key, burn=True, is_test=True)
 
     def test_starter_burn_upload(self, starter_user):
         key = unique_key('burn-starter')
-        assert upload_text(HOST, starter_user.session, 'burn me', key=key, burn=True)
+        assert upload_text(HOST, starter_user.session, 'burn me', key=key, burn=True, is_test=True)
 
     def test_pro_burn_upload(self, pro_user):
         key = unique_key('burn-pro')
-        assert upload_text(HOST, pro_user.session, 'burn me', key=key, burn=True)
+        assert upload_text(HOST, pro_user.session, 'burn me', key=key, burn=True, is_test=True)
 
     def test_burn_consumed_on_first_read(self, free_user, anon):
         key = unique_key('burn-read')
-        upload_text(HOST, free_user.session, 'ephemeral', key=key, burn=True)
+        upload_text(HOST, free_user.session, 'ephemeral', key=key, burn=True, is_test=True)
         kind1, _ = get_clipboard(HOST, anon, key)
         assert kind1 == 'text'
         kind2, _ = get_clipboard(HOST, anon, key)
@@ -59,17 +59,17 @@ class TestExpiry:
     def test_free_expiry_not_applied(self, free_user):
         """Free plan: server ignores expiry_days. Upload must succeed."""
         key = free_user.track(unique_key('exp-free'))
-        result = upload_text(HOST, free_user.session, 'exp?', key=key, expiry_days=30)
+        result = upload_text(HOST, free_user.session, 'exp?', key=key, expiry_days=30, is_test=True)
         assert result is not None
 
     def test_starter_expiry_applied(self, starter_user):
         key = starter_user.track(unique_key('exp-starter'))
-        result = upload_text(HOST, starter_user.session, 'expires', key=key, expiry_days=30)
+        result = upload_text(HOST, starter_user.session, 'expires', key=key, expiry_days=30, is_test=True)
         assert result is not None
 
     def test_pro_expiry_applied(self, pro_user):
         key = pro_user.track(unique_key('exp-pro'))
-        result = upload_text(HOST, pro_user.session, 'expires', key=key, expiry_days=365)
+        result = upload_text(HOST, pro_user.session, 'expires', key=key, expiry_days=365, is_test=True)
         assert result is not None
 
 
@@ -80,20 +80,20 @@ class TestRenew:
 
     def test_free_drop_cannot_be_renewed(self, free_user):
         key = free_user.track(unique_key('renew-free'))
-        upload_text(HOST, free_user.session, 'renew?', key=key)
+        upload_text(HOST, free_user.session, 'renew?', key=key, is_test=True)
         expires_at, _ = renew(HOST, free_user.session, key, ns='c')
         assert expires_at is None
 
     def test_starter_drop_with_expiry_can_be_renewed(self, starter_user):
         key = starter_user.track(unique_key('renew-starter'))
-        upload_text(HOST, starter_user.session, 'renew', key=key, expiry_days=7)
+        upload_text(HOST, starter_user.session, 'renew', key=key, expiry_days=7, is_test=True)
         expires_at, count = renew(HOST, starter_user.session, key, ns='c')
         if expires_at is not None:
             assert isinstance(count, int)
 
     def test_pro_drop_with_expiry_can_be_renewed(self, pro_user):
         key = pro_user.track(unique_key('renew-pro'))
-        upload_text(HOST, pro_user.session, 'renew', key=key, expiry_days=7)
+        upload_text(HOST, pro_user.session, 'renew', key=key, expiry_days=7, is_test=True)
         expires_at, count = renew(HOST, pro_user.session, key, ns='c')
         if expires_at is not None:
             assert isinstance(count, int)
@@ -111,7 +111,7 @@ class TestFileSizeLimits:
         path = _tmp_file(content=content)
         key  = unique_key('fsize')
         try:
-            result = upload_file(HOST, user.session, path, key=key)
+            result = upload_file(HOST, user.session, path, key=key, is_test=True)
         finally:
             os.unlink(path)
         if result:
@@ -140,7 +140,7 @@ class TestCliNewCommands:
     def test_cp_clipboard(self, free_user, cli_envs):
         from conftest import run_drp
         key = unique_key('cp-src')
-        upload_text(HOST, free_user.session, 'copy me', key=key)
+        upload_text(HOST, free_user.session, 'copy me', key=key, is_test=True)
         env = cli_envs['free']
         result = run_drp('cp', key, unique_key('cp-dst'), env=env)
         assert result.returncode == 0
@@ -150,8 +150,8 @@ class TestCliNewCommands:
         from conftest import run_drp
         key1 = unique_key('diff-a')
         key2 = unique_key('diff-b')
-        upload_text(HOST, free_user.session, 'same', key=key1)
-        upload_text(HOST, free_user.session, 'same', key=key2)
+        upload_text(HOST, free_user.session, 'same', key=key1, is_test=True)
+        upload_text(HOST, free_user.session, 'same', key=key2, is_test=True)
         env = cli_envs['free']
         result = run_drp('diff', key1, key2, env=env)
         assert result.returncode == 0  # 0 = identical
@@ -160,8 +160,8 @@ class TestCliNewCommands:
         from conftest import run_drp
         key1 = unique_key('diffd-a')
         key2 = unique_key('diffd-b')
-        upload_text(HOST, free_user.session, 'aaa', key=key1)
-        upload_text(HOST, free_user.session, 'bbb', key=key2)
+        upload_text(HOST, free_user.session, 'aaa', key=key1, is_test=True)
+        upload_text(HOST, free_user.session, 'bbb', key=key2, is_test=True)
         env = cli_envs['free']
         result = run_drp('diff', key1, key2, env=env)
         assert result.returncode == 1  # 1 = different
@@ -169,7 +169,7 @@ class TestCliNewCommands:
     def test_status_key(self, free_user, cli_envs):
         from conftest import run_drp
         key = unique_key('stat')
-        upload_text(HOST, free_user.session, 'status test', key=key)
+        upload_text(HOST, free_user.session, 'status test', key=key, is_test=True)
         env = cli_envs['free']
         result = run_drp('status', key, env=env)
         assert result.returncode == 0
@@ -179,7 +179,7 @@ class TestCliNewCommands:
         import json, tempfile, os
         from conftest import run_drp
         key = unique_key('load-key')
-        upload_text(HOST, free_user.session, 'to import', key=key)
+        upload_text(HOST, free_user.session, 'to import', key=key, is_test=True)
         data = {'drops': [{'key': key, 'ns': 'c'}], 'saved': []}
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             json.dump(data, f)
@@ -200,7 +200,7 @@ class TestPasswordProtection:
         from cli.api.text import upload_text as upt
         import requests
         key = starter_user.track(unique_key('pw-set'))
-        upt(HOST, starter_user.session, 'secret', key=key)
+        upt(HOST, starter_user.session, 'secret', key=key, is_test=True)
         # Set password via API
         from cli.api.auth import get_csrf
         csrf = get_csrf(HOST, starter_user.session)
@@ -213,7 +213,7 @@ class TestPasswordProtection:
 
     def test_password_protected_drop_requires_password(self, starter_user, anon):
         key = starter_user.track(unique_key('pw-gate'))
-        upload_text(HOST, starter_user.session, 'guarded', key=key)
+        upload_text(HOST, starter_user.session, 'guarded', key=key, is_test=True)
         from cli.api.auth import get_csrf
         csrf = get_csrf(HOST, starter_user.session)
         starter_user.session.post(
@@ -227,7 +227,7 @@ class TestPasswordProtection:
 
     def test_correct_password_grants_access(self, starter_user, anon):
         key = starter_user.track(unique_key('pw-ok'))
-        upload_text(HOST, starter_user.session, 'unlocked content', key=key)
+        upload_text(HOST, starter_user.session, 'unlocked content', key=key, is_test=True)
         from cli.api.auth import get_csrf
         csrf = get_csrf(HOST, starter_user.session)
         starter_user.session.post(

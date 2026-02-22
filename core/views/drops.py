@@ -258,7 +258,8 @@ def _save_text(request, ns, key, existing, paid, anon_token):
         limit = Plan.get(user_plan(request.user), "max_text_kb")
         return JsonResponse({"error": f"Text exceeds {limit} KB."}, status=400)
 
-    burn = request.POST.get("burn") in ("1", "true", "True")
+    burn    = request.POST.get("burn") in ("1", "true", "True")
+    is_test = request.POST.get("is_test") in ("1", "true", "True")
 
     if existing:
         existing.content = text
@@ -277,6 +278,7 @@ def _save_text(request, ns, key, existing, paid, anon_token):
             max_lifetime_secs=max_lifetime_secs(request.user, ns),
             anon_token=anon_token,
             burn=burn,
+            is_test=is_test,
         )
 
     # Set password if provided and caller is owner on paid plan
@@ -367,6 +369,7 @@ def upload_confirm(request):
     filename = (data.get("filename") or key).strip()
     burn     = bool(data.get("burn", False))
     password = (data.get("password") or "").strip()
+    is_test  = bool(data.get("is_test", False))
 
     if not key or ns not in (Drop.NS_CLIPBOARD, Drop.NS_FILE):
         return JsonResponse({"error": "key and valid ns required."}, status=400)
@@ -437,6 +440,7 @@ def upload_confirm(request):
             max_lifetime_secs=max_lifetime_secs(request.user, ns),
             anon_token=anon_token,
             burn=burn,
+            is_test=is_test,
         )
         add_storage(request.user, actual_size)
 
