@@ -1,4 +1,4 @@
 """drp CLI — command-line tool for drp."""
 
-__version__ = '0.2.25'
+__version__ = '0.2.26'
 DEFAULT_HOST = 'https://drp.vicnas.me'
