@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from core import views
 from core.views.error_reporting import report_error
 from core.views.github_webhook import github_webhook
-from core.views.drops import raw_view, set_drop_password
+from core.views.drops import raw_view, raw_file, set_drop_password
 from core.views.legal import privacy_view, terms_view
 
 KEY = r"(?P<key>[^/\s]+)"
@@ -60,7 +60,7 @@ urlpatterns = [
     re_path(r"^@(?P<username>[^/]+)/$",             views.user_collections,         name="user_collections"),
     re_path(r"^@(?P<username>[^/]+)/(?P<slug>[^/]+)/$", views.collection_view,     name="collection_view"),
     re_path(rf"^f/{KEY}/download/$",      views.download_drop,                         name="download_drop"),
-    re_path(rf"^f/{KEY}/raw/$",            views.raw_file,                              name="raw_file"),
+    re_path(rf"^f/{KEY}/raw/$",            raw_file,                                    name="raw_file"),
     re_path(rf"^f/{KEY}/rename/$",        views.rename_drop,    {"ns": "f"},           name="rename_file"),
     re_path(rf"^f/{KEY}/delete/$",        views.delete_drop,    {"ns": "f"},           name="delete_file"),
     re_path(rf"^f/{KEY}/renew/$",         views.renew_drop,     {"ns": "f"},           name="renew_file"),
