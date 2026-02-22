@@ -88,6 +88,7 @@ def report(command: str, exc: Exception) -> None:
     })
 
 
+
 def report_http_error(command: str, status_code: int, context: str = '') -> None:
     """
     Report a non-OK HTTP response that caused a handled early return.
