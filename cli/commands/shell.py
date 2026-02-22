@@ -63,8 +63,8 @@ def cmd_shell(args):
 
     def prompt():
         if cwd:
-            return f'{magenta("@" + username + "/" + cwd)}  {dim("❯")} '
-        return f'{cyan("drp")}  {dim("❯")} '
+            return f'{magenta("@" + username + "/" + cwd)}> '
+        return f'{cyan("drp")}> '
 
     def _run_line(line, cwd):
         """Parse and execute one shell line. Returns updated cwd."""
@@ -325,7 +325,10 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
     # ── status ────────────────────────────────────────────────────────────────
     if cmd == 'status':
         if not rest:
-            return [f'  {red("✗")} Usage: status <key>']
+            from cli.commands.status import cmd_status
+            import argparse
+            cmd_status(argparse.Namespace(key=None, file=False, clip=False))
+            return None
         key = rest[0]
         try:
             res = session.get(f'{host}/{key}/', headers={'Accept': 'application/json'}, timeout=10)

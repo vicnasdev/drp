@@ -28,7 +28,11 @@ def cmd_status(args):
     with Spinner('loading'):
         _sync_local_cache(cfg)
 
-    local_count = len(config.load_local_drops())
+    current_host = cfg.get('host', '')
+    local_count = sum(
+        1 for d in config.load_local_drops()
+        if d.get('host', '') != current_host or d.get('from_server', False)
+    )
 
     # Fetch server drop count when authed
     server_count = None
