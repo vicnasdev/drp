@@ -483,18 +483,26 @@ def _delete_all_collections(session):
     for _ in range(3):  # up to 3 passes
         res = session.get(f'{HOST}/auth/account/', headers={'Accept': 'application/json'})
         if not res.ok:
-            return
-        cols = res.json().get('collections', [])
+            raise RuntimeError(f'Account fetch failed: {res.status_code} url={res.url}')
+        try:
+            data = res.json()
+        except Exception:
+            raise RuntimeError(f'Account response not JSON (redirected to login?): url={res.url} body={res.text[:200]}')
+        if 'collections' not in data:
+            raise RuntimeError(f'No collections key in response: {list(data.keys())} url={res.url}')
+        cols = data['collections']
         if not cols:
             return
         for col in cols:
             col_id = col.get('id')
             if col_id:
                 csrf = get_csrf(HOST, session)
-                session.post(
+                r = session.post(
                     f'{HOST}/collections/{col_id}/delete/',
                     headers={'X-CSRFToken': csrf, 'Referer': HOST + '/'},
                 )
+                if not r.ok:
+                    raise RuntimeError(f'Delete {col_id} failed: status={r.status_code} url={r.url} body={r.text[:300]}')
 
 
 class TestCollectionPlanRestrictions:
