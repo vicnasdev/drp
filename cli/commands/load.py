@@ -12,22 +12,11 @@ Requires login.
 import json
 import sys
 
-import requests
-
-from cli import config
-from cli.session import auto_login
+from cli.commands._context import load_context
 
 
 def cmd_load(args):
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(1)
-
-    if not cfg.get('email'):
-        print('  ✗ drp load requires a logged-in account. Run: drp login')
-        sys.exit(1)
+    cfg, host, session = load_context(require_login=True)
 
     try:
         with open(args.file) as f:
@@ -37,12 +26,6 @@ def cmd_load(args):
         sys.exit(1)
     except json.JSONDecodeError as e:
         print(f'  ✗ Invalid JSON: {e}')
-        sys.exit(1)
-
-    session = requests.Session()
-    authed = auto_login(cfg, host, session)
-    if not authed:
-        print('  ✗ Not logged in. Run: drp login')
         sys.exit(1)
 
     from cli.api.auth import get_csrf
@@ -68,6 +51,6 @@ def cmd_load(args):
 
     result = res.json()
     imported = result.get('imported', 0)
-    skipped = result.get('skipped', 0)
+    skipped  = result.get('skipped', 0)
 
     print(f'  ✓ Imported {imported} drop(s) as saved.' + (f' {skipped} already saved or skipped.' if skipped else ''))

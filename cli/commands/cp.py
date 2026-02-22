@@ -7,10 +7,7 @@ drp cp — duplicate a drop under a new key.
 
 import sys
 
-import requests
-
-from cli import config
-from cli.session import auto_login
+from cli.commands._context import load_context
 from cli.api.auth import get_csrf
 from cli.api.helpers import err
 
@@ -22,14 +19,7 @@ def _url(host, ns, key):
 
 
 def cmd_cp(args):
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(1)
-
-    session = requests.Session()
-    auto_login(cfg, host, session)
+    cfg, host, session = load_context()
 
     ns = 'f' if getattr(args, 'file', False) and not getattr(args, 'clip', False) else 'c'
 

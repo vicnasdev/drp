@@ -13,6 +13,7 @@ from conftest import HOST, unique_key
 from cli.api.text import upload_text, get_clipboard
 from cli.api.file import upload_file, get_file
 from cli.api.actions import delete, rename, save_bookmark
+from tests.integration.conftest import api_post
 
 
 def _tmp(content=b'data', suffix='.bin'):
@@ -79,25 +80,15 @@ class TestAccessControl:
     def test_other_cannot_overwrite_paid_drop(self, starter_user, free_user):
         key = unique_key('ac-lock')
         upload_text(HOST, starter_user.session, 'owner content', key=key, is_test=True)
-        from cli.api.auth import get_csrf
-        csrf = get_csrf(HOST, free_user.session)
-        res = free_user.session.post(
-            f'{HOST}/save/',
-            data={'key': key, 'content': 'hijack', 'csrfmiddlewaretoken': csrf},
-            headers={'Accept': 'application/json'},
-        )
+        res = api_post(free_user.session, f'{HOST}/save/',
+                       data={'key': key, 'content': 'hijack'})
         assert res.status_code == 403
 
     def test_anon_cannot_overwrite_paid_drop(self, starter_user, anon):
         key = unique_key('ac-lock-anon')
         upload_text(HOST, starter_user.session, 'owner content', key=key, is_test=True)
-        from cli.api.auth import get_csrf
-        csrf = get_csrf(HOST, anon)
-        res = anon.post(
-            f'{HOST}/save/',
-            data={'key': key, 'content': 'hijack', 'csrfmiddlewaretoken': csrf},
-            headers={'Accept': 'application/json', 'Referer': f'{HOST}/'},
-        )
+        res = api_post(anon, f'{HOST}/save/',
+                       data={'key': key, 'content': 'hijack'})
         assert res.status_code == 403
 
     def test_owner_can_overwrite_own_drop(self, starter_user):
@@ -159,32 +150,20 @@ class TestRenameDelete:
 
 class TestCopy:
     def test_copy_produces_new_drop(self, free_user, anon):
-        from cli.api.auth import get_csrf
         key     = unique_key('cp-orig')
         new_key = unique_key('cp-copy')
         upload_text(HOST, free_user.session, 'original', key=key, is_test=True)
-        csrf = get_csrf(HOST, free_user.session)
-        res = free_user.session.post(
-            f'{HOST}/{key}/copy/',
-            json={'new_key': new_key},
-            headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
-        )
+        res = api_post(free_user.session, f'{HOST}/{key}/copy/', json_body={'new_key': new_key})
         assert res.ok
         kind, content = get_clipboard(HOST, anon, new_key)
         assert kind == 'text' and content == 'original'
 
     def test_copy_to_taken_key_returns_409(self, free_user):
-        from cli.api.auth import get_csrf
         key1 = unique_key('cp-409a')
         key2 = unique_key('cp-409b')
         upload_text(HOST, free_user.session, 'a', key=key1, is_test=True)
         upload_text(HOST, free_user.session, 'b', key=key2, is_test=True)
-        csrf = get_csrf(HOST, free_user.session)
-        res = free_user.session.post(
-            f'{HOST}/{key1}/copy/',
-            json={'new_key': key2},
-            headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
-        )
+        res = api_post(free_user.session, f'{HOST}/{key1}/copy/', json_body={'new_key': key2})
         assert res.status_code == 409
 
 

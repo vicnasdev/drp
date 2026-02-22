@@ -13,38 +13,32 @@ drp get — fetch a clipboard drop or download a file.
 import sys
 import getpass
 
-import requests
-
-from cli import config, api
-from cli.session import auto_login
+from cli import api
+from cli.commands._context import load_context
 from cli.timing import Timer
 
 
 def cmd_get(args):
     t = Timer(enabled=getattr(args, 'timing', False))
 
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(1)
-
-    t.checkpoint('load config')
-
+    # --url shortcut: no network call needed beyond config
     if getattr(args, 'url', False):
+        from cli import config
+        cfg = config.load()
+        host = cfg.get('host')
+        if not host:
+            print('  ✗ Not configured. Run: drp setup')
+            import sys; sys.exit(1)
         if getattr(args, 'file', False) and not getattr(args, 'clip', False):
             print(f'{host}/f/{args.key}/')
         else:
             print(f'{host}/{args.key}/')
         return
 
-    session = requests.Session()
+    cfg, host, session = load_context()
     t.instrument(session)
-    auto_login(cfg, host, session)
+    t.checkpoint('load config')
 
-    t.checkpoint('load session')
-
-    # Password from flag or will be prompted on 401
     password = getattr(args, 'password', None) or ''
 
     if getattr(args, 'file', False) and not getattr(args, 'clip', False):
@@ -62,7 +56,6 @@ def _get_clipboard(args, host, session, t, password=''):
         kind, content = api.get_clipboard(host, session, args.key,
                                           timer=t, password=password)
 
-    # Password required — prompt and retry once
     if kind == 'password_required':
         try:
             password = getpass.getpass(f'  Password for /{args.key}/: ')
@@ -109,7 +102,6 @@ def _get_file(args, host, session, t, password=''):
     with Spinner('fetching'):
         kind, result = api.get_file(host, session, args.key, password=password)
 
-    # Password required — prompt and retry once
     if kind == 'password_required':
         try:
             password = getpass.getpass(f'  Password for /f/{args.key}/: ')

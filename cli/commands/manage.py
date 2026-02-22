@@ -12,6 +12,7 @@ import requests
 
 from cli import config, api
 from cli.session import auto_login
+from cli.commands._context import load_context
 from cli.format import human_time
 from cli.crash_reporter import report_outcome
 
@@ -22,15 +23,7 @@ def _parse_key(raw, is_file=False, is_clip=False):
 
 
 def cmd_rm(args):
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(1)
-
-    session = requests.Session()
-    auto_login(cfg, host, session)
-
+    cfg, host, session = load_context()
     ns, key = _parse_key(args.key, args.file, getattr(args, 'clip', False))
 
     if api.delete(host, session, key, ns=ns):
@@ -48,15 +41,7 @@ def cmd_rm(args):
 
 
 def cmd_mv(args):
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(1)
-
-    session = requests.Session()
-    auto_login(cfg, host, session)
-
+    cfg, host, session = load_context()
     ns, key = _parse_key(args.key, args.file, getattr(args, 'clip', False))
     result = api.rename(host, session, key, args.new_key, ns=ns)
 
@@ -82,15 +67,7 @@ def cmd_mv(args):
 
 
 def cmd_renew(args):
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(1)
-
-    session = requests.Session()
-    auto_login(cfg, host, session)
-
+    cfg, host, session = load_context()
     ns, key = _parse_key(args.key, args.file, getattr(args, 'clip', False))
     expires_at, renewals = api.renew(host, session, key, ns=ns)
 

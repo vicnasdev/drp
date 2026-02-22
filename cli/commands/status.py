@@ -7,11 +7,11 @@ drp status and drp ping commands.
 """
 
 import sys
-
 import requests
 
 from cli import config
 from cli.session import SESSION_FILE
+from cli.commands._context import load_context
 
 
 def cmd_status(args):
@@ -29,14 +29,13 @@ def cmd_status(args):
         _sync_local_cache(cfg)
 
     current_host = cfg.get('host', '')
-    local_count = sum(
+    local_count  = sum(
         1 for d in config.load_local_drops()
         if d.get('host', '') != current_host or d.get('from_server', False)
     )
 
-    # Fetch server drop count when authed
-    server_count = None
-    local_only   = None
+    server_count   = None
+    local_only     = None
     session_active = SESSION_FILE.exists()
     if session_active:
         try:
@@ -50,7 +49,7 @@ def cmd_status(args):
                 timeout=6,
             )
             if res.ok:
-                data = res.json()
+                data        = res.json()
                 server_keys = {(d.get('ns'), d.get('key')) for d in data.get('drops', [])}
                 server_count = len(server_keys)
                 local_drops  = config.load_local_drops()
@@ -65,8 +64,8 @@ def cmd_status(args):
     print(dim('──────────'))
     print(f'  {dim("Host:")}        {cfg.get("host", "(not set)")}')
 
-    username = cfg.get('username', '')
-    email    = cfg.get('email', 'anonymous')
+    username    = cfg.get('username', '')
+    email       = cfg.get('email', 'anonymous')
     account_str = f'{cyan("@" + username)}  {dim(email)}' if username else dim(email)
     print(f'  {dim("Account:")}     {account_str}')
 
@@ -85,23 +84,14 @@ def cmd_status(args):
 
 
 def _drop_status(args, key):
-    """Fetch and display view stats for a specific drop."""
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(1)
+    cfg, host, session = load_context()
 
-    ns = 'f' if getattr(args, 'file', False) and not getattr(args, 'clip', False) else 'c'
+    ns  = 'f' if getattr(args, 'file', False) and not getattr(args, 'clip', False) else 'c'
     url = f'{host}/f/{key}/' if ns == 'f' else f'{host}/{key}/'
 
     from cli.spinner import Spinner
-    from cli.format import dim, green, red, bold
+    from cli.format import dim, green, bold
     from cli.api.helpers import err
-
-    session = requests.Session()
-    from cli.session import auto_login
-    auto_login(cfg, host, session)
 
     try:
         with Spinner('fetching'):
@@ -120,10 +110,8 @@ def _drop_status(args, key):
         err(f'Server returned {res.status_code}.')
         sys.exit(1)
 
-    data = res.json()
-
+    data   = res.json()
     from cli.format import human_time
-
     prefix = 'f/' if ns == 'f' else ''
     views  = data.get('view_count', 0)
     last   = data.get('last_viewed_at')
@@ -138,16 +126,11 @@ def _drop_status(args, key):
         print(f'  {dim("expires")}     {human_time(data.get("expires_at"))}')
     else:
         kind = data.get('kind', 'text')
-        idle = dim('24h after last access' if kind == 'text' else '90d after upload')
+        idle = dim('activity-based' if kind == 'text' else 'activity-based expiry')
         print(f'  {dim("expires")}     {idle}')
 
 
 def _sync_local_cache(cfg) -> None:
-    """
-    Synchronously prune dead drops from the local cache.
-    Only runs if a session exists and the user is logged in.
-    Silent — never blocks or raises.
-    """
     try:
         from cli.session import SESSION_FILE
         if not SESSION_FILE.exists():
@@ -163,27 +146,24 @@ def _sync_local_cache(cfg) -> None:
 
 
 def cmd_ping(args):
-    cfg = config.load()
+    from cli import config as cfg_mod
+    from cli.format import green, red
+    cfg  = cfg_mod.load()
     host = cfg.get('host')
     if not host:
         print('  ✗ Not configured. Run: drp setup')
         sys.exit(1)
 
-    from cli.format import green, red
-
     try:
-        res = requests.get(f'{host}/', timeout=5)
+        res  = requests.get(f'{host}/', timeout=5)
         tick = green('✓')
         print(f'  {tick} {host} reachable (HTTP {res.status_code})')
     except requests.ConnectionError:
-        cross = red('✗')
-        print(f'  {cross} {host} unreachable — connection refused.')
+        print(f'  {red("✗")} {host} unreachable — connection refused.')
         sys.exit(1)
     except requests.Timeout:
-        cross = red('✗')
-        print(f'  {cross} {host} unreachable — timed out.')
+        print(f'  {red("✗")} {host} unreachable — timed out.')
         sys.exit(1)
     except Exception as e:
-        cross = red('✗')
-        print(f'  {cross} {host} unreachable: {e}')
+        print(f'  {red("✗")} {host} unreachable: {e}')
         sys.exit(1)

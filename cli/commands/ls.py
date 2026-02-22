@@ -15,10 +15,8 @@ import json
 import sys
 from datetime import datetime, timezone
 
-import requests
 
-from cli import config
-from cli.session import auto_login
+from cli.commands._context import load_context
 
 
 # ── Formatting helpers ────────────────────────────────────────────────────────
@@ -64,21 +62,7 @@ def _until(iso):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def cmd_ls(args):
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(1)
-
-    if not cfg.get('email'):
-        print('  ✗ drp ls requires a logged-in account. Run: drp login')
-        sys.exit(1)
-
-    session = requests.Session()
-    authed = auto_login(cfg, host, session)
-    if not authed:
-        print('  ✗ Not logged in. Run: drp login')
-        sys.exit(1)
+    cfg, host, session = load_context(require_login=True)
 
     from cli.spinner import Spinner
     from cli.format import dim, green, cyan, yellow, magenta, blue, grey, bold

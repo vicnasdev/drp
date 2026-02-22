@@ -16,29 +16,15 @@ import glob
 import os
 import sys
 
-import requests
-
-from cli import config, api
-from cli.session import auto_login
+from cli import api, config
+from cli.commands._context import load_context
 from cli.commands.upload import _parse_expires
 from cli.crash_reporter import report_outcome
 
 
 def cmd_serve(args):
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(1)
+    cfg, host, session = load_context(require_login=True)
 
-    session = requests.Session()
-    authed = auto_login(cfg, host, session)
-
-    if not cfg.get('email') or not authed:
-        print('  ✗ drp serve requires a logged-in account. Run: drp login')
-        sys.exit(1)
-
-    # ── Resolve file list ─────────────────────────────────────────────────────
     paths = _resolve_paths(args.targets)
     if not paths:
         print('  ✗ No files found.')
@@ -48,7 +34,7 @@ def cmd_serve(args):
 
     from cli.format import green, red, dim, bold
 
-    col_w = max(len(os.path.basename(p)) for p in paths) + 2
+    col_w    = max(len(os.path.basename(p)) for p in paths) + 2
     uploaded = []
     skipped  = []
 
@@ -58,7 +44,6 @@ def cmd_serve(args):
         filename = os.path.basename(path)
         key = api.slug(filename)
 
-        # Avoid key collisions by appending a short random suffix
         from cli.api.actions import key_exists
         import secrets
         if key_exists(host, session, key, ns='f'):
@@ -95,12 +80,11 @@ def _resolve_paths(targets):
     Expand targets to a deduplicated list of file paths.
     Each target can be a file path, directory, or glob pattern.
     """
-    seen = set()
+    seen   = set()
     result = []
 
     for target in targets:
         if os.path.isdir(target):
-            # All files directly in the directory (non-recursive)
             for entry in sorted(os.listdir(target)):
                 full = os.path.join(target, entry)
                 if os.path.isfile(full) and full not in seen:
@@ -111,9 +95,7 @@ def _resolve_paths(targets):
                 seen.add(target)
                 result.append(target)
         else:
-            # Try glob
-            matches = sorted(glob.glob(target))
-            for full in matches:
+            for full in sorted(glob.glob(target)):
                 if os.path.isfile(full) and full not in seen:
                     seen.add(full)
                     result.append(full)

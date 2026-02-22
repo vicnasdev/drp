@@ -97,7 +97,7 @@ def _build_epilog():
         '',
         'urls:',
         '  /key/      clipboard — activity-based expiry',
-        '  /f/key/    file — expires 90 days after upload (anon)',
+        '  /f/key/    file — expires after upload (anon) or by quota (paid)',
         '  /raw/key/  clipboard as plain text — for curl | bash workflows',
         '',
         'key format:',

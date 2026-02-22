@@ -2,1031 +2,548 @@
 {% block ads %}{% endblock %}
 {% load static %}
 
-{% block title %}Mobile Blueprint · drp{% endblock %}
+{% block title %}Mobile API Reference · drp{% endblock %}
 
 {% block extra_css %}
 <style>
-  body:has(.blueprint-wrap) .page-content {
-    max-width: none;
-    padding: 0;
-    width: 100%;
-    margin: 0;
-  }
+  body:has(.mbp) .page-content { max-width: none; padding: 0; }
 
-  .blueprint-wrap {
-    display: flex;
-    gap: 2rem;
-    padding: 2rem;
-    max-width: 1400px;
-    margin: 0 auto;
-    align-items: flex-start;
-  }
+  .mbp { display: flex; min-height: 100vh; }
 
-  .bp-nav {
-    width: 180px;
+  /* ── Sidebar ── */
+  .mbp-nav {
+    width: 200px;
     flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem;
     position: sticky;
-    top: 80px;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
   }
-
-  .bp-nav h3 {
-    font-size: .7rem;
+  .mbp-nav h4 {
+    font-size: .65rem;
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--muted);
-    margin-bottom: .75rem;
+    margin: 1rem 0 .4rem;
   }
-
-  .bp-nav button {
+  .mbp-nav h4:first-child { margin-top: 0; }
+  .mbp-nav a {
     display: block;
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
+    font-size: .82rem;
     color: var(--muted);
-    font-size: .85rem;
-    padding: .4rem .6rem;
+    padding: .3rem .5rem;
     border-radius: var(--radius);
-    cursor: pointer;
-    transition: background .15s, color .15s;
+    text-decoration: none;
     margin-bottom: 2px;
   }
+  .mbp-nav a:hover { background: var(--surface); color: var(--text); }
 
-  .bp-nav button:hover { background: var(--surface); color: var(--text); }
-  .bp-nav button.active { background: var(--surface); color: var(--accent); font-weight: 600; }
+  /* ── Main ── */
+  .mbp-main { flex: 1; padding: 2rem 2.5rem; max-width: 860px; }
 
-  .phone-wrap {
-    flex-shrink: 0;
-    position: sticky;
-    top: 80px;
+  .mbp-main h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 2.5rem 0 .2rem;
+    padding-top: 2.5rem;
+    border-top: 1px solid var(--border);
+    scroll-margin-top: 1rem;
   }
+  .mbp-main h2:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
 
-  .phone {
-    width: 280px;
-    height: 560px;
-    background: #111;
-    border-radius: 36px;
-    border: 2px solid #333;
-    box-shadow: 0 0 0 6px #1a1a1a, 0 20px 60px rgba(0,0,0,.6);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-  }
-
-  .phone-notch {
-    width: 80px;
-    height: 18px;
-    background: #111;
-    border-bottom-left-radius: 10px;
-    border-bottom-right-radius: 10px;
-    margin: 0 auto;
-    flex-shrink: 0;
-    position: relative;
-    z-index: 2;
-    border-bottom: 1px solid #222;
-  }
-
-  .phone-screen {
-    flex: 1;
-    overflow-y: auto;
-    scrollbar-width: none;
-    background: #0f0f0f;
-    padding: 12px;
-    font-size: 11px;
-  }
-
-  .phone-screen::-webkit-scrollbar { display: none; }
-
-  .ps-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #222;
-  }
-
-  .ps-logo { font-weight: 800; font-size: 14px; color: #e8e8e8; letter-spacing: -0.5px; }
-
-  .ps-input {
-    width: 100%;
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 6px;
-    padding: 7px 10px;
-    color: #e8e8e8;
-    font-size: 11px;
-    margin-bottom: 6px;
-    font-family: system-ui;
-  }
-
-  .ps-btn {
-    width: 100%;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    padding: 8px;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    margin-bottom: 6px;
-  }
-
-  .ps-btn.secondary {
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    color: var(--muted);
-  }
-
-  .ps-btn.danger { background: #2a1a1a; color: var(--danger); border: 1px solid #3a2020; }
-
-  .ps-link-box {
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 6px;
-    padding: 8px 10px;
-    font-family: 'Courier New', monospace;
-    font-size: 10px;
-    color: var(--accent);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-
-  .ps-copy-icon { font-size: 12px; cursor: pointer; }
-
-  .ps-label {
-    font-size: 9px;
+  .mbp-main h3 {
+    font-size: .8rem;
     text-transform: uppercase;
     letter-spacing: .08em;
     color: var(--muted);
-    margin-bottom: 4px;
-    margin-top: 8px;
+    margin: 1.5rem 0 .6rem;
+    padding-bottom: .4rem;
+    border-bottom: 1px solid var(--border);
   }
 
-  .ps-drop-card {
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 6px;
-    padding: 8px 10px;
-    margin-bottom: 6px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .ps-drop-key { font-family: monospace; color: #e8e8e8; font-size: 11px; }
-  .ps-drop-meta { font-size: 9px; color: var(--muted); margin-top: 2px; }
-  .ps-drop-actions { display: flex; gap: 4px; font-size: 13px; }
-
-  .ps-plan-card {
-    border: 1px solid #2a2a2a;
-    border-radius: 8px;
-    padding: 10px;
-    margin-bottom: 8px;
-    background: #1a1a1a;
-  }
-
-  .ps-plan-card.highlight { border-color: var(--accent); }
-  .ps-plan-name { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
-  .ps-plan-features { font-size: 9px; color: var(--muted); line-height: 1.6; }
-
-  .ps-tab-bar {
-    display: flex;
-    background: #111;
-    border-top: 1px solid #222;
-    padding: 6px 0 4px;
-    flex-shrink: 0;
-  }
-
-  .ps-tab {
-    flex: 1;
-    text-align: center;
-    font-size: 9px;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 2px 0;
-  }
-
-  .ps-tab.active { color: var(--accent); }
-  .ps-tab-icon { font-size: 14px; display: block; }
-
-  .ps-badge {
-    display: inline-block;
-    background: #1e2d1e;
-    color: #4caf50;
-    border-radius: 4px;
-    padding: 1px 5px;
-    font-size: 9px;
-    font-weight: 600;
-  }
-
-  .ps-badge.pro { background: #1e2040; color: var(--accent); }
-  .ps-badge.free { background: #252525; color: var(--muted); }
-
-  .ps-section-title {
-    font-size: 13px;
-    font-weight: 700;
-    color: #e8e8e8;
-    margin-bottom: 10px;
-  }
-
-  .ps-divider {
-    border: none;
-    border-top: 1px solid #222;
-    margin: 10px 0;
-  }
-
-  .ps-muted { color: var(--muted); font-size: 10px; }
-
-  .ps-toggle-row {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 10px;
-  }
-
-  .ps-toggle {
-    flex: 1;
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 6px;
-    padding: 5px;
-    font-size: 10px;
-    color: var(--muted);
-    cursor: pointer;
-    text-align: center;
-  }
-
-  .ps-toggle.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-
-  .ps-preview-box {
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 6px;
-    padding: 10px;
-    font-size: 10px;
-    color: #c8d3e8;
-    line-height: 1.5;
-    margin-bottom: 8px;
-    font-family: monospace;
-    min-height: 60px;
-  }
-
-  .ps-file-info {
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 6px;
-    padding: 10px;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .ps-file-icon { font-size: 22px; }
-  .ps-file-name { font-size: 11px; color: #e8e8e8; }
-  .ps-file-size { font-size: 9px; color: var(--muted); margin-top: 2px; }
-
-  .ps-action-row {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 6px;
-  }
-
-  .ps-action-btn {
-    flex: 1;
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 6px;
-    padding: 6px 4px;
-    font-size: 9px;
-    color: var(--muted);
-    text-align: center;
-    cursor: pointer;
-  }
-
-  .ps-action-btn.danger { color: var(--danger); border-color: #3a2020; }
-
-  /* Docs panel */
-  .bp-docs { flex: 1; min-width: 0; }
-  .bp-screen { display: none; }
-  .bp-screen.active { display: block; }
-
-  .bp-screen h2 {
-    font-size: 1.2rem;
-    font-weight: 700;
-    margin-bottom: .25rem;
-    color: var(--text);
-  }
-
-  .bp-screen .subtitle {
-    color: var(--muted);
-    font-size: .85rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .endpoint {
+  .ep {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    margin-bottom: 1rem;
+    margin-bottom: .75rem;
     overflow: hidden;
   }
-
-  .endpoint-header {
+  .ep-head {
     display: flex;
     align-items: center;
-    gap: .75rem;
-    padding: .65rem 1rem;
+    gap: .65rem;
+    padding: .55rem .9rem;
     border-bottom: 1px solid var(--border);
-    position: relative;
   }
-
-  .endpoint-header:last-child { border-bottom: none; }
+  .ep-head:last-child { border-bottom: none; }
+  .ep-body { padding: .65rem .9rem; }
 
   .method {
-    font-size: .7rem;
+    font-size: .65rem;
     font-weight: 700;
     padding: 2px 7px;
     border-radius: 4px;
     font-family: monospace;
     flex-shrink: 0;
   }
+  .m-get    { background: #1e3a1e; color: #4caf50; }
+  .m-post   { background: #1e2d4a; color: #5b8dee; }
+  .m-delete { background: #3a1e1e; color: var(--danger); }
+  .m-put    { background: #3a2e1e; color: #e0a855; }
+  .m-brw    { background: #252525; color: var(--muted); }
 
-  .method.GET { background: #1e3a1e; color: #4caf50; }
-  .method.POST { background: #1e2d4a; color: #5b8dee; }
-  .method.DELETE { background: #3a1e1e; color: var(--danger); }
-  .method.PUT { background: #3a2e1e; color: #e0a855; }
-  .method.BROWSER { background: #252525; color: var(--muted); }
-
-  .endpoint-path {
-    font-family: monospace;
-    font-size: .85rem;
-    color: var(--text);
-  }
-
-  .endpoint-note { font-size: .75rem; color: var(--muted); margin-left: auto; }
-
-  .tip-icon {
-    margin-left: .5rem;
-    cursor: help;
-    color: var(--muted);
-    font-size: .8rem;
-    position: relative;
-  }
-
-  .tip-icon .tip-text {
-    display: none;
-    position: absolute;
-    right: 0;
-    top: 120%;
-    background: #222;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: .5rem .75rem;
-    font-size: .75rem;
-    color: var(--text);
-    width: 260px;
-    z-index: 100;
-    line-height: 1.5;
-    font-family: system-ui;
-    box-shadow: 0 4px 20px rgba(0,0,0,.5);
-  }
-
-  .tip-icon:hover .tip-text { display: block; }
-
-  .endpoint-body { padding: .75rem 1rem; }
+  .ep-path { font-family: monospace; font-size: .85rem; }
+  .ep-note { font-size: .72rem; color: var(--muted); margin-left: auto; }
 
   .ep-label {
-    font-size: .7rem;
+    font-size: .65rem;
     text-transform: uppercase;
     letter-spacing: .08em;
     color: var(--muted);
-    margin-bottom: .35rem;
-    margin-top: .65rem;
+    margin: .6rem 0 .3rem;
   }
-
   .ep-label:first-child { margin-top: 0; }
 
   pre {
     background: #111;
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: .6rem .85rem;
-    font-size: .78rem;
+    border-radius: 5px;
+    padding: .55rem .8rem;
+    font-size: .77rem;
     overflow-x: auto;
     color: #c8d3e8;
-    line-height: 1.5;
+    line-height: 1.55;
+    margin: 0;
   }
 
-  .paid-badge {
-    display: inline-block;
-    background: #1e2d40;
-    color: var(--accent);
-    font-size: .65rem;
-    padding: 1px 6px;
-    border-radius: 4px;
-    margin-left: .4rem;
-    vertical-align: middle;
-    font-weight: 600;
+  .badge-paid {
+    font-size: .62rem; font-weight: 700;
+    background: #1e2d40; color: var(--accent);
+    padding: 1px 6px; border-radius: 3px; margin-left: .3rem;
+  }
+  .badge-auth {
+    font-size: .62rem; font-weight: 700;
+    background: #2a1e35; color: #b57bee;
+    padding: 1px 6px; border-radius: 3px; margin-left: .3rem;
   }
 
-  .auth-badge {
-    display: inline-block;
-    background: #2a1e35;
-    color: #b57bee;
-    font-size: .65rem;
-    padding: 1px 6px;
-    border-radius: 4px;
-    margin-left: .4rem;
-    vertical-align: middle;
-    font-weight: 600;
-  }
-
-  .section-note {
-    background: #1a1f2e;
-    border: 1px solid #2a3050;
+  .note-box {
+    background: #1a1f2e; border: 1px solid #2a3050;
     border-radius: var(--radius);
-    padding: .65rem 1rem;
-    font-size: .8rem;
-    color: #8aabda;
-    margin-bottom: 1rem;
+    padding: .6rem .9rem; font-size: .8rem; color: #8aabda;
+    margin-bottom: .75rem;
   }
 
-  .bp-screen h3 {
-    font-size: .9rem;
-    font-weight: 700;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: .08em;
-    margin: 1.5rem 0 .75rem;
-    padding-bottom: .4rem;
-    border-bottom: 1px solid var(--border);
+  /* ── Plan table ── */
+  .plan-table { width: 100%; border-collapse: collapse; font-size: .8rem; margin-bottom: 1rem; }
+  .plan-table th {
+    text-align: left; padding: .4rem .6rem;
+    font-size: .65rem; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); border-bottom: 1px solid var(--border);
   }
+  .plan-table td { padding: .35rem .6rem; border-bottom: 1px solid var(--border); }
+  .plan-table tr:last-child td { border-bottom: none; }
+  .plan-table .field { font-family: monospace; color: var(--text); }
+  .plan-table .null  { color: var(--muted); font-style: italic; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="blueprint-wrap">
+<div class="mbp">
 
-  <!-- Sidebar nav -->
-  <aside class="bp-nav">
-    <h3>Screens</h3>
-    <button class="active" onclick="showScreen('auth', this)">1. Login / Register</button>
-    <button onclick="showScreen('upload', this)">2. Upload</button>
-    <button onclick="showScreen('drop_file', this)">3. File Drop View</button>
-    <button onclick="showScreen('drop_clip', this)">4. Clipboard Drop View</button>
-    <button onclick="showScreen('drops', this)">5. My Drops</button>
-    <button onclick="showScreen('account', this)">6. Account</button>
-    <button onclick="showScreen('plans', this)">7. Plans</button>
-    <h3 style="margin-top:1.5rem">Notes</h3>
-    <button onclick="showScreen('setup', this)">Auth / CSRF setup</button>
-    <button onclick="showScreen('style', this)">Style guide</button>
-  </aside>
+  <nav class="mbp-nav">
+    <h4>Setup</h4>
+    <a href="#auth-csrf">Auth &amp; CSRF</a>
+    <h4>Screens</h4>
+    <a href="#auth">1. Auth</a>
+    <a href="#upload">2. Upload</a>
+    <a href="#drop-file">3. File drop</a>
+    <a href="#drop-clip">4. Clipboard drop</a>
+    <a href="#account">5. Account</a>
+    <a href="#collections">6. Collections</a>
+    <a href="#billing">7. Billing</a>
+    <h4>Reference</h4>
+    <a href="#plan-limits">Plan limits</a>
+    <a href="#style">Style guide</a>
+  </nav>
 
-  <!-- Phone mockup -->
-  <div class="phone-wrap">
-    <div class="phone">
-      <div class="phone-notch"></div>
-      <div class="phone-screen" id="phone-screen"></div>
-      <div class="ps-tab-bar" id="phone-tabs" style="display:none">
-        <div class="ps-tab" id="tab-upload" onclick="tabClick('upload')"><span class="ps-tab-icon">⬆</span>Upload</div>
-        <div class="ps-tab" id="tab-mydrops" onclick="tabClick('mydrops')"><span class="ps-tab-icon">📋</span>Drops</div>
-        <div class="ps-tab" id="tab-account" onclick="tabClick('account')"><span class="ps-tab-icon">👤</span>Account</div>
+  <main class="mbp-main">
+
+    {# ── Auth & CSRF setup ────────────────────────────────────────────────── #}
+    <h2 id="auth-csrf">Auth &amp; CSRF Setup</h2>
+    <div class="note-box">
+      Django session auth. Every POST/DELETE needs a CSRF token; every request
+      needs the <code>sessionid</code> cookie. Use a persistent cookie jar.
+    </div>
+    <div class="ep">
+      <div class="ep-body">
+        <div class="ep-label">Flow</div>
+        <pre>1. POST /auth/login/ → Django sets:
+     sessionid   — identifies the session (store in cookie jar)
+     csrftoken   — CSRF protection token
+
+2. Extract csrftoken value.
+
+3. Every POST / DELETE must include:
+     X-CSRFToken: &lt;csrftoken value&gt;
+
+4. Enable persistent cookie jar so sessionid is
+   sent automatically on every request.</pre>
+        <div class="ep-label">Common headers (every request)</div>
+        <pre>Cookie: sessionid=&lt;val&gt;; csrftoken=&lt;val&gt;
+X-CSRFToken: &lt;val&gt;        // POST / DELETE only
+Accept: application/json  // always — returns JSON instead of HTML</pre>
+        <div class="ep-label">Base URL</div>
+        <pre>{{ base_url }}</pre>
       </div>
     </div>
-    <p style="text-align:center;font-size:.7rem;color:var(--muted);margin-top:.75rem">interactive mockup</p>
-  </div>
 
-  <!-- Docs panel -->
-  <div class="bp-docs">
+    {# ── 1. Auth ─────────────────────────────────────────────────────────── #}
+    <h2 id="auth">1. Auth</h2>
 
-    <!-- 1. Auth -->
-    <div class="bp-screen active" id="screen-auth">
-      <h2>1. Login / Register</h2>
-      <p class="subtitle">Two tabs on one screen. No session required.</p>
-
-      <h3>Login</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/auth/login/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">On success Django sets a <code>sessionid</code> cookie and a <code>csrftoken</code> cookie. Store the csrftoken and include it as <code>X-CSRFToken</code> on every subsequent POST/DELETE.</span></span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request — application/x-www-form-urlencoded</div>
-          <pre>email=user@example.com
-password=secret</pre>
-          <div class="ep-label">Success</div>
-          <pre>HTTP 302 → /   (check redirect URL or status)</pre>
-          <div class="ep-label">Error</div>
-          <pre>HTTP 200 with error message in HTML</pre>
-        </div>
+    <h3>Login</h3>
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-post">POST</span>
+        <span class="ep-path">/auth/login/</span>
       </div>
+      <div class="ep-body">
+        <div class="ep-label">Request — application/x-www-form-urlencoded</div>
+        <pre>email=user@example.com
+password=secret</pre>
+        <div class="ep-label">Success</div>
+        <pre>HTTP 302 — check Location header or catch redirect</pre>
+        <div class="ep-label">Error</div>
+        <pre>HTTP 200 with error in HTML — check for .error or re-login</pre>
+      </div>
+    </div>
 
-      <h3>Register</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/auth/register/</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request — application/x-www-form-urlencoded</div>
-          <pre>email=user@example.com
+    <h3>Register</h3>
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-post">POST</span>
+        <span class="ep-path">/auth/register/</span>
+      </div>
+      <div class="ep-body">
+        <div class="ep-label">Request — application/x-www-form-urlencoded</div>
+        <pre>email=user@example.com
 password=secret
 password2=secret
 plan=free</pre>
-          <div class="ep-label">Notes</div>
-          <pre>Always use plan=free on signup. Upgrade via billing.</pre>
-        </div>
-      </div>
-
-      <h3>Forgot password</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method BROWSER">BROWSER</span>
-          <span class="endpoint-path">https://drp.fyi/auth/forgot-password/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Open in system browser. The full reset email + token flow is handled by Django on the web — too complex to reimplement natively.</span></span>
-        </div>
+        <div class="ep-label">Note</div>
+        <pre>Always register with plan=free. Upgrade via /billing/checkout/.</pre>
       </div>
     </div>
 
-    <!-- 2. Upload -->
-    <div class="bp-screen" id="screen-upload">
-      <h2>2. Home / Upload</h2>
-      <p class="subtitle">Main screen. Supports anonymous and authenticated users. Toggle between File and Text.</p>
+    <h3>Forgot password</h3>
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-brw">BROWSER</span>
+        <span class="ep-path">{{ base_url }}/auth/forgot-password/</span>
+      </div>
+      <div class="ep-body">
+        <pre>Open in system browser — reset flow handled server-side.</pre>
+      </div>
+    </div>
 
-      <h3>Check key availability</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method GET">GET</span>
-          <span class="endpoint-path">/check-key/?key=&lt;key&gt;&amp;ns=&lt;f|c&gt;</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Call on every keystroke (debounced ~300ms). ns=f for file, ns=c for clipboard/text. Show a green tick or red cross inline next to the key input.</span></span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Response</div>
-          <pre>{ "available": true,  "ns": "f", "key": "my-key" }
+    <h3>Logout</h3>
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-post">POST</span>
+        <span class="ep-path">/auth/logout/</span>
+      </div>
+    </div>
+
+    {# ── 2. Upload ───────────────────────────────────────────────────────── #}
+    <h2 id="upload">2. Upload</h2>
+
+    <h3>Check key availability</h3>
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-get">GET</span>
+        <span class="ep-path">/check-key/?key=&lt;key&gt;&amp;ns=&lt;f|c&gt;</span>
+        <span class="ep-note">ns=f file · ns=c clipboard</span>
+      </div>
+      <div class="ep-body">
+        <pre>{ "available": true,  "ns": "f", "key": "my-key" }
 { "available": false, "reserved": true, "ns": "f", "key": "save" }</pre>
-        </div>
+        <div class="ep-label">Tip</div>
+        <pre>Debounce ~300 ms. Show green tick / red cross inline.</pre>
       </div>
+    </div>
 
-      <h3>Upload File (3-step)</h3>
-      <div class="section-note">File uploads go directly to Backblaze B2, not through your server. Step 1 gets a presigned PUT URL, step 2 uploads to B2, step 3 registers the drop.</div>
+    <h3>Upload file — 3 steps</h3>
+    <div class="note-box">Files go directly to Backblaze B2. Step 1 gets a presigned URL, step 2 PUTs to B2, step 3 registers the drop.</div>
 
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/upload/prepare/</span>
-          <span class="endpoint-note">Step 1</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request — application/json</div>
-          <pre>{
-  "filename": "photo.jpg",
-  "size": 1048576,
-  "content_type": "image/jpeg",
-  "ns": "f",
-  "key": "my-key"   // optional
-}</pre>
-          <div class="ep-label">Response</div>
-          <pre>{
-  "presigned_url": "https://s3.backblaze.com/...",
-  "key": "my-key",
-  "ns": "f",
-  "expires_in": 3600
-}</pre>
-        </div>
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-post">POST</span>
+        <span class="ep-path">/upload/prepare/</span>
+        <span class="ep-note">Step 1</span>
       </div>
-
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method PUT">PUT</span>
-          <span class="endpoint-path">&lt;presigned_url&gt;</span>
-          <span class="endpoint-note">Step 2 — direct to B2</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">No auth headers needed. PUT raw file bytes with the correct Content-Type. Presigned URL expires in 3600s.</span></span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request</div>
-          <pre>Headers: Content-Type: image/jpeg
-Body: raw file bytes</pre>
-        </div>
+      <div class="ep-body">
+        <div class="ep-label">Request — application/json</div>
+        <pre>{ "filename": "photo.jpg", "size": 1048576,
+  "content_type": "image/jpeg", "ns": "f",
+  "key": "my-key" }</pre>
+        <div class="ep-label">Response</div>
+        <pre>{ "presigned_url": "https://…", "key": "my-key",
+  "ns": "f", "expires_in": 3600 }</pre>
       </div>
+    </div>
 
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/upload/confirm/</span>
-          <span class="endpoint-note">Step 3</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request — application/json</div>
-          <pre>{
-  "key": "my-key",
-  "ns": "f",
-  "filename": "photo.jpg",
-  "burn": false,
-  "password": ""   // paid only
-}</pre>
-          <div class="ep-label">Response</div>
-          <pre>{ "key": "my-key", "url": "/f/my-key/" }
-// Full URL: https://drp.fyi/f/my-key/</pre>
-        </div>
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-put">PUT</span>
+        <span class="ep-path">&lt;presigned_url&gt;</span>
+        <span class="ep-note">Step 2 — direct to B2, no auth headers</span>
       </div>
+      <div class="ep-body">
+        <pre>Headers: Content-Type: image/jpeg
+Body:    raw file bytes</pre>
+      </div>
+    </div>
 
-      <h3>Drop Text</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/save/</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request — multipart/form-data</div>
-          <pre>key=my-key          // optional
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-post">POST</span>
+        <span class="ep-path">/upload/confirm/</span>
+        <span class="ep-note">Step 3</span>
+      </div>
+      <div class="ep-body">
+        <div class="ep-label">Request — application/json</div>
+        <pre>{ "key": "my-key", "ns": "f", "filename": "photo.jpg",
+  "burn": false, "password": "" }</pre>
+        <div class="ep-label">Response</div>
+        <pre>{ "key": "my-key", "url": "/f/my-key/", "burn": false,
+  "password_protected": false }</pre>
+      </div>
+    </div>
+
+    <h3>Upload text (clipboard drop)</h3>
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-post">POST</span>
+        <span class="ep-path">/save/</span>
+      </div>
+      <div class="ep-body">
+        <div class="ep-label">Request — multipart/form-data</div>
+        <pre>key=my-key          // optional
 content=hello world
 expiry_days=7       // paid only
 password=secret     // paid only</pre>
-          <div class="ep-label">Response</div>
-          <pre>{ "key": "abc123", "url": "/abc123/" }
-// Full URL: https://drp.fyi/abc123/</pre>
-        </div>
+        <div class="ep-label">Response</div>
+        <pre>{ "key": "abc123", "url": "/abc123/" }</pre>
       </div>
     </div>
 
-    <!-- 3. File Drop View -->
-    <div class="bp-screen" id="screen-drop_file">
-      <h2>3. File Drop View</h2>
-      <p class="subtitle">Shown after file upload or when opening a <code>/f/&lt;key&gt;/</code> link. Shows filename and size. All actions use the <code>/f/&lt;key&gt;/</code> prefix.</p>
+    {# ── 3. File drop view ───────────────────────────────────────────────── #}
+    <h2 id="drop-file">3. File Drop View</h2>
 
-      <h3>View drop metadata</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method GET">GET</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Send Accept: application/json to get JSON. For password-protected drops include X-Drop-Password header.</span></span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Headers</div>
-          <pre>Accept: application/json
-X-Drop-Password: secret   // if password protected</pre>
-        </div>
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-get">GET</span>
+        <span class="ep-path">/f/&lt;key&gt;/</span>
+        <span class="ep-note">Accept: application/json</span>
       </div>
-
-      <h3>Download</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method GET">GET</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/download/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Returns a redirect to a presigned B2 download URL. Open in system browser or use a download manager.</span></span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Headers (if password protected)</div>
-          <pre>X-Drop-Password: secret</pre>
-        </div>
-      </div>
-
-      <h3>Actions <span class="auth-badge">owner only</span></h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/rename/</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request — application/json</div>
-          <pre>{ "new_key": "better-name" }</pre>
-          <div class="ep-label">Response</div>
-          <pre>{ "key": "better-name", "url": "/f/better-name/" }</pre>
-        </div>
-      </div>
-
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method DELETE">DELETE</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/delete/</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Response</div>
-          <pre>{ "deleted": true }</pre>
-        </div>
-      </div>
-
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/renew/</span>
-          <span class="paid-badge">paid</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Extends expiry by plan's max_expiry_days from now. Only works if the drop has an expiry set.</span></span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Response</div>
-          <pre>{ "expires_at": "2026-03-01T00:00:00Z", "renewals": 1 }</pre>
-        </div>
-      </div>
-
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/copy/</span>
-          <span class="paid-badge">paid</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Copies the B2 object server-side — no re-upload needed. Omit new_key for auto-generated key.</span></span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request — application/json (optional)</div>
-          <pre>{ "new_key": "my-copy" }</pre>
-          <div class="ep-label">Response</div>
-          <pre>{ "key": "my-copy", "url": "/f/my-copy/" }</pre>
-        </div>
-      </div>
-
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/set-password/</span>
-          <span class="paid-badge">paid</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request — application/json</div>
-          <pre>{ "password": "secret" }   // set
-{ "password": "" }         // remove</pre>
-        </div>
-      </div>
-
-      <h3>Bookmarks <span class="auth-badge">login required</span></h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/save/</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Response</div>
-          <pre>{ "saved": true, "created": true }</pre>
-        </div>
-      </div>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/unsave/</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Response</div>
-          <pre>{ "saved": false, "deleted": true }</pre>
-        </div>
+      <div class="ep-body">
+        <pre>{ "key": "my-key", "ns": "f", "kind": "file",
+  "filename": "photo.jpg", "filesize": 1048576,
+  "burn": false, "password_protected": false,
+  "created_at": "…", "expires_at": null,
+  "view_count": 5, "last_viewed_at": "…",
+  "download": "/f/my-key/download/",
+  "presigned_url": "https://…" }</pre>
+        <div class="ep-label">Password-protected</div>
+        <pre>X-Drop-Password: secret   // header → unlocks for this request</pre>
       </div>
     </div>
 
-    <!-- 4. Clipboard Drop View -->
-    <div class="bp-screen" id="screen-drop_clip">
-      <h2>4. Clipboard Drop View</h2>
-      <p class="subtitle">Shown after text drop or when opening a <code>/&lt;key&gt;/</code> link. Shows text preview. All actions use the <code>/&lt;key&gt;/</code> prefix — identical to file drop actions.</p>
-
-      <h3>View drop + text content</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method GET">GET</span>
-          <span class="endpoint-path">/&lt;key&gt;/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Send Accept: application/json to get JSON including the text content. Display it as a scrollable preview box.</span></span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Headers</div>
-          <pre>Accept: application/json
-X-Drop-Password: secret   // if password protected</pre>
-        </div>
-      </div>
-
-      <h3>View raw text</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method GET">GET</span>
-          <span class="endpoint-path">/raw/&lt;key&gt;/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Returns plain text. Use for copying or sharing the raw content.</span></span>
-        </div>
-      </div>
-
-      <h3>Actions <span class="auth-badge">owner only</span></h3>
-      <div class="endpoint">
-        <div class="endpoint-header"><span class="method POST">POST</span><span class="endpoint-path">/&lt;key&gt;/rename/</span></div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request</div><pre>{ "new_key": "better-name" }</pre>
-          <div class="ep-label">Response</div><pre>{ "key": "better-name", "url": "/better-name/" }</pre>
-        </div>
-      </div>
-      <div class="endpoint">
-        <div class="endpoint-header"><span class="method DELETE">DELETE</span><span class="endpoint-path">/&lt;key&gt;/delete/</span></div>
-        <div class="endpoint-body"><div class="ep-label">Response</div><pre>{ "deleted": true }</pre></div>
-      </div>
-      <div class="endpoint">
-        <div class="endpoint-header"><span class="method POST">POST</span><span class="endpoint-path">/&lt;key&gt;/renew/</span><span class="paid-badge">paid</span></div>
-        <div class="endpoint-body"><div class="ep-label">Response</div><pre>{ "expires_at": "2026-03-01T00:00:00Z", "renewals": 1 }</pre></div>
-      </div>
-      <div class="endpoint">
-        <div class="endpoint-header"><span class="method POST">POST</span><span class="endpoint-path">/&lt;key&gt;/copy/</span><span class="paid-badge">paid</span></div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request (optional)</div><pre>{ "new_key": "my-copy" }</pre>
-          <div class="ep-label">Response</div><pre>{ "key": "my-copy", "url": "/my-copy/" }</pre>
-        </div>
-      </div>
-      <div class="endpoint">
-        <div class="endpoint-header"><span class="method POST">POST</span><span class="endpoint-path">/&lt;key&gt;/set-password/</span><span class="paid-badge">paid</span></div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request</div><pre>{ "password": "secret" }  // set
-{ "password": "" }        // remove</pre>
-        </div>
-      </div>
-
-      <h3>Bookmarks <span class="auth-badge">login required</span></h3>
-      <div class="endpoint">
-        <div class="endpoint-header"><span class="method POST">POST</span><span class="endpoint-path">/&lt;key&gt;/save/</span></div>
-        <div class="endpoint-body"><div class="ep-label">Response</div><pre>{ "saved": true, "created": true }</pre></div>
-      </div>
-      <div class="endpoint">
-        <div class="endpoint-header"><span class="method POST">POST</span><span class="endpoint-path">/&lt;key&gt;/unsave/</span></div>
-        <div class="endpoint-body"><div class="ep-label">Response</div><pre>{ "saved": false, "deleted": true }</pre></div>
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-get">GET</span>
+        <span class="ep-path">/f/&lt;key&gt;/download/</span>
+        <span class="ep-note">redirects to presigned B2 URL</span>
       </div>
     </div>
 
-    <!-- 5. My Drops -->
-    <div class="bp-screen" id="screen-drops">
-      <h2>5. My Drops</h2>
-      <p class="subtitle">List of owned drops and bookmarks. Single API call returns both.</p>
+    <h3>Owner actions <span class="badge-auth">owner</span></h3>
+    {% for method, path, note, paid in actions_file %}{% endfor %}
+    <div class="ep"><div class="ep-head"><span class="method m-post">POST</span><span class="ep-path">/f/&lt;key&gt;/rename/</span></div>
+      <div class="ep-body"><pre>// body: { "new_key": "better-name" }
+// response: { "key": "better-name", "url": "/f/better-name/" }</pre></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-delete">DELETE</span><span class="ep-path">/f/&lt;key&gt;/delete/</span></div>
+      <div class="ep-body"><pre>{ "deleted": true }</pre></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-post">POST</span><span class="ep-path">/f/&lt;key&gt;/renew/</span><span class="badge-paid">paid</span></div>
+      <div class="ep-body"><pre>{ "expires_at": "2026-03-01T00:00:00Z", "renewals": 1 }</pre></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-post">POST</span><span class="ep-path">/f/&lt;key&gt;/copy/</span><span class="badge-paid">paid</span></div>
+      <div class="ep-body"><pre>// body (optional): { "new_key": "my-copy" }
+// response: { "key": "my-copy", "url": "/f/my-copy/" }</pre></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-post">POST</span><span class="ep-path">/f/&lt;key&gt;/set-password/</span><span class="badge-paid">paid</span></div>
+      <div class="ep-body"><pre>{ "password": "secret" }   // set
+{ "password": "" }         // remove</pre></div></div>
 
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method GET">GET</span>
-          <span class="endpoint-path">/auth/account/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Send Accept: application/json. Build full URL from ns + key: ns=="f" → /f/key/, ns=="c" → /key/</span></span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Headers</div>
-          <pre>Accept: application/json</pre>
-          <div class="ep-label">Response</div>
-          <pre>{
+    <h3>Bookmarks <span class="badge-auth">login required</span></h3>
+    <div class="ep"><div class="ep-head"><span class="method m-post">POST</span><span class="ep-path">/f/&lt;key&gt;/save/</span></div>
+      <div class="ep-body"><pre>{ "saved": true, "created": true }</pre></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-post">POST</span><span class="ep-path">/f/&lt;key&gt;/unsave/</span></div>
+      <div class="ep-body"><pre>{ "saved": false, "deleted": true }</pre></div></div>
+
+    {# ── 4. Clipboard drop view ──────────────────────────────────────────── #}
+    <h2 id="drop-clip">4. Clipboard Drop View</h2>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:1rem">
+      Same actions as file drop but paths use <code>/&lt;key&gt;/</code> instead of <code>/f/&lt;key&gt;/</code>.
+    </p>
+
+    <div class="ep"><div class="ep-head"><span class="method m-get">GET</span><span class="ep-path">/&lt;key&gt;/</span><span class="ep-note">Accept: application/json</span></div>
+      <div class="ep-body"><pre>{ "key": "…", "ns": "c", "kind": "text",
+  "content": "drop text here",
+  "burn": false, "password_protected": false,
+  "created_at": "…", "expires_at": null, "view_count": 3 }</pre></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-get">GET</span><span class="ep-path">/raw/&lt;key&gt;/</span><span class="ep-note">plain text response</span></div></div>
+
+    <h3>Owner actions / Bookmarks</h3>
+    <pre style="font-size:.78rem">POST   /&lt;key&gt;/rename/       { "new_key": "…" }
+DELETE /&lt;key&gt;/delete/
+POST   /&lt;key&gt;/renew/        [paid]
+POST   /&lt;key&gt;/copy/         [paid]  body: { "new_key": "…" }
+POST   /&lt;key&gt;/set-password/ [paid]  { "password": "…" }
+POST   /&lt;key&gt;/save/         [login] bookmark
+POST   /&lt;key&gt;/unsave/       [login]</pre>
+
+    {# ── 5. Account ──────────────────────────────────────────────────────── #}
+    <h2 id="account">5. Account</h2>
+
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-get">GET</span>
+        <span class="ep-path">/auth/account/</span>
+        <span class="ep-note">Accept: application/json</span>
+      </div>
+      <div class="ep-body">
+        <pre>{ "username": "alice",
+  "email": "alice@example.com",
+  "plan": "starter",
+  "storage_used_bytes": 1073741824,
+  "storage_quota_bytes": 5368709120,   // null = no quota
+  "plan_limits": { "max_file_mb": 1024, … },
   "drops": [
-    {
-      "key": "abc123",
-      "ns": "c",            // "c"=text, "f"=file
-      "kind": "text",       // "text" | "file"
-      "created_at": "2026-02-21T00:00:00Z",
-      "expires_at": "2026-03-21T00:00:00Z",  // null if none
-      "filename": null,
-      "filesize": null,
-      "locked": false,
-      "view_count": 5,
-      "last_viewed_at": "2026-02-21T10:00:00Z",
-      "last_accessed_at": "2026-02-21T10:00:00Z"
-    }
+    { "key": "…", "ns": "c", "kind": "text",
+      "created_at": "…", "expires_at": null,
+      "filename": null, "filesize": null,
+      "locked": false, "view_count": 5,
+      "last_accessed_at": "…", "last_viewed_at": "…" }
   ],
   "saved": [
-    {
-      "key": "xyz",
-      "ns": "f",
-      "saved_at": "2026-02-20T00:00:00Z",
-      "url": "/f/xyz/"
-    }
+    { "key": "…", "ns": "f", "saved_at": "…", "url": "/f/…/" }
+  ],
+  "collections": [
+    { "id": 1, "name": "Notes", "slug": "notes",
+      "drops": [{"ns": "c", "key": "…"}] }
   ]
 }</pre>
-          <div class="ep-label">Build full URL</div>
-          <pre>ns == "f"  →  https://drp.fyi/f/&lt;key&gt;/
-ns == "c"  →  https://drp.fyi/&lt;key&gt;/</pre>
-        </div>
+        <div class="ep-label">Build drop URL from ns + key</div>
+        <pre>ns == "f"  →  {{ base_url }}/f/&lt;key&gt;/
+ns == "c"  →  {{ base_url }}/&lt;key&gt;/</pre>
       </div>
     </div>
 
-    <!-- 6. Account -->
-    <div class="bp-screen" id="screen-account">
-      <h2>6. Account / Settings</h2>
-      <p class="subtitle">Settings, export/import, and logout.</p>
-
-      <h3>Update settings</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/auth/account/settings/</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request — application/x-www-form-urlencoded</div>
-          <pre>notify_bug_fix=1   // 1 or 0</pre>
-        </div>
+    <h3>Update notification settings</h3>
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method m-post">POST</span>
+        <span class="ep-path">/auth/account/settings/</span>
       </div>
-
-      <h3>Export drops</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method GET">GET</span>
-          <span class="endpoint-path">/auth/account/export/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Returns a JSON file download. Trigger the system share sheet so the user can save it.</span></span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Response</div>
-          <pre>Content-Disposition: attachment; filename="drp-export.json"</pre>
-        </div>
-      </div>
-
-      <h3>Import drops</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/auth/account/import/</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request — application/json</div>
-          <pre>[...array of drop objects from export...]</pre>
-        </div>
-      </div>
-
-      <h3>Logout</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/auth/logout/</span>
-        </div>
+      <div class="ep-body">
+        <div class="ep-label">Request — application/x-www-form-urlencoded</div>
+        <pre>notify_bug_fix=1          // 1 or 0
+notify_product_updates=1
+notify_billing=1</pre>
       </div>
     </div>
 
-    <!-- 7. Plans -->
-    <div class="bp-screen" id="screen-plans">
-      <h2>7. Plans / Subscription</h2>
-      <p class="subtitle">Show plan cards in Account. Open browser — never implement in-app payment (Apple IAP = 30% cut).</p>
-
-      <div class="section-note">⚠️ Apple policy: in-app purchases of digital goods must use IAP. Redirect to your web checkout instead — fully allowed.</div>
-
-      <h3>Upgrade</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method BROWSER">BROWSER</span>
-          <span class="endpoint-path">/billing/checkout/starter/</span>
-        </div>
-      </div>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method BROWSER">BROWSER</span>
-          <span class="endpoint-path">/billing/checkout/pro/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Opens LemonSqueezy hosted checkout. Passes user email and user_id so the subscription links to the account automatically.</span></span>
-        </div>
-      </div>
-
-      <h3>Manage / cancel</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method BROWSER">BROWSER</span>
-          <span class="endpoint-path">/billing/portal/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Redirects logged-in user to LemonSqueezy customer portal. User may need to log in on the web if browser session has expired.</span></span>
-        </div>
-      </div>
-
-      <h3>Plan limits</h3>
-      <div class="endpoint">
-        <div class="endpoint-body">
-          <pre>Feature            Free    Starter   Pro
-─────────────────────────────────────────
-File upload         ✓        ✓        ✓
-Text drop           ✓        ✓        ✓
-Custom key          ✓        ✓        ✓
-Expiry control      ✗        ✓        ✓
-Password protect    ✗        ✓        ✓
-Renew drop          ✗        ✓        ✓
-Copy drop           ✗        ✓        ✓</pre>
-        </div>
+    <h3>Export / Import</h3>
+    <div class="ep"><div class="ep-head"><span class="method m-get">GET</span><span class="ep-path">/auth/account/export/</span></div>
+      <div class="ep-body"><pre>→ JSON file download (Content-Disposition: attachment)</pre></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-post">POST</span><span class="ep-path">/auth/account/import/</span></div>
+      <div class="ep-body">
+        <div class="ep-label">Request — application/json</div>
+        <pre>[…array of drop objects from export…]</pre>
       </div>
     </div>
 
-    <!-- Auth/CSRF -->
-    <div class="bp-screen" id="screen-setup">
-      <h2>Auth & CSRF Setup</h2>
-      <p class="subtitle">How Django session auth works with a native app.</p>
-      <div class="endpoint">
-        <div class="endpoint-body">
-          <div class="ep-label">Flow</div>
-          <pre>1. POST /auth/login/ → Django sets:
-     sessionid   — identifies the session
-     csrftoken   — CSRF protection token
+    {# ── 6. Collections ──────────────────────────────────────────────────── #}
+    <h2 id="collections">6. Collections <span class="badge-paid">starter+</span></h2>
 
-2. Store csrftoken value.
+    <div class="ep"><div class="ep-head"><span class="method m-post">POST</span><span class="ep-path">/collections/create/</span></div>
+      <div class="ep-body"><pre>// body: { "name": "My Notes", "slug": "my-notes" }  slug is optional
+// response: { "id": 1, "slug": "my-notes", "url": "/@alice/my-notes/" }</pre></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-post">POST</span><span class="ep-path">/collections/&lt;id&gt;/add/</span></div>
+      <div class="ep-body"><pre>{ "ns": "c", "key": "my-drop" }</pre></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-post">POST</span><span class="ep-path">/collections/&lt;id&gt;/remove/</span></div>
+      <div class="ep-body"><pre>{ "ns": "c", "key": "my-drop" }</pre></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-post">POST</span><span class="ep-path">/collections/&lt;id&gt;/rename/</span></div>
+      <div class="ep-body"><pre>{ "name": "New Name" }</pre></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-post">POST</span><span class="ep-path">/collections/&lt;id&gt;/delete/</span></div>
+      <div class="ep-body"><pre>{ "deleted": true }</pre></div></div>
 
-3. Every POST/DELETE must include:
-     X-CSRFToken: &lt;csrftoken value&gt;
+    <h3>Public collection page</h3>
+    <div class="ep"><div class="ep-head"><span class="method m-get">GET</span><span class="ep-path">/@&lt;username&gt;/&lt;slug&gt;/</span><span class="ep-note">Accept: application/json</span></div>
+      <div class="ep-body"><pre>{ "id": 1, "name": "…", "slug": "…",
+  "drops": [{"ns": "c", "key": "…"}] }</pre></div></div>
 
-4. FlutterFlow: enable persistent cookie jar
-   so sessionid is sent automatically.</pre>
-          <div class="ep-label">Common headers</div>
-          <pre>Cookie: sessionid=&lt;val&gt;; csrftoken=&lt;val&gt;
-X-CSRFToken: &lt;val&gt;        // POST/DELETE only
-Accept: application/json  // always</pre>
-          <div class="ep-label">Base URL</div>
-          <pre>https://drp.fyi</pre>
-        </div>
-      </div>
-    </div>
+    {# ── 7. Billing ──────────────────────────────────────────────────────── #}
+    <h2 id="billing">7. Billing</h2>
+    <div class="note-box">⚠ Open browser — never implement in-app payment (Apple IAP = 30% cut, against App Store rules for digital goods).</div>
 
-    <!-- Style guide -->
-    <div class="bp-screen" id="screen-style">
-      <h2>Style Guide</h2>
-      <p class="subtitle">Design tokens and component guidance for FlutterFlow.</p>
-      <div class="endpoint">
-        <div class="endpoint-body">
-          <div class="ep-label">Colours</div>
-          <pre>Background:   #0f0f0f
+    <div class="ep"><div class="ep-head"><span class="method m-brw">BROWSER</span><span class="ep-path">{{ base_url }}/billing/checkout/starter/</span></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-brw">BROWSER</span><span class="ep-path">{{ base_url }}/billing/checkout/pro/</span></div></div>
+    <div class="ep"><div class="ep-head"><span class="method m-brw">BROWSER</span><span class="ep-path">{{ base_url }}/billing/portal/</span><span class="ep-note">manage / cancel</span></div></div>
+
+    {# ── Plan limits ─────────────────────────────────────────────────────── #}
+    <h2 id="plan-limits">Plan Limits</h2>
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:1rem">
+      Live from DB — always current. Use <code>plan_limits</code> from
+      <code>GET /auth/account/</code> to drive feature gating in the app.
+    </p>
+
+    <table class="plan-table">
+      <thead>
+        <tr>
+          <th>Field</th>
+          {% for plan_key, limits in plans %}<th>{{ plan_key }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% with fields="max_file_mb,max_text_kb,max_expiry_days,clipboard_idle_hours,clipboard_max_lifetime_days,anon_file_lifetime_days,storage_gb,renewals,password_protection,max_collections" %}
+        {% for field in fields.split(",") %}
+        <tr>
+          <td class="field">{{ field }}</td>
+          {% for plan_key, limits in plans %}
+          <td>
+            {% with val=limits|default_if_none:"—" %}
+              {% if val is None or val == "" %}
+                <span class="null">null</span>
+              {% else %}
+                {{ val }}
+              {% endif %}
+            {% endwith %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+        {% endwith %}
+      </tbody>
+    </table>
+
+    {# ── Style guide ─────────────────────────────────────────────────────── #}
+    <h2 id="style">Style Guide</h2>
+    <div class="ep">
+      <div class="ep-body">
+        <div class="ep-label">Colours</div>
+        <pre>Background:   #0f0f0f
 Surface:      #1a1a1a
 Border:       #2a2a2a
 Text:         #e8e8e8
@@ -1034,214 +551,23 @@ Muted:        #888888
 Accent:       #5b8dee
 Danger:       #e05555
 Success:      #4caf50</pre>
-          <div class="ep-label">Typography</div>
-          <pre>UI:      system-ui, sans-serif
+        <div class="ep-label">Typography</div>
+        <pre>UI:      system-ui, sans-serif
 Keys:    JetBrains Mono  or  Roboto Mono</pre>
-          <div class="ep-label">Components & UX</div>
-          <pre>Link box      — monospace, accent, tap-to-copy
-Drop card     — key + type icon + expiry + long-press actions
-File drop     — show filename + formatted file size
-Text drop     — show scrollable text preview
-Plan badge    — Free / Starter / Pro chip
-Upload zone   — dashed border, tap or share sheet
-Copy snackbar — "Copied!" 2s, icon → checkmark
-Delete        — always confirm with dialog
-Paid features — greyed out + Upgrade nudge for free users
-Subscription  — always open browser, never in-app payment</pre>
-        </div>
+        <div class="ep-label">UX patterns</div>
+        <pre>Link box       — monospace, accent colour, tap-to-copy
+Drop card      — key + type icon + expiry + long-press actions
+File drop      — filename + human-readable size
+Text drop      — scrollable preview
+Plan badge     — free / starter / pro chip
+Upload zone    — dashed border, tap or share sheet
+Copy snackbar  — "Copied!" 2 s, icon → checkmark
+Delete         — always confirm with dialog
+Paid features  — greyed out + Upgrade nudge for free users
+Subscription   — always open browser, never in-app payment</pre>
       </div>
     </div>
 
-  </div><!-- /.bp-docs -->
+  </main>
 </div>
-
-<script>
-  const phoneScreens = {
-    auth: {
-      tabs: false,
-      activeTab: null,
-      html: `
-        <div class="ps-section-title">drp</div>
-        <div class="ps-toggle-row">
-          <div class="ps-toggle active">Log in</div>
-          <div class="ps-toggle">Register</div>
-        </div>
-        <div class="ps-label">Email</div>
-        <input class="ps-input" placeholder="you@example.com" readonly>
-        <div class="ps-label">Password</div>
-        <input class="ps-input" placeholder="••••••••" type="password" readonly>
-        <button class="ps-btn">Log in</button>
-        <button class="ps-btn secondary">Forgot password →</button>
-      `
-    },
-    upload: {
-      tabs: true, activeTab: 'upload', html: `
-        <div class="ps-header">
-          <span class="ps-logo">drp</span>
-          <span class="ps-muted">vic@e.com</span>
-        </div>
-        <div class="ps-toggle-row">
-          <div class="ps-toggle active">📄 File</div>
-          <div class="ps-toggle">📋 Text</div>
-        </div>
-        <div style="border:1.5px dashed #333;border-radius:8px;padding:20px;text-align:center;margin-bottom:8px;color:var(--muted);font-size:11px">
-          Tap to pick a file<br><span style="font-size:9px">or use share sheet</span>
-        </div>
-        <div class="ps-label">Custom key (optional)</div>
-        <input class="ps-input" placeholder="my-key" readonly>
-        <button class="ps-btn">Drop it</button>
-      `
-    },
-    drop_file: {
-      tabs: true, activeTab: 'upload', html: `
-        <div class="ps-header">
-          <span class="ps-logo">drp</span>
-          <span class="ps-muted">my-photo</span>
-        </div>
-        <div class="ps-link-box">
-          drp.fyi/f/my-photo <span class="ps-copy-icon">⎘</span>
-        </div>
-        <div class="ps-file-info">
-          <div class="ps-file-icon">📄</div>
-          <div>
-            <div class="ps-file-name">holiday-photo.jpg</div>
-            <div class="ps-file-size">3.2 MB · expires in 12d · 5 views</div>
-          </div>
-        </div>
-        <button class="ps-btn">⬇ Download</button>
-        <div class="ps-action-row">
-          <div class="ps-action-btn">✏️ Rename</div>
-          <div class="ps-action-btn">🔄 Renew</div>
-          <div class="ps-action-btn">📋 Copy</div>
-          <div class="ps-action-btn">🔖 Save</div>
-        </div>
-        <div class="ps-action-row">
-          <div class="ps-action-btn">🔒 Password</div>
-          <div class="ps-action-btn danger">🗑 Delete</div>
-        </div>
-      `
-    },
-    drop_clip: {
-      tabs: true, activeTab: 'upload', html: `
-        <div class="ps-header">
-          <span class="ps-logo">drp</span>
-          <span class="ps-muted">hello-world</span>
-        </div>
-        <div class="ps-link-box">
-          drp.fyi/hello-world <span class="ps-copy-icon">⎘</span>
-        </div>
-        <div class="ps-label">Content preview</div>
-        <div class="ps-preview-box">Hello world! This is a text drop. You can share any snippet of text with a short link...</div>
-        <div class="ps-action-row">
-          <div class="ps-action-btn">⎘ Copy text</div>
-          <div class="ps-action-btn">✏️ Rename</div>
-          <div class="ps-action-btn">🔄 Renew</div>
-          <div class="ps-action-btn">🔖 Save</div>
-        </div>
-        <div class="ps-action-row">
-          <div class="ps-action-btn">🔒 Password</div>
-          <div class="ps-action-btn danger">🗑 Delete</div>
-        </div>
-      `
-    },
-    mydrops: {
-      tabs: true, activeTab: 'mydrops', html: `
-        <div class="ps-header">
-          <span class="ps-logo">My Drops</span>
-          <span class="ps-badge pro">Pro</span>
-        </div>
-        <div class="ps-label">Owned</div>
-        <div class="ps-drop-card">
-          <div>
-            <div class="ps-drop-key">📄 my-photo</div>
-            <div class="ps-drop-meta">3.2 MB · expires in 12d · 5 views</div>
-          </div>
-          <div class="ps-drop-actions">✏️ 🗑</div>
-        </div>
-        <div class="ps-drop-card">
-          <div>
-            <div class="ps-drop-key">📋 hello-world</div>
-            <div class="ps-drop-meta">text · no expiry · 1 view</div>
-          </div>
-          <div class="ps-drop-actions">✏️ 🗑</div>
-        </div>
-        <div class="ps-label">Bookmarked</div>
-        <div class="ps-drop-card">
-          <div>
-            <div class="ps-drop-key">📄 shared-doc</div>
-            <div class="ps-drop-meta">saved 2d ago</div>
-          </div>
-          <div class="ps-drop-actions">🔖</div>
-        </div>
-      `
-    },
-    account: {
-      tabs: true, activeTab: 'account', html: `
-        <div class="ps-header">
-          <span class="ps-logo">Account</span>
-          <span class="ps-badge pro">Pro</span>
-        </div>
-        <div class="ps-muted" style="margin-bottom:8px">vic@example.com</div>
-        <hr class="ps-divider">
-        <div class="ps-label">Subscription</div>
-        <div class="ps-plan-card highlight">
-          <div class="ps-plan-name">Pro ✓</div>
-          <div class="ps-plan-features">Expiry · Password · Renew · Copy</div>
-        </div>
-        <button class="ps-btn secondary">Manage subscription →</button>
-        <hr class="ps-divider">
-        <button class="ps-btn secondary">Export drops</button>
-        <button class="ps-btn secondary">Import drops</button>
-        <hr class="ps-divider">
-        <button class="ps-btn danger">Log out</button>
-      `
-    },
-  };
-
-  const screenToPhone = {
-    auth:      'auth',
-    upload:    'upload',
-    drop_file: 'drop_file',
-    drop_clip: 'drop_clip',
-    drops:     'mydrops',
-    account:   'account',
-    plans:     'account',
-    setup:     'upload',
-    style:     'mydrops',
-  };
-
-  function renderPhone(phoneKey) {
-    const p = phoneScreens[phoneKey];
-    if (!p) return;
-    document.getElementById('phone-screen').innerHTML = p.html;
-    const tabBar = document.getElementById('phone-tabs');
-    tabBar.style.display = p.tabs ? 'flex' : 'none';
-    if (p.tabs && p.activeTab) {
-      document.querySelectorAll('.ps-tab').forEach(t => t.classList.remove('active'));
-      const tabMap = { upload: 'tab-upload', mydrops: 'tab-mydrops', account: 'tab-account' };
-      const el = document.getElementById(tabMap[p.activeTab]);
-      if (el) el.classList.add('active');
-    }
-  }
-
-  function showScreen(id, btn) {
-    document.querySelectorAll('.bp-screen').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.bp-nav button').forEach(b => b.classList.remove('active'));
-    document.getElementById('screen-' + id).classList.add('active');
-    btn.classList.add('active');
-    renderPhone(screenToPhone[id]);
-  }
-
-  function tabClick(key) {
-    // Only update phone display — don't touch the docs panel
-    const phoneKey = key === 'upload' ? 'upload' : key === 'mydrops' ? 'mydrops' : 'account';
-    document.getElementById('phone-screen').innerHTML = phoneScreens[phoneKey].html;
-    document.querySelectorAll('.ps-tab').forEach(t => t.classList.remove('active'));
-    const tabMap = { upload: 'tab-upload', mydrops: 'tab-mydrops', account: 'tab-account' };
-    document.getElementById(tabMap[key]).classList.add('active');
-  }
-
-  // Init
-  renderPhone('auth');
-</script>
 {% endblock %}

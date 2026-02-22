@@ -27,34 +27,16 @@ Pipe subset (inline, no bash delegation):
 import re
 import sys
 
-import requests
-
-from cli import config
-from cli.session import auto_login
+from cli.commands._context import load_context
 from cli.api.helpers import err, ok
 
 
 def cmd_shell(args):
     from cli.format import bold, dim, cyan, magenta, green, red, grey, yellow
 
-    cfg  = config.load()
-    host = cfg.get('host')
-    if not host:
-        err('Not configured. Run: drp setup')
-        sys.exit(1)
-
-    if not cfg.get('email'):
-        err('drp shell requires a logged-in account. Run: drp login')
-        sys.exit(1)
-
-    session  = requests.Session()
-    authed   = auto_login(cfg, host, session)
-    if not authed:
-        err('Not logged in. Run: drp login')
-        sys.exit(1)
+    cfg, host, session = load_context(require_login=True)
 
     username = cfg.get('username', '')
-    # Current collection context (slug string or None)
     cwd = None
 
     version_line = dim(f'drp shell  —  type {bold("help")} for commands, ^D to exit')

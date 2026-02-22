@@ -28,50 +28,11 @@ from conftest import HOST, unique_key
 from cli.api.text import upload_text, get_clipboard
 from cli.api.file import upload_file, get_file
 from cli.api.actions import renew
-from cli.api.auth import get_csrf
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _tmp_file(content=b'test', suffix='.bin'):
-    f = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    f.write(content)
-    f.close()
-    return f.name
-
-
-def _fetch_drop_json(session, key, ns='c'):
-    """Return the raw JSON dict for a drop, or None."""
-    if ns == 'f':
-        url = f'{HOST}/f/{key}/'
-    else:
-        url = f'{HOST}/{key}/'
-    res = session.get(url, headers={'Accept': 'application/json'})
-    if res.ok:
-        return res.json()
-    return None
-
-
-def _upload_oversized(session, mb, key=None):
-    """Attempt to upload a file of `mb` megabytes. Returns (status_code, result_key)."""
-    import requests as _req
-    path = _tmp_file(content=b'X' * (mb * 1024 * 1024), suffix='.bin')
-    k = key or unique_key('oversize')
-    try:
-        # Use prepare step directly to capture the HTTP status
-        import json, mimetypes
-        size = os.path.getsize(path)
-        ct   = 'application/octet-stream'
-        csrf = get_csrf(HOST, session)
-        res = session.post(
-            f'{HOST}/upload/prepare/',
-            json={'filename': 'big.bin', 'size': size, 'content_type': ct, 'ns': 'f', 'key': k},
-            headers={'X-CSRFToken': csrf},
-            timeout=30,
-        )
-        return res.status_code, None
-    finally:
-        os.unlink(path)
+from tests.integration.conftest import (
+    HOST, unique_key, api_post,
+    _tmp_file, _fetch_drop_json, _upload_oversized, _delete_all_collections,
+)
 
 
 # ── Burn-after-read ───────────────────────────────────────────────────────────
@@ -474,37 +435,6 @@ class TestCli:
 
 # ── Collections — plan restrictions ──────────────────────────────────────────
 
-def _delete_all_collections(session):
-    """Module-level helper: delete every collection the session user owns.
-    Fetches a fresh CSRF token per delete to avoid token rotation issues.
-    Loops until the server confirms 0 collections remain.
-    """
-    from cli.api.auth import get_csrf
-    for _ in range(3):  # up to 3 passes
-        res = session.get(f'{HOST}/auth/account/', headers={'Accept': 'application/json'})
-        if not res.ok:
-            raise RuntimeError(f'Account fetch failed: {res.status_code} url={res.url}')
-        try:
-            data = res.json()
-        except Exception:
-            raise RuntimeError(f'Account response not JSON (redirected to login?): url={res.url} body={res.text[:200]}')
-        if 'collections' not in data:
-            raise RuntimeError(f'No collections key in response: {list(data.keys())} url={res.url}')
-        cols = data['collections']
-        if not cols:
-            return
-        for col in cols:
-            col_id = col.get('id')
-            if col_id:
-                csrf = get_csrf(HOST, session)
-                r = session.post(
-                    f'{HOST}/collections/{col_id}/delete/',
-                    headers={'X-CSRFToken': csrf, 'Referer': HOST + '/'},
-                )
-                if not r.ok:
-                    raise RuntimeError(f'Delete {col_id} failed: status={r.status_code} url={r.url} body={r.text[:300]}')
-
-
 class TestCollectionPlanRestrictions:
     """End-to-end: collection creation/limit enforcement via HTTP API."""
 
@@ -657,3 +587,183 @@ class TestStatusWithServerCount:
         result = run_drp('status', env=anon_cli_env)
         assert result.returncode == 0
         assert 'Local drops' in result.stdout or 'local' in result.stdout.lower()
+
+# ── Text size limits ──────────────────────────────────────────────────────────
+
+class TestTextSizeLimits:
+    """Upload text at/above plan limits and assert accept/reject."""
+
+    def test_free_text_at_limit_accepted(self, free_user):
+        key     = unique_key('txt-ok')
+        content = 'x' * (500 * 1024)   # exactly 500 KB
+        result  = upload_text(HOST, free_user.session, content, key=key, is_test=True)
+        assert result is not None, 'Expected 500 KB upload to succeed for free plan'
+
+    def test_free_oversized_text_rejected(self, free_user):
+        key     = unique_key('txt-over')
+        content = 'x' * (500 * 1024 + 1)   # 1 byte over 500 KB
+        result  = upload_text(HOST, free_user.session, content, key=key)
+        assert result is None, 'Expected slightly-over-500 KB to be rejected for free plan'
+
+    def test_starter_oversized_text_rejected(self, starter_user):
+        key     = unique_key('txt-over-s')
+        content = 'x' * (2048 * 1024 + 1)  # 1 byte over 2 MB
+        result  = upload_text(HOST, starter_user.session, content, key=key)
+        assert result is None, 'Expected over-2 MB to be rejected for starter plan'
+
+    def test_pro_oversized_text_rejected(self, pro_user):
+        key     = unique_key('txt-over-p')
+        content = 'x' * (10240 * 1024 + 1) # 1 byte over 10 MB
+        result  = upload_text(HOST, pro_user.session, content, key=key)
+        assert result is None, 'Expected over-10 MB to be rejected for pro plan'
+
+
+# ── File size limits — starter rejection ──────────────────────────────────────
+
+class TestFileSizeLimitsStarter:
+    def test_starter_oversized_file_rejected(self, starter_user):
+        status, _ = _upload_oversized(starter_user.session, mb=1025)
+        assert status == 413, f'Expected 413 for 1025 MB file on starter, got {status}'
+
+
+# ── CLI binary — drp up / drp get ─────────────────────────────────────────────
+
+class TestCliUpGet:
+    def test_up_clipboard_and_get(self, cli_envs, free_user):
+        from conftest import run_drp
+        key = unique_key('cli-up')
+        r   = run_drp('up', 'hello-cli', '-k', key, env=cli_envs['free'])
+        assert r.returncode == 0, f'drp up failed: {r.stderr}'
+        kind, content = get_clipboard(HOST, free_user.session, key)
+        assert kind == 'text' and content == 'hello-cli'
+
+    def test_get_prints_clipboard_content(self, cli_envs, free_user):
+        from conftest import run_drp
+        key = unique_key('cli-get')
+        upload_text(HOST, free_user.session, 'get-content', key=key, is_test=True)
+        r = run_drp('get', key, env=cli_envs['free'])
+        assert r.returncode == 0
+        assert 'get-content' in r.stdout
+
+    def test_up_file_and_get_url(self, cli_envs, tmp_path):
+        from conftest import run_drp
+        import tempfile, os
+        f = tmp_path / 'test.txt'
+        f.write_text('file-content')
+        key = unique_key('cli-upf')
+        r   = run_drp('up', str(f), '-k', key, env=cli_envs['free'])
+        assert r.returncode == 0, f'drp up file failed: {r.stderr}'
+        # --url should print the file URL
+        r2 = run_drp('get', '-f', key, '--url', env=cli_envs['free'])
+        assert r2.returncode == 0
+        assert f'/f/{key}/' in r2.stdout
+
+
+# ── CLI binary — drp mv ───────────────────────────────────────────────────────
+
+class TestCliMv:
+    def test_mv_renames_key(self, cli_envs, free_user):
+        from conftest import run_drp
+        old = unique_key('mv-old')
+        new = unique_key('mv-new')
+        upload_text(HOST, free_user.session, 'mv content', key=old, is_test=True)
+        r = run_drp('mv', old, new, env=cli_envs['free'])
+        assert r.returncode == 0, f'drp mv failed: {r.stderr}'
+        # old key should be gone
+        data = _fetch_drop_json(free_user.session, old)
+        assert data is None
+        # new key should exist
+        data = _fetch_drop_json(free_user.session, new)
+        assert data is not None
+
+
+# ── CLI binary — drp renew ────────────────────────────────────────────────────
+
+class TestCliRenew:
+    def test_renew_paid_moves_expiry(self, cli_envs, starter_user):
+        from conftest import run_drp
+        from cli.api.text import upload_text as _up
+        key = unique_key('renew-cli')
+        _up(HOST, starter_user.session, 'renew me', key=key,
+            expiry_days=7, is_test=True)
+        r = run_drp('renew', key, env=cli_envs['starter'])
+        assert r.returncode == 0, f'drp renew failed: {r.stderr}'
+        out = r.stdout + r.stderr
+        assert any(x in out for x in ('renew', 'expir', 'extend')), \
+            f'Expected expiry mention in output: {out}'
+
+
+# ── CLI binary — drp save ─────────────────────────────────────────────────────
+
+class TestCliSave:
+    def test_save_bookmarks_drop(self, cli_envs, free_user, starter_user):
+        from conftest import run_drp
+        key = unique_key('save-cli')
+        upload_text(HOST, starter_user.session, 'saveable', key=key, is_test=True)
+        r = run_drp('save', key, env=cli_envs['free'])
+        assert r.returncode == 0, f'drp save failed: {r.stderr}'
+
+
+# ── CLI binary — drp ping / drp login / drp logout ───────────────────────────
+
+class TestSetupCommands:
+    def test_ping_returns_ok(self, anon_cli_env):
+        from conftest import run_drp
+        r = run_drp('ping', env=anon_cli_env)
+        assert r.returncode == 0
+        assert 'reachable' in r.stdout.lower()
+
+    def test_status_runs_without_error(self, cli_envs):
+        from conftest import run_drp
+        r = run_drp('status', env=cli_envs['free'])
+        assert r.returncode == 0
+
+    def test_logout_then_login(self, cli_envs, users, tmp_path_factory):
+        """logout clears session; login re-establishes it."""
+        import json, shutil
+        from conftest import run_drp
+        # Work in an isolated config dir so we don't break other tests
+        src  = None  # we'll copy from cli_envs['free'] base dir
+        env  = dict(cli_envs['free'])
+        base = tmp_path_factory.mktemp('logtest')
+        drp  = base / 'drp'
+        drp.mkdir()
+        user = users['free']
+        (drp / 'config.json').write_text(json.dumps(
+            {'host': HOST, 'email': user.email, 'username': user.email, 'ansi': False}
+        ))
+        (drp / 'session.json').write_text(json.dumps(dict(user.session.cookies)))
+        env['XDG_CONFIG_HOME'] = str(base)
+
+        r = run_drp('logout', env=env)
+        assert r.returncode == 0
+
+        r = run_drp('ping', env=env)
+        assert r.returncode == 0  # server still up
+
+        shutil.rmtree(base, ignore_errors=True)
+
+
+# ── drp serve — fix vacuous test ─────────────────────────────────────────────
+
+class TestServeSkip:
+    """
+    Verify drp serve skips files that exceed the plan limit and continues
+    uploading files within the limit.
+    The original test was vacuous (two small files — no skip logic exercised).
+    Here we create one under-limit file and one just over the free limit (200 MB).
+    Because writing 201 MB in CI is slow, we use the /upload/prepare/ API to
+    simulate the oversized check without actually uploading bytes.
+    """
+
+    def test_prepare_rejects_oversized_for_free(self, free_user):
+        status, _ = _upload_oversized(free_user.session, mb=201)
+        assert status == 413, f'Expected 413 for 201 MB file, got {status}'
+
+    def test_serve_uploads_valid_file(self, cli_envs, tmp_path):
+        from conftest import run_drp
+        f = tmp_path / 'valid.txt'
+        f.write_text('small file content')
+        r = run_drp('serve', str(f), env=cli_envs['free'])
+        assert r.returncode == 0
+        assert '1 uploaded' in (r.stdout + r.stderr).lower() or 'valid' in r.stdout

@@ -218,3 +218,72 @@ def run_drp(*args, input=None, env=None, check=False):
             f'stdout: {result.stdout}\nstderr: {result.stderr}'
         )
     return result
+
+# ── Shared API helpers ────────────────────────────────────────────────────────
+
+import tempfile
+import os
+from cli.api.auth import get_csrf
+
+
+def api_post(session, url, data=None, json_body=None):
+    """CSRF-aware POST. Sends Referer so proxy + Django CSRF both pass."""
+    csrf = get_csrf(HOST, session)
+    headers = {
+        'X-CSRFToken': csrf,
+        'Accept':      'application/json',
+        'Referer':     HOST + '/',
+    }
+    if json_body is not None:
+        headers['Content-Type'] = 'application/json'
+        return session.post(url, json=json_body, headers=headers)
+    return session.post(url, data={**(data or {}), 'csrfmiddlewaretoken': csrf}, headers=headers)
+
+
+def _tmp_file(content=b'test', suffix='.bin'):
+    f = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    f.write(content)
+    f.close()
+    return f.name
+
+
+def _fetch_drop_json(session, key, ns='c'):
+    """Return the JSON dict for a drop, or None if not found."""
+    url = f'{HOST}/f/{key}/' if ns == 'f' else f'{HOST}/{key}/'
+    res = session.get(url, headers={'Accept': 'application/json'})
+    return res.json() if res.ok else None
+
+
+def _upload_oversized(session, mb, key=None):
+    """Attempt to upload a file of `mb` megabytes. Returns (status_code, result_key)."""
+    path = _tmp_file(content=b'X' * (mb * 1024 * 1024), suffix='.bin')
+    k    = key or unique_key('oversize')
+    try:
+        size = os.path.getsize(path)
+        csrf = get_csrf(HOST, session)
+        res  = session.post(
+            f'{HOST}/upload/prepare/',
+            json={'filename': 'big.bin', 'size': size,
+                  'content_type': 'application/octet-stream', 'ns': 'f', 'key': k},
+            headers={'X-CSRFToken': csrf, 'Referer': HOST + '/'},
+            timeout=30,
+        )
+        return res.status_code, None
+    finally:
+        os.unlink(path)
+
+
+def _delete_all_collections(session):
+    """Delete every collection the session user owns. Safe to call in teardown."""
+    for _ in range(3):
+        res = session.get(f'{HOST}/auth/account/', headers={'Accept': 'application/json'})
+        res.raise_for_status()
+        cols = res.json().get('collections', [])
+        if not cols:
+            return
+        for col in cols:
+            col_id = col.get('id')
+            if col_id:
+                r = api_post(session, f'{HOST}/collections/{col_id}/delete/')
+                if not r.ok:
+                    raise RuntimeError(f'Delete collection {col_id} failed: {r.status_code}')

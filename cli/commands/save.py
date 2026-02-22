@@ -11,32 +11,13 @@ Requires login.
 
 import sys
 
-import requests
-
-from cli import config, api
-from cli.session import auto_login
-
-
-def _parse_key(raw, is_file=False, is_clip=False):
-    return ('f', raw) if is_file and not is_clip else ('c', raw)
+from cli import api
+from cli.commands._context import load_context
+from cli.commands.manage import _parse_key
 
 
 def cmd_save(args):
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(1)
-
-    if not cfg.get('email'):
-        print('  ✗ drp save requires a logged-in account. Run: drp login')
-        sys.exit(1)
-
-    session = requests.Session()
-    authed = auto_login(cfg, host, session)
-    if not authed:
-        print('  ✗ Not logged in. Run: drp login')
-        sys.exit(1)
+    cfg, host, session = load_context(require_login=True)
 
     ns, key = _parse_key(args.key, args.file, getattr(args, 'clip', False))
     prefix = 'f/' if ns == 'f' else ''

@@ -28,6 +28,8 @@ class Plan:
             # Clipboard drops: 24 h idle window, 7-day hard ceiling.
             "clipboard_idle_hours":       24,
             "clipboard_max_lifetime_days": 7,
+            # File drops: hard ceiling from creation date. None = never expire.
+            "anon_file_lifetime_days":    90,
             "storage_gb":                 None,
             "renewals":                   0,
             "password_protection":        False,
@@ -43,6 +45,8 @@ class Plan:
             # Clipboard drops: 48 h idle window, 30-day hard ceiling.
             "clipboard_idle_hours":       48,
             "clipboard_max_lifetime_days": 30,
+            # File drops: hard ceiling from creation date. None = never expire.
+            "anon_file_lifetime_days":    90,
             "storage_gb":                 None,
             "renewals":                   0,
             "password_protection":        False,
@@ -56,6 +60,7 @@ class Plan:
             "max_expiry_days":            365,
             "clipboard_idle_hours":       None,   # explicit expiry only
             "clipboard_max_lifetime_days": None,  # explicit expiry only
+            "anon_file_lifetime_days":    None,   # never expire by time (quota is the limit)
             "storage_gb":                 5,
             "renewals":                   None,   # unlimited
             "password_protection":        True,
@@ -69,6 +74,7 @@ class Plan:
             "max_expiry_days":            365 * 3,
             "clipboard_idle_hours":       None,
             "clipboard_max_lifetime_days": None,
+            "anon_file_lifetime_days":    None,   # never expire by time (quota is the limit)
             "storage_gb":                 20,
             "renewals":                   None,   # unlimited
             "password_protection":        True,
@@ -102,6 +108,8 @@ class PlanLimit(models.Model):
     max_expiry_days            = models.PositiveIntegerField(null=True, blank=True)
     clipboard_idle_hours       = models.PositiveIntegerField(null=True, blank=True)
     clipboard_max_lifetime_days = models.PositiveIntegerField(null=True, blank=True)
+    anon_file_lifetime_days    = models.PositiveIntegerField(null=True, blank=True,
+                                     help_text="Hard ceiling (days from creation) for file drops with no explicit expiry. null = never expire (paid plans).")
     storage_gb                 = models.PositiveIntegerField(null=True, blank=True)
     renewals                   = models.PositiveIntegerField(null=True, blank=True,
                                      help_text="null = unlimited, 0 = none")
@@ -124,6 +132,7 @@ class PlanLimit(models.Model):
             "max_expiry_days":             self.max_expiry_days,
             "clipboard_idle_hours":        self.clipboard_idle_hours,
             "clipboard_max_lifetime_days": self.clipboard_max_lifetime_days,
+            "anon_file_lifetime_days":     self.anon_file_lifetime_days,
             "storage_gb":                  self.storage_gb,
             "renewals":                    self.renewals,
             "password_protection":         self.password_protection,
@@ -348,7 +357,13 @@ class Drop(models.Model):
             ref = self.last_accessed_at or self.created_at
             return (now - ref) > timedelta(hours=idle_hours)
 
-        return (now - self.created_at) > timedelta(days=90)
+        # File drop fallback: check plan's anon_file_lifetime_days.
+        # Paid plans return None (never expire by time — quota is the constraint).
+        plan = self.owner_plan if self.owner_id else Plan.ANON
+        max_days = Plan.get(plan, "anon_file_lifetime_days")
+        if max_days is None:
+            return False
+        return (now - self.created_at) > timedelta(days=max_days)
 
     TOUCH_DEBOUNCE_SECS = 300  # 5 minutes
 

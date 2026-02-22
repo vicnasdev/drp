@@ -107,13 +107,12 @@ def webhook(request):
     """
     # ── Verify signature ──────────────────────────────────────────────────────
     secret    = settings.LEMONSQUEEZY_SIGNING_SECRET
-    signature = request.headers.get("X-Signature", "")
+    if not secret:
+        logger.error("LS webhook: LEMONSQUEEZY_SIGNING_SECRET is not configured")
+        return HttpResponse("Server misconfiguration", status=500)
 
-    digest = hmac.new(
-        secret.encode("utf-8"),
-        request.body,
-        hashlib.sha256,
-    ).hexdigest()
+    signature = request.headers.get("X-Signature", "")
+    digest    = hmac.digest(secret.encode("utf-8"), request.body, hashlib.sha256).hex()
 
     if not hmac.compare_digest(digest, signature):
         logger.warning("LS webhook: invalid signature")

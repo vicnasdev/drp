@@ -13,21 +13,12 @@ import subprocess
 import sys
 import tempfile
 
-import requests
-
-from cli import config, api
-from cli.session import auto_login
+from cli import api
+from cli.commands._context import load_context
 
 
 def cmd_edit(args):
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(1)
-
-    session = requests.Session()
-    auto_login(cfg, host, session)
+    cfg, host, session = load_context()
 
     # ── Fetch current content ─────────────────────────────────────────────────
     from cli.spinner import Spinner
@@ -35,7 +26,6 @@ def cmd_edit(args):
         kind, content = api.get_clipboard(host, session, args.key)
 
     if kind is None:
-        # Could be a file drop — give a clear message
         try:
             res = session.get(
                 f'{host}/f/{args.key}/',

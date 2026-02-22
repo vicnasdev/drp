@@ -11,21 +11,12 @@ File drops are not supported.
 import difflib
 import sys
 
-import requests
-
-from cli import config, api
-from cli.session import auto_login
+from cli import api
+from cli.commands._context import load_context
 
 
 def cmd_diff(args):
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(2)
-
-    session = requests.Session()
-    auto_login(cfg, host, session)
+    cfg, host, session = load_context()
 
     from cli.spinner import Spinner
     from cli.format import green, red, dim

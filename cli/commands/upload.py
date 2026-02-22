@@ -16,7 +16,7 @@ import sys
 import requests
 
 from cli import config, api
-from cli.session import auto_login
+from cli.commands._context import load_context
 from cli.crash_reporter import report_outcome
 
 
@@ -35,20 +35,15 @@ def _parse_expires(value: str) -> int | None:
 
 
 def _copy_to_clipboard(text: str) -> bool:
-    # Don't attempt clipboard copy in non-interactive environments (pipes, test subprocesses)
     if not sys.stdout.isatty():
         return False
-
     try:
         import pyperclip
         pyperclip.copy(text)
         return True
     except Exception:
         pass
-
-    import subprocess
-    import shutil
-
+    import subprocess, shutil
     for cmd in (['pbcopy'], ['xclip', '-selection', 'clipboard'],
                 ['xsel', '--clipboard', '--input'], ['wl-copy']):
         if shutil.which(cmd[0]):
@@ -57,28 +52,19 @@ def _copy_to_clipboard(text: str) -> bool:
                 return proc.returncode == 0
             except Exception:
                 continue
-
     return False
 
 
 def cmd_up(args):
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        print('  ✗ Not configured. Run: drp setup')
-        sys.exit(1)
+    cfg, host, session = load_context()
 
-    session = requests.Session()
-    auto_login(cfg, host, session)
-
-    target    = getattr(args, 'target', None)
-    key       = args.key
-    burn      = getattr(args, 'burn', False)
-    password  = getattr(args, 'password', None) or ''
+    target     = getattr(args, 'target', None)
+    key        = args.key
+    burn       = getattr(args, 'burn', False)
+    password   = getattr(args, 'password', None) or ''
     force_file = getattr(args, 'file', False)
     force_clip = getattr(args, 'clip', False)
 
-    # stdin pipe
     if target is None or target == '-':
         if sys.stdin.isatty():
             print('  ✗ No input. Provide text, a file path, a URL, or pipe via stdin.')
@@ -99,8 +85,7 @@ def cmd_up(args):
 def _upload_url(host, session, url, key, cfg, args, password=''):
     from cli.progress import ProgressBar
     from cli.format import dim
-    import mimetypes
-    import tempfile
+    import mimetypes, tempfile
 
     print(f'  {dim("fetching")} {url}')
 
@@ -112,7 +97,7 @@ def _upload_url(host, session, url, key, cfg, args, password=''):
         sys.exit(1)
 
     filename = _filename_from_response(r, url)
-    total = int(r.headers.get('Content-Length', 0))
+    total    = int(r.headers.get('Content-Length', 0))
 
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1])
     bar = ProgressBar(max(total, 1), label='downloading')
@@ -202,10 +187,9 @@ def _filename_from_response(r, url: str) -> str:
             part = part.strip()
             if part.startswith('filename='):
                 return part[9:].strip('"\'')
-
     from urllib.parse import urlparse
     path = urlparse(url).path
     if path.endswith('/'):
-        return 'download'          # trailing slash = directory listing, no meaningful filename
+        return 'download'
     name = os.path.basename(path)
     return name if name else 'download'

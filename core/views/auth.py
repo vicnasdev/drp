@@ -125,7 +125,12 @@ def account_view(request):
     if 'application/json' in request.headers.get('Accept', ''):
         collections = request.user.collections.prefetch_related('memberships').order_by('-created_at')
         return JsonResponse({
-            'username': request.user.username,
+            'username':            request.user.username,
+            'email':               request.user.email,
+            'plan':                profile.plan,
+            'storage_used_bytes':  profile.storage_used_bytes,
+            'storage_quota_bytes': profile.storage_quota_bytes,
+            'plan_limits':         plan_limits,
             'drops': [_drop_dict(d) for d in drops],
             'saved': [_saved_dict(s) for s in saved],
             'collections': [

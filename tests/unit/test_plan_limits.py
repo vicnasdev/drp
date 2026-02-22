@@ -15,32 +15,54 @@ from core.models import Plan, UserProfile
 # ── Plan.LIMITS completeness ──────────────────────────────────────────────────
 
 class TestPlanLimitsSchema(TestCase):
-    """Every plan must define every field — no silent KeyError at runtime."""
+    """
+    Every plan must define every field — no silent KeyError at runtime.
+    Tests go through Plan.get() so DB changes are visible.
+    Rows are seeded from Plan.LIMITS in setUp() (same as migration 0006/0007).
+    """
 
     REQUIRED_FIELDS = [
         "label", "price_monthly", "max_file_mb", "max_text_kb",
         "max_expiry_days", "clipboard_idle_hours", "clipboard_max_lifetime_days",
+        "anon_file_lifetime_days",
         "storage_gb", "renewals", "password_protection", "max_collections",
     ]
 
-    def _plan(self, key):
-        return Plan.LIMITS[key]
+    def setUp(self):
+        from core.models import PlanLimit
+        for plan_key, data in Plan.LIMITS.items():
+            PlanLimit.objects.update_or_create(plan=plan_key, defaults=data)
+        PlanLimit.invalidate_cache()
+
+    def _check_plan(self, plan_key):
+        for field in self.REQUIRED_FIELDS:
+            # Plan.get() must not raise — it should return a value (possibly None)
+            try:
+                Plan.get(plan_key, field)
+            except Exception as e:
+                self.fail(f"{plan_key} field '{field}' raised via Plan.get(): {e}")
 
     def test_anon_has_all_fields(self):
-        for f in self.REQUIRED_FIELDS:
-            self.assertIn(f, self._plan(Plan.ANON), msg=f"ANON missing field: {f}")
+        self._check_plan(Plan.ANON)
 
     def test_free_has_all_fields(self):
-        for f in self.REQUIRED_FIELDS:
-            self.assertIn(f, self._plan(Plan.FREE), msg=f"FREE missing field: {f}")
+        self._check_plan(Plan.FREE)
 
     def test_starter_has_all_fields(self):
-        for f in self.REQUIRED_FIELDS:
-            self.assertIn(f, self._plan(Plan.STARTER), msg=f"STARTER missing field: {f}")
+        self._check_plan(Plan.STARTER)
 
     def test_pro_has_all_fields(self):
-        for f in self.REQUIRED_FIELDS:
-            self.assertIn(f, self._plan(Plan.PRO), msg=f"PRO missing field: {f}")
+        self._check_plan(Plan.PRO)
+
+    def test_anon_file_lifetime_is_90(self):
+        self.assertEqual(Plan.get(Plan.ANON, "anon_file_lifetime_days"), 90)
+
+    def test_free_file_lifetime_is_90(self):
+        self.assertEqual(Plan.get(Plan.FREE, "anon_file_lifetime_days"), 90)
+
+    def test_paid_file_lifetime_is_none(self):
+        self.assertIsNone(Plan.get(Plan.STARTER, "anon_file_lifetime_days"))
+        self.assertIsNone(Plan.get(Plan.PRO, "anon_file_lifetime_days"))
 
 
 # ── File / text size limits ───────────────────────────────────────────────────
@@ -238,6 +260,7 @@ class TestPlanLimitModel(TestCase):
         required = [
             'label', 'price_monthly', 'max_file_mb', 'max_text_kb',
             'max_expiry_days', 'clipboard_idle_hours', 'clipboard_max_lifetime_days',
+            'anon_file_lifetime_days',
             'storage_gb', 'renewals', 'password_protection', 'max_collections',
         ]
         for plan_key in (Plan.ANON, Plan.FREE, Plan.STARTER, Plan.PRO):
