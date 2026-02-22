@@ -1,3 +1,8 @@
+GITHUB_REPO := vicnasdev/drp
+
+-include .env
+export
+
 .PHONY: help dev test migrate cleanup install set-domain
 
 help: ## Show available commands
@@ -23,8 +28,6 @@ install: ## Install drp CLI locally (editable)
 	pip install -e .
 
 # ── Domain migration ──────────────────────────────────────────────────────────
-
-
 
 set-domain: ## Swap default host: make set-domain NEW=drp.fyi
 	@test -n "$(NEW)" || (echo "  ✗ Usage: make set-domain NEW=drp.fyi" && exit 1)
