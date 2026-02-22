@@ -150,6 +150,9 @@ def _version() -> str:
 def _send(payload: dict) -> None:
     """Fire-and-forget POST to /api/report-error/. Never raises."""
     try:
+        import os
+        if os.environ.get('PYTEST_CURRENT_TEST'):
+            return
         import requests
         from cli import config
         cfg = config.load()
