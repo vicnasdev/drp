@@ -579,14 +579,7 @@ async function toggleRender() {
 
   try {
     if (!_renderContent) {
-      // Fetch presigned URL then content
-      const meta = await fetch(window.location.pathname, {
-        headers: { Accept: 'application/json' },
-      });
-      const data = await meta.json();
-      const fileUrl = data.presigned_url || data.file_url;
-      if (!fileUrl) throw new Error('No file URL available');
-      const resp = await fetch(fileUrl);
+      const resp = await fetch(`/f/${KEY}/raw/`);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       _renderContent = await resp.text();
     }

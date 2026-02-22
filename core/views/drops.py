@@ -661,6 +661,33 @@ def raw_view(request, key):
 
 # ── Download ──────────────────────────────────────────────────────────────────
 
+def raw_file(request, key):
+    """Stream file content through Django for in-browser rendering (avoids B2 CORS)."""
+    drop = Drop.objects.filter(ns=Drop.NS_FILE, key=key).first()
+    if not drop:
+        raise Http404
+    if drop.is_expired():
+        drop.hard_delete()
+        raise Http404
+
+    if drop.is_password_protected and not _is_owner(request, drop):
+        if not _is_password_unlocked(request, drop):
+            header_pw = request.headers.get("X-Drop-Password", "")
+            if not header_pw or not drop.check_password(header_pw):
+                return JsonResponse({"error": "password_required"}, status=401)
+
+    try:
+        import requests as http_requests
+        url = drop.download_url(expires_in=300)
+        upstream = http_requests.get(url, timeout=15)
+        upstream.raise_for_status()
+    except Exception:
+        raise Http404
+
+    content_type = drop.content_type or "application/octet-stream"
+    return HttpResponse(upstream.content, content_type=content_type)
+
+
 def download_drop(request, key):
     drop = Drop.objects.filter(ns=Drop.NS_FILE, key=key).first()
     if not drop:

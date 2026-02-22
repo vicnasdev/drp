@@ -130,6 +130,7 @@ def account_view(request):
             'saved': [_saved_dict(s) for s in saved],
             'collections': [
                 {
+                    'id':   col.pk,
                     'name': col.name,
                     'slug': col.slug,
                     'drops': [{'ns': m.ns, 'key': m.key} for m in col.memberships.all()],
