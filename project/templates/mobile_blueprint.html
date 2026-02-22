@@ -22,7 +22,6 @@
     align-items: flex-start;
   }
 
-  /* ── Sidebar nav ── */
   .bp-nav {
     width: 180px;
     flex-shrink: 0;
@@ -56,7 +55,6 @@
   .bp-nav button:hover { background: var(--surface); color: var(--text); }
   .bp-nav button.active { background: var(--surface); color: var(--accent); font-weight: 600; }
 
-  /* ── Phone mockup ── */
   .phone-wrap {
     flex-shrink: 0;
     position: sticky;
@@ -100,7 +98,6 @@
 
   .phone-screen::-webkit-scrollbar { display: none; }
 
-  /* Phone screen inner components */
   .ps-header {
     display: flex;
     justify-content: space-between;
@@ -244,11 +241,13 @@
   }
 
   .ps-muted { color: var(--muted); font-size: 10px; }
+
   .ps-toggle-row {
     display: flex;
     gap: 4px;
     margin-bottom: 10px;
   }
+
   .ps-toggle {
     flex: 1;
     background: #1a1a1a;
@@ -260,14 +259,59 @@
     cursor: pointer;
     text-align: center;
   }
+
   .ps-toggle.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-  /* ── Docs panel ── */
-  .bp-docs {
-    flex: 1;
-    min-width: 0;
+  .ps-preview-box {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 10px;
+    color: #c8d3e8;
+    line-height: 1.5;
+    margin-bottom: 8px;
+    font-family: monospace;
+    min-height: 60px;
   }
 
+  .ps-file-info {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ps-file-icon { font-size: 22px; }
+  .ps-file-name { font-size: 11px; color: #e8e8e8; }
+  .ps-file-size { font-size: 9px; color: var(--muted); margin-top: 2px; }
+
+  .ps-action-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+
+  .ps-action-btn {
+    flex: 1;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    padding: 6px 4px;
+    font-size: 9px;
+    color: var(--muted);
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .ps-action-btn.danger { color: var(--danger); border-color: #3a2020; }
+
+  /* Docs panel */
+  .bp-docs { flex: 1; min-width: 0; }
   .bp-screen { display: none; }
   .bp-screen.active { display: block; }
 
@@ -301,6 +345,8 @@
     position: relative;
   }
 
+  .endpoint-header:last-child { border-bottom: none; }
+
   .method {
     font-size: .7rem;
     font-weight: 700;
@@ -314,6 +360,7 @@
   .method.POST { background: #1e2d4a; color: #5b8dee; }
   .method.DELETE { background: #3a1e1e; color: var(--danger); }
   .method.PUT { background: #3a2e1e; color: #e0a855; }
+  .method.BROWSER { background: #252525; color: var(--muted); }
 
   .endpoint-path {
     font-family: monospace;
@@ -321,11 +368,7 @@
     color: var(--text);
   }
 
-  .endpoint-note {
-    font-size: .75rem;
-    color: var(--muted);
-    margin-left: auto;
-  }
+  .endpoint-note { font-size: .75rem; color: var(--muted); margin-left: auto; }
 
   .tip-icon {
     margin-left: .5rem;
@@ -355,9 +398,7 @@
 
   .tip-icon:hover .tip-text { display: block; }
 
-  .endpoint-body {
-    padding: .75rem 1rem;
-  }
+  .endpoint-body { padding: .75rem 1rem; }
 
   .ep-label {
     font-size: .7rem;
@@ -436,11 +477,11 @@
     <h3>Screens</h3>
     <button class="active" onclick="showScreen('auth', this)">1. Login / Register</button>
     <button onclick="showScreen('upload', this)">2. Upload</button>
-    <button onclick="showScreen('drop', this)">3. Drop View</button>
-    <button onclick="showScreen('drops', this)">4. My Drops</button>
-    <button onclick="showScreen('account', this)">5. Account</button>
-    <button onclick="showScreen('plans', this)">6. Plans</button>
-    <button onclick="showScreen('bugreport', this)">7. Bug Report</button>
+    <button onclick="showScreen('drop_file', this)">3. File Drop View</button>
+    <button onclick="showScreen('drop_clip', this)">4. Clipboard Drop View</button>
+    <button onclick="showScreen('drops', this)">5. My Drops</button>
+    <button onclick="showScreen('account', this)">6. Account</button>
+    <button onclick="showScreen('plans', this)">7. Plans</button>
     <h3 style="margin-top:1.5rem">Notes</h3>
     <button onclick="showScreen('setup', this)">Auth / CSRF setup</button>
     <button onclick="showScreen('style', this)">Style guide</button>
@@ -450,13 +491,11 @@
   <div class="phone-wrap">
     <div class="phone">
       <div class="phone-notch"></div>
-      <div class="phone-screen" id="phone-screen">
-        <!-- injected by JS -->
-      </div>
+      <div class="phone-screen" id="phone-screen"></div>
       <div class="ps-tab-bar" id="phone-tabs" style="display:none">
-        <div class="ps-tab active" onclick="phoneTab('upload')"><span class="ps-tab-icon">⬆</span>Upload</div>
-        <div class="ps-tab" onclick="phoneTab('mydrops')"><span class="ps-tab-icon">📋</span>Drops</div>
-        <div class="ps-tab" onclick="phoneTab('account')"><span class="ps-tab-icon">👤</span>Account</div>
+        <div class="ps-tab" id="tab-upload" onclick="tabClick('upload')"><span class="ps-tab-icon">⬆</span>Upload</div>
+        <div class="ps-tab" id="tab-mydrops" onclick="tabClick('mydrops')"><span class="ps-tab-icon">📋</span>Drops</div>
+        <div class="ps-tab" id="tab-account" onclick="tabClick('account')"><span class="ps-tab-icon">👤</span>Account</div>
       </div>
     </div>
     <p style="text-align:center;font-size:.7rem;color:var(--muted);margin-top:.75rem">interactive mockup</p>
@@ -484,7 +523,7 @@ password=secret</pre>
           <div class="ep-label">Success</div>
           <pre>HTTP 302 → /   (check redirect URL or status)</pre>
           <div class="ep-label">Error</div>
-          <pre>HTTP 200 with error message in HTML (check for error text)</pre>
+          <pre>HTTP 200 with error message in HTML</pre>
         </div>
       </div>
 
@@ -501,17 +540,16 @@ password=secret
 password2=secret
 plan=free</pre>
           <div class="ep-label">Notes</div>
-          <pre>plan: "free" | "starter" | "pro"
-Always use "free" on signup — upgrade via billing.</pre>
+          <pre>Always use plan=free on signup. Upgrade via billing.</pre>
         </div>
       </div>
 
       <h3>Forgot password</h3>
       <div class="endpoint">
         <div class="endpoint-header">
-          <span class="method GET">BROWSER</span>
+          <span class="method BROWSER">BROWSER</span>
           <span class="endpoint-path">https://drp.fyi/auth/forgot-password/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Open in system browser. Too complex to reimplement natively — the full reset email + token flow is handled by Django on the web.</span></span>
+          <span class="tip-icon">ⓘ<span class="tip-text">Open in system browser. The full reset email + token flow is handled by Django on the web — too complex to reimplement natively.</span></span>
         </div>
       </div>
     </div>
@@ -525,8 +563,8 @@ Always use "free" on signup — upgrade via billing.</pre>
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method GET">GET</span>
-          <span class="endpoint-path">/check-key/?key=&lt;key&gt;&ns=&lt;f|c&gt;</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Call on every keystroke (debounced). <code>ns=f</code> for file, <code>ns=c</code> for clipboard/text. Show a green tick or red cross inline next to the key input.</span></span>
+          <span class="endpoint-path">/check-key/?key=&lt;key&gt;&amp;ns=&lt;f|c&gt;</span>
+          <span class="tip-icon">ⓘ<span class="tip-text">Call on every keystroke (debounced ~300ms). ns=f for file, ns=c for clipboard/text. Show a green tick or red cross inline next to the key input.</span></span>
         </div>
         <div class="endpoint-body">
           <div class="ep-label">Response</div>
@@ -551,7 +589,7 @@ Always use "free" on signup — upgrade via billing.</pre>
   "size": 1048576,
   "content_type": "image/jpeg",
   "ns": "f",
-  "key": "my-key"   // optional, omit for auto key
+  "key": "my-key"   // optional
 }</pre>
           <div class="ep-label">Response</div>
           <pre>{
@@ -568,7 +606,7 @@ Always use "free" on signup — upgrade via billing.</pre>
           <span class="method PUT">PUT</span>
           <span class="endpoint-path">&lt;presigned_url&gt;</span>
           <span class="endpoint-note">Step 2 — direct to B2</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">No auth headers needed. Just PUT the raw file bytes with the correct Content-Type to the presigned URL. Expires in 3600s.</span></span>
+          <span class="tip-icon">ⓘ<span class="tip-text">No auth headers needed. PUT raw file bytes with the correct Content-Type. Presigned URL expires in 3600s.</span></span>
         </div>
         <div class="endpoint-body">
           <div class="ep-label">Request</div>
@@ -593,9 +631,8 @@ Body: raw file bytes</pre>
   "password": ""   // paid only
 }</pre>
           <div class="ep-label">Response</div>
-          <pre>{ "key": "my-key", "url": "/f/my-key/" }</pre>
-          <div class="ep-label">Full URL</div>
-          <pre>https://drp.fyi/f/my-key/</pre>
+          <pre>{ "key": "my-key", "url": "/f/my-key/" }
+// Full URL: https://drp.fyi/f/my-key/</pre>
         </div>
       </div>
 
@@ -618,17 +655,17 @@ password=secret     // paid only</pre>
       </div>
     </div>
 
-    <!-- 3. Drop view -->
-    <div class="bp-screen" id="screen-drop">
-      <h2>3. Drop View</h2>
-      <p class="subtitle">Shown after upload or when opening a drop link. Two URL namespaces — file (<code>/f/&lt;key&gt;/</code>) and text (<code>/&lt;key&gt;/</code>). All actions work on both, just swap the prefix.</p>
+    <!-- 3. File Drop View -->
+    <div class="bp-screen" id="screen-drop_file">
+      <h2>3. File Drop View</h2>
+      <p class="subtitle">Shown after file upload or when opening a <code>/f/&lt;key&gt;/</code> link. Shows filename and size. All actions use the <code>/f/&lt;key&gt;/</code> prefix.</p>
 
-      <h3>View drop</h3>
+      <h3>View drop metadata</h3>
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method GET">GET</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/ &nbsp;·&nbsp; /&lt;key&gt;/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Send <code>Accept: application/json</code> to get JSON instead of HTML. For password-protected drops, include <code>X-Drop-Password: &lt;pw&gt;</code> header.</span></span>
+          <span class="endpoint-path">/f/&lt;key&gt;/</span>
+          <span class="tip-icon">ⓘ<span class="tip-text">Send Accept: application/json to get JSON. For password-protected drops include X-Drop-Password header.</span></span>
         </div>
         <div class="endpoint-body">
           <div class="ep-label">Headers</div>
@@ -637,12 +674,12 @@ X-Drop-Password: secret   // if password protected</pre>
         </div>
       </div>
 
-      <h3>Download file</h3>
+      <h3>Download</h3>
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method GET">GET</span>
           <span class="endpoint-path">/f/&lt;key&gt;/download/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Returns a redirect to a presigned B2 download URL. Open in system browser or use a download manager. Include <code>X-Drop-Password</code> header if the drop is password-protected.</span></span>
+          <span class="tip-icon">ⓘ<span class="tip-text">Returns a redirect to a presigned B2 download URL. Open in system browser or use a download manager.</span></span>
         </div>
         <div class="endpoint-body">
           <div class="ep-label">Headers (if password protected)</div>
@@ -650,19 +687,11 @@ X-Drop-Password: secret   // if password protected</pre>
         </div>
       </div>
 
-      <h3>View raw text</h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method GET">GET</span>
-          <span class="endpoint-path">/raw/&lt;key&gt;/</span>
-        </div>
-      </div>
-
-      <h3>Rename <span class="auth-badge">owner only</span></h3>
+      <h3>Actions <span class="auth-badge">owner only</span></h3>
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method POST">POST</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/rename/ &nbsp;·&nbsp; /&lt;key&gt;/rename/</span>
+          <span class="endpoint-path">/f/&lt;key&gt;/rename/</span>
         </div>
         <div class="endpoint-body">
           <div class="ep-label">Request — application/json</div>
@@ -672,11 +701,10 @@ X-Drop-Password: secret   // if password protected</pre>
         </div>
       </div>
 
-      <h3>Delete <span class="auth-badge">owner only</span></h3>
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method DELETE">DELETE</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/delete/ &nbsp;·&nbsp; /&lt;key&gt;/delete/</span>
+          <span class="endpoint-path">/f/&lt;key&gt;/delete/</span>
         </div>
         <div class="endpoint-body">
           <div class="ep-label">Response</div>
@@ -684,12 +712,12 @@ X-Drop-Password: secret   // if password protected</pre>
         </div>
       </div>
 
-      <h3>Renew <span class="auth-badge">owner only</span> <span class="paid-badge">paid</span></h3>
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method POST">POST</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/renew/ &nbsp;·&nbsp; /&lt;key&gt;/renew/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Extends the expiry by the plan's max_expiry_days from now. Only works if the drop has an expiry set. Returns updated expiry and renewal count.</span></span>
+          <span class="endpoint-path">/f/&lt;key&gt;/renew/</span>
+          <span class="paid-badge">paid</span>
+          <span class="tip-icon">ⓘ<span class="tip-text">Extends expiry by plan's max_expiry_days from now. Only works if the drop has an expiry set.</span></span>
         </div>
         <div class="endpoint-body">
           <div class="ep-label">Response</div>
@@ -697,49 +725,26 @@ X-Drop-Password: secret   // if password protected</pre>
         </div>
       </div>
 
-      <h3>Copy drop <span class="paid-badge">paid</span></h3>
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method POST">POST</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/copy/ &nbsp;·&nbsp; /&lt;key&gt;/copy/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Duplicates the drop under a new key. For file drops, copies the B2 object server-side — no re-upload needed. Omit new_key for an auto-generated key.</span></span>
+          <span class="endpoint-path">/f/&lt;key&gt;/copy/</span>
+          <span class="paid-badge">paid</span>
+          <span class="tip-icon">ⓘ<span class="tip-text">Copies the B2 object server-side — no re-upload needed. Omit new_key for auto-generated key.</span></span>
         </div>
         <div class="endpoint-body">
           <div class="ep-label">Request — application/json (optional)</div>
-          <pre>{ "new_key": "my-copy" }   // omit for auto key</pre>
+          <pre>{ "new_key": "my-copy" }</pre>
           <div class="ep-label">Response</div>
           <pre>{ "key": "my-copy", "url": "/f/my-copy/" }</pre>
         </div>
       </div>
 
-      <h3>Bookmark <span class="auth-badge">login required</span></h3>
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method POST">POST</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/save/ &nbsp;·&nbsp; /&lt;key&gt;/save/</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Response</div>
-          <pre>{ "saved": true, "created": true }</pre>
-        </div>
-      </div>
-
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/unsave/ &nbsp;·&nbsp; /&lt;key&gt;/unsave/</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Response</div>
-          <pre>{ "saved": false, "deleted": true }</pre>
-        </div>
-      </div>
-
-      <h3>Set / remove password <span class="auth-badge">owner only</span> <span class="paid-badge">paid</span></h3>
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/f/&lt;key&gt;/set-password/ &nbsp;·&nbsp; /&lt;key&gt;/set-password/</span>
+          <span class="endpoint-path">/f/&lt;key&gt;/set-password/</span>
+          <span class="paid-badge">paid</span>
         </div>
         <div class="endpoint-body">
           <div class="ep-label">Request — application/json</div>
@@ -747,18 +752,110 @@ X-Drop-Password: secret   // if password protected</pre>
 { "password": "" }         // remove</pre>
         </div>
       </div>
+
+      <h3>Bookmarks <span class="auth-badge">login required</span></h3>
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method POST">POST</span>
+          <span class="endpoint-path">/f/&lt;key&gt;/save/</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="ep-label">Response</div>
+          <pre>{ "saved": true, "created": true }</pre>
+        </div>
+      </div>
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method POST">POST</span>
+          <span class="endpoint-path">/f/&lt;key&gt;/unsave/</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="ep-label">Response</div>
+          <pre>{ "saved": false, "deleted": true }</pre>
+        </div>
+      </div>
     </div>
 
-    <!-- 4. My drops -->
+    <!-- 4. Clipboard Drop View -->
+    <div class="bp-screen" id="screen-drop_clip">
+      <h2>4. Clipboard Drop View</h2>
+      <p class="subtitle">Shown after text drop or when opening a <code>/&lt;key&gt;/</code> link. Shows text preview. All actions use the <code>/&lt;key&gt;/</code> prefix — identical to file drop actions.</p>
+
+      <h3>View drop + text content</h3>
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method GET">GET</span>
+          <span class="endpoint-path">/&lt;key&gt;/</span>
+          <span class="tip-icon">ⓘ<span class="tip-text">Send Accept: application/json to get JSON including the text content. Display it as a scrollable preview box.</span></span>
+        </div>
+        <div class="endpoint-body">
+          <div class="ep-label">Headers</div>
+          <pre>Accept: application/json
+X-Drop-Password: secret   // if password protected</pre>
+        </div>
+      </div>
+
+      <h3>View raw text</h3>
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method GET">GET</span>
+          <span class="endpoint-path">/raw/&lt;key&gt;/</span>
+          <span class="tip-icon">ⓘ<span class="tip-text">Returns plain text. Use for copying or sharing the raw content.</span></span>
+        </div>
+      </div>
+
+      <h3>Actions <span class="auth-badge">owner only</span></h3>
+      <div class="endpoint">
+        <div class="endpoint-header"><span class="method POST">POST</span><span class="endpoint-path">/&lt;key&gt;/rename/</span></div>
+        <div class="endpoint-body">
+          <div class="ep-label">Request</div><pre>{ "new_key": "better-name" }</pre>
+          <div class="ep-label">Response</div><pre>{ "key": "better-name", "url": "/better-name/" }</pre>
+        </div>
+      </div>
+      <div class="endpoint">
+        <div class="endpoint-header"><span class="method DELETE">DELETE</span><span class="endpoint-path">/&lt;key&gt;/delete/</span></div>
+        <div class="endpoint-body"><div class="ep-label">Response</div><pre>{ "deleted": true }</pre></div>
+      </div>
+      <div class="endpoint">
+        <div class="endpoint-header"><span class="method POST">POST</span><span class="endpoint-path">/&lt;key&gt;/renew/</span><span class="paid-badge">paid</span></div>
+        <div class="endpoint-body"><div class="ep-label">Response</div><pre>{ "expires_at": "2026-03-01T00:00:00Z", "renewals": 1 }</pre></div>
+      </div>
+      <div class="endpoint">
+        <div class="endpoint-header"><span class="method POST">POST</span><span class="endpoint-path">/&lt;key&gt;/copy/</span><span class="paid-badge">paid</span></div>
+        <div class="endpoint-body">
+          <div class="ep-label">Request (optional)</div><pre>{ "new_key": "my-copy" }</pre>
+          <div class="ep-label">Response</div><pre>{ "key": "my-copy", "url": "/my-copy/" }</pre>
+        </div>
+      </div>
+      <div class="endpoint">
+        <div class="endpoint-header"><span class="method POST">POST</span><span class="endpoint-path">/&lt;key&gt;/set-password/</span><span class="paid-badge">paid</span></div>
+        <div class="endpoint-body">
+          <div class="ep-label">Request</div><pre>{ "password": "secret" }  // set
+{ "password": "" }        // remove</pre>
+        </div>
+      </div>
+
+      <h3>Bookmarks <span class="auth-badge">login required</span></h3>
+      <div class="endpoint">
+        <div class="endpoint-header"><span class="method POST">POST</span><span class="endpoint-path">/&lt;key&gt;/save/</span></div>
+        <div class="endpoint-body"><div class="ep-label">Response</div><pre>{ "saved": true, "created": true }</pre></div>
+      </div>
+      <div class="endpoint">
+        <div class="endpoint-header"><span class="method POST">POST</span><span class="endpoint-path">/&lt;key&gt;/unsave/</span></div>
+        <div class="endpoint-body"><div class="ep-label">Response</div><pre>{ "saved": false, "deleted": true }</pre></div>
+      </div>
+    </div>
+
+    <!-- 5. My Drops -->
     <div class="bp-screen" id="screen-drops">
-      <h2>4. My Drops</h2>
+      <h2>5. My Drops</h2>
       <p class="subtitle">List of owned drops and bookmarks. Single API call returns both.</p>
 
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method GET">GET</span>
           <span class="endpoint-path">/auth/account/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Send <code>Accept: application/json</code> to get JSON. Without it, returns HTML. Build the full URL from ns + key: ns=="f" → /f/key/, ns=="c" → /key/</span></span>
+          <span class="tip-icon">ⓘ<span class="tip-text">Send Accept: application/json. Build full URL from ns + key: ns=="f" → /f/key/, ns=="c" → /key/</span></span>
         </div>
         <div class="endpoint-body">
           <div class="ep-label">Headers</div>
@@ -771,7 +868,7 @@ X-Drop-Password: secret   // if password protected</pre>
       "ns": "c",            // "c"=text, "f"=file
       "kind": "text",       // "text" | "file"
       "created_at": "2026-02-21T00:00:00Z",
-      "expires_at": "2026-03-21T00:00:00Z",  // null if no expiry
+      "expires_at": "2026-03-21T00:00:00Z",  // null if none
       "filename": null,
       "filesize": null,
       "locked": false,
@@ -796,9 +893,9 @@ ns == "c"  →  https://drp.fyi/&lt;key&gt;/</pre>
       </div>
     </div>
 
-    <!-- 5. Account -->
+    <!-- 6. Account -->
     <div class="bp-screen" id="screen-account">
-      <h2>5. Account / Settings</h2>
+      <h2>6. Account / Settings</h2>
       <p class="subtitle">Settings, export/import, and logout.</p>
 
       <h3>Update settings</h3>
@@ -818,12 +915,11 @@ ns == "c"  →  https://drp.fyi/&lt;key&gt;/</pre>
         <div class="endpoint-header">
           <span class="method GET">GET</span>
           <span class="endpoint-path">/auth/account/export/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Returns a JSON file download with all owned drops and bookmarks. Trigger the system share sheet so the user can save it.</span></span>
+          <span class="tip-icon">ⓘ<span class="tip-text">Returns a JSON file download. Trigger the system share sheet so the user can save it.</span></span>
         </div>
         <div class="endpoint-body">
           <div class="ep-label">Response</div>
-          <pre>Content-Disposition: attachment; filename="drp-export.json"
-Body: JSON array of drop objects</pre>
+          <pre>Content-Disposition: attachment; filename="drp-export.json"</pre>
         </div>
       </div>
 
@@ -848,38 +944,38 @@ Body: JSON array of drop objects</pre>
       </div>
     </div>
 
-    <!-- 6. Plans -->
+    <!-- 7. Plans -->
     <div class="bp-screen" id="screen-plans">
-      <h2>6. Plans / Subscription</h2>
-      <p class="subtitle">Show plan cards in Account. Do not implement in-app payment — Apple requires IAP for in-app purchases (30% cut). Open browser instead.</p>
+      <h2>7. Plans / Subscription</h2>
+      <p class="subtitle">Show plan cards in Account. Open browser — never implement in-app payment (Apple IAP = 30% cut).</p>
 
-      <div class="section-note">⚠️ Apple policy: you cannot charge users inside the app through your own payment processor. Open the browser to your web checkout instead. Redirecting is fully allowed.</div>
+      <div class="section-note">⚠️ Apple policy: in-app purchases of digital goods must use IAP. Redirect to your web checkout instead — fully allowed.</div>
 
       <h3>Upgrade</h3>
       <div class="endpoint">
         <div class="endpoint-header">
-          <span class="method GET">BROWSER</span>
+          <span class="method BROWSER">BROWSER</span>
           <span class="endpoint-path">/billing/checkout/starter/</span>
         </div>
       </div>
       <div class="endpoint">
         <div class="endpoint-header">
-          <span class="method GET">BROWSER</span>
+          <span class="method BROWSER">BROWSER</span>
           <span class="endpoint-path">/billing/checkout/pro/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Opens the LemonSqueezy hosted checkout. The URL passes the user's email and user_id as params so the subscription gets linked to their account automatically.</span></span>
+          <span class="tip-icon">ⓘ<span class="tip-text">Opens LemonSqueezy hosted checkout. Passes user email and user_id so the subscription links to the account automatically.</span></span>
         </div>
       </div>
 
-      <h3>Manage / cancel subscription</h3>
+      <h3>Manage / cancel</h3>
       <div class="endpoint">
         <div class="endpoint-header">
-          <span class="method GET">BROWSER</span>
+          <span class="method BROWSER">BROWSER</span>
           <span class="endpoint-path">/billing/portal/</span>
-          <span class="tip-icon">ⓘ<span class="tip-text">Django redirects the logged-in user to their LemonSqueezy customer portal. The user may need to log in on the web if their browser session has expired. Consider adding a one-time token login endpoint in the future.</span></span>
+          <span class="tip-icon">ⓘ<span class="tip-text">Redirects logged-in user to LemonSqueezy customer portal. User may need to log in on the web if browser session has expired.</span></span>
         </div>
       </div>
 
-      <h3>Plan limits reference</h3>
+      <h3>Plan limits</h3>
       <div class="endpoint">
         <div class="endpoint-body">
           <pre>Feature            Free    Starter   Pro
@@ -891,55 +987,34 @@ Expiry control      ✗        ✓        ✓
 Password protect    ✗        ✓        ✓
 Renew drop          ✗        ✓        ✓
 Copy drop           ✗        ✓        ✓</pre>
-          <div class="ep-label">UI guidance</div>
-          <pre>Gate paid features — show greyed out + "Upgrade" nudge for free users.
-Never show a native payment sheet — always open browser.</pre>
         </div>
       </div>
     </div>
 
-    <!-- 7. Bug report -->
-    <div class="bp-screen" id="screen-bugreport">
-      <h2>7. Bug Report</h2>
-      <p class="subtitle">Simple form. Optional, but nice to include.</p>
-
-      <div class="endpoint">
-        <div class="endpoint-header">
-          <span class="method POST">POST</span>
-          <span class="endpoint-path">/report-bug/</span>
-        </div>
-        <div class="endpoint-body">
-          <div class="ep-label">Request — application/x-www-form-urlencoded</div>
-          <pre>description=Something broke when I...</pre>
-        </div>
-      </div>
-    </div>
-
-    <!-- Auth/CSRF setup -->
+    <!-- Auth/CSRF -->
     <div class="bp-screen" id="screen-setup">
       <h2>Auth & CSRF Setup</h2>
       <p class="subtitle">How Django session auth works with a native app.</p>
-
       <div class="endpoint">
         <div class="endpoint-body">
-          <div class="ep-label">How it works</div>
-          <pre>1. POST /auth/login/ → Django sets two cookies:
-     sessionid   — identifies the logged-in session
+          <div class="ep-label">Flow</div>
+          <pre>1. POST /auth/login/ → Django sets:
+     sessionid   — identifies the session
      csrftoken   — CSRF protection token
 
-2. Store csrftoken value from the cookie.
+2. Store csrftoken value.
 
-3. On every POST or DELETE request, add header:
+3. Every POST/DELETE must include:
      X-CSRFToken: &lt;csrftoken value&gt;
 
-4. FlutterFlow: enable persistent cookie jar on
-   the HTTP client so sessionid is sent automatically.</pre>
+4. FlutterFlow: enable persistent cookie jar
+   so sessionid is sent automatically.</pre>
+          <div class="ep-label">Common headers</div>
+          <pre>Cookie: sessionid=&lt;val&gt;; csrftoken=&lt;val&gt;
+X-CSRFToken: &lt;val&gt;        // POST/DELETE only
+Accept: application/json  // always</pre>
           <div class="ep-label">Base URL</div>
           <pre>https://drp.fyi</pre>
-          <div class="ep-label">Common headers for all authenticated requests</div>
-          <pre>Cookie: sessionid=&lt;value&gt;; csrftoken=&lt;value&gt;
-X-CSRFToken: &lt;csrftoken value&gt;   // POST/DELETE only
-Accept: application/json          // to get JSON not HTML</pre>
         </div>
       </div>
     </div>
@@ -948,34 +1023,31 @@ Accept: application/json          // to get JSON not HTML</pre>
     <div class="bp-screen" id="screen-style">
       <h2>Style Guide</h2>
       <p class="subtitle">Design tokens and component guidance for FlutterFlow.</p>
-
       <div class="endpoint">
         <div class="endpoint-body">
-          <div class="ep-label">Colour palette</div>
+          <div class="ep-label">Colours</div>
           <pre>Background:   #0f0f0f
 Surface:      #1a1a1a
 Border:       #2a2a2a
 Text:         #e8e8e8
 Muted:        #888888
-Accent:       #5b8dee   // links, CTAs, active
-Danger:       #e05555   // delete
-Success:      #4caf50   // copy confirmation</pre>
+Accent:       #5b8dee
+Danger:       #e05555
+Success:      #4caf50</pre>
           <div class="ep-label">Typography</div>
-          <pre>UI text:      system-ui, sans-serif
-Keys/links:   JetBrains Mono  or  Roboto Mono</pre>
-          <div class="ep-label">Key components</div>
-          <pre>Link box      — dark bg, monospace, accent colour, tap-to-copy
-Drop card     — key (mono) + type icon + expiry badge + long-press actions
-Plan badge    — small chip: Free / Starter / Pro
-Upload zone   — full-width dashed border, tap to pick / share sheet
-Action bar    — icon-only buttons in drop view, confirm delete with dialog
-Copy snackbar — "Copied!" for 2s, icon → checkmark</pre>
-          <div class="ep-label">UX rules</div>
-          <pre>• Show link immediately after upload — core interaction
-• Anonymous uploads work, but drops won't appear in account
-• Expired drops return 404 — show "This drop has expired"
-• Gate paid features with grey-out + Upgrade nudge
-• Subscription always opens browser, never in-app payment</pre>
+          <pre>UI:      system-ui, sans-serif
+Keys:    JetBrains Mono  or  Roboto Mono</pre>
+          <div class="ep-label">Components & UX</div>
+          <pre>Link box      — monospace, accent, tap-to-copy
+Drop card     — key + type icon + expiry + long-press actions
+File drop     — show filename + formatted file size
+Text drop     — show scrollable text preview
+Plan badge    — Free / Starter / Pro chip
+Upload zone   — dashed border, tap or share sheet
+Copy snackbar — "Copied!" 2s, icon → checkmark
+Delete        — always confirm with dialog
+Paid features — greyed out + Upgrade nudge for free users
+Subscription  — always open browser, never in-app payment</pre>
         </div>
       </div>
     </div>
@@ -984,127 +1056,172 @@ Copy snackbar — "Copied!" for 2s, icon → checkmark</pre>
 </div>
 
 <script>
-  const BASE = 'https://drp.fyi';
-
   const phoneScreens = {
-    auth: `
-      <div class="ps-section-title">drp</div>
-      <div class="ps-toggle-row">
-        <div class="ps-toggle active">Log in</div>
-        <div class="ps-toggle">Register</div>
-      </div>
-      <div class="ps-label">Email</div>
-      <input class="ps-input" placeholder="you@example.com" readonly>
-      <div class="ps-label">Password</div>
-      <input class="ps-input" placeholder="••••••••" type="password" readonly>
-      <button class="ps-btn">Log in</button>
-      <button class="ps-btn secondary">Forgot password →</button>
-    `,
-    upload: `
-      <div class="ps-header">
-        <span class="ps-logo">drp</span>
-        <span class="ps-muted">vic@e.com</span>
-      </div>
-      <div class="ps-toggle-row">
-        <div class="ps-toggle active">📄 File</div>
-        <div class="ps-toggle">📋 Text</div>
-      </div>
-      <div style="border:1.5px dashed #333;border-radius:8px;padding:20px;text-align:center;margin-bottom:8px;color:var(--muted);font-size:11px">
-        Tap to pick a file<br><span style="font-size:9px">or use share sheet</span>
-      </div>
-      <div class="ps-label">Custom key (optional)</div>
-      <input class="ps-input" placeholder="my-key" readonly>
-      <button class="ps-btn">Drop it</button>
-    `,
-    uploadresult: `
-      <div class="ps-header">
-        <span class="ps-logo">drp</span>
-      </div>
-      <div class="ps-label">Your link</div>
-      <div class="ps-link-box">
-        drp.fyi/my-photo
-        <span class="ps-copy-icon">⎘</span>
-      </div>
-      <button class="ps-btn secondary">Share</button>
-      <button class="ps-btn secondary">Drop another</button>
-    `,
-    mydrops: `
-      <div class="ps-header">
-        <span class="ps-logo">My Drops</span>
-        <span class="ps-badge">Pro</span>
-      </div>
-      <div class="ps-label">Owned</div>
-      <div class="ps-drop-card">
-        <div>
-          <div class="ps-drop-key">📄 my-photo</div>
-          <div class="ps-drop-meta">3.2 MB · expires in 12d · 5 views</div>
+    auth: {
+      tabs: false,
+      activeTab: null,
+      html: `
+        <div class="ps-section-title">drp</div>
+        <div class="ps-toggle-row">
+          <div class="ps-toggle active">Log in</div>
+          <div class="ps-toggle">Register</div>
         </div>
-        <div class="ps-drop-actions">✏️ 🗑</div>
-      </div>
-      <div class="ps-drop-card">
-        <div>
-          <div class="ps-drop-key">📋 hello-world</div>
-          <div class="ps-drop-meta">text · no expiry · 1 view</div>
+        <div class="ps-label">Email</div>
+        <input class="ps-input" placeholder="you@example.com" readonly>
+        <div class="ps-label">Password</div>
+        <input class="ps-input" placeholder="••••••••" type="password" readonly>
+        <button class="ps-btn">Log in</button>
+        <button class="ps-btn secondary">Forgot password →</button>
+      `
+    },
+    upload: {
+      tabs: true, activeTab: 'upload', html: `
+        <div class="ps-header">
+          <span class="ps-logo">drp</span>
+          <span class="ps-muted">vic@e.com</span>
         </div>
-        <div class="ps-drop-actions">✏️ 🗑</div>
-      </div>
-      <div class="ps-label">Bookmarked</div>
-      <div class="ps-drop-card">
-        <div>
-          <div class="ps-drop-key">📄 shared-doc</div>
-          <div class="ps-drop-meta">saved 2d ago</div>
+        <div class="ps-toggle-row">
+          <div class="ps-toggle active">📄 File</div>
+          <div class="ps-toggle">📋 Text</div>
         </div>
-        <div class="ps-drop-actions">🔖</div>
-      </div>
-    `,
-    account: `
-      <div class="ps-header">
-        <span class="ps-logo">Account</span>
-        <span class="ps-badge pro">Pro</span>
-      </div>
-      <div class="ps-muted" style="margin-bottom:8px">vic@example.com</div>
-      <hr class="ps-divider">
-      <div class="ps-label">Subscription</div>
-      <div class="ps-plan-card highlight">
-        <div class="ps-plan-name">Pro ✓</div>
-        <div class="ps-plan-features">Expiry · Password · Renew · Copy</div>
-      </div>
-      <button class="ps-btn secondary">Manage subscription →</button>
-      <hr class="ps-divider">
-      <button class="ps-btn secondary">Export drops</button>
-      <button class="ps-btn secondary">Import drops</button>
-      <hr class="ps-divider">
-      <button class="ps-btn danger">Log out</button>
-    `,
+        <div style="border:1.5px dashed #333;border-radius:8px;padding:20px;text-align:center;margin-bottom:8px;color:var(--muted);font-size:11px">
+          Tap to pick a file<br><span style="font-size:9px">or use share sheet</span>
+        </div>
+        <div class="ps-label">Custom key (optional)</div>
+        <input class="ps-input" placeholder="my-key" readonly>
+        <button class="ps-btn">Drop it</button>
+      `
+    },
+    drop_file: {
+      tabs: true, activeTab: 'upload', html: `
+        <div class="ps-header">
+          <span class="ps-logo">drp</span>
+          <span class="ps-muted">my-photo</span>
+        </div>
+        <div class="ps-link-box">
+          drp.fyi/f/my-photo <span class="ps-copy-icon">⎘</span>
+        </div>
+        <div class="ps-file-info">
+          <div class="ps-file-icon">📄</div>
+          <div>
+            <div class="ps-file-name">holiday-photo.jpg</div>
+            <div class="ps-file-size">3.2 MB · expires in 12d · 5 views</div>
+          </div>
+        </div>
+        <button class="ps-btn">⬇ Download</button>
+        <div class="ps-action-row">
+          <div class="ps-action-btn">✏️ Rename</div>
+          <div class="ps-action-btn">🔄 Renew</div>
+          <div class="ps-action-btn">📋 Copy</div>
+          <div class="ps-action-btn">🔖 Save</div>
+        </div>
+        <div class="ps-action-row">
+          <div class="ps-action-btn">🔒 Password</div>
+          <div class="ps-action-btn danger">🗑 Delete</div>
+        </div>
+      `
+    },
+    drop_clip: {
+      tabs: true, activeTab: 'upload', html: `
+        <div class="ps-header">
+          <span class="ps-logo">drp</span>
+          <span class="ps-muted">hello-world</span>
+        </div>
+        <div class="ps-link-box">
+          drp.fyi/hello-world <span class="ps-copy-icon">⎘</span>
+        </div>
+        <div class="ps-label">Content preview</div>
+        <div class="ps-preview-box">Hello world! This is a text drop. You can share any snippet of text with a short link...</div>
+        <div class="ps-action-row">
+          <div class="ps-action-btn">⎘ Copy text</div>
+          <div class="ps-action-btn">✏️ Rename</div>
+          <div class="ps-action-btn">🔄 Renew</div>
+          <div class="ps-action-btn">🔖 Save</div>
+        </div>
+        <div class="ps-action-row">
+          <div class="ps-action-btn">🔒 Password</div>
+          <div class="ps-action-btn danger">🗑 Delete</div>
+        </div>
+      `
+    },
+    mydrops: {
+      tabs: true, activeTab: 'mydrops', html: `
+        <div class="ps-header">
+          <span class="ps-logo">My Drops</span>
+          <span class="ps-badge pro">Pro</span>
+        </div>
+        <div class="ps-label">Owned</div>
+        <div class="ps-drop-card">
+          <div>
+            <div class="ps-drop-key">📄 my-photo</div>
+            <div class="ps-drop-meta">3.2 MB · expires in 12d · 5 views</div>
+          </div>
+          <div class="ps-drop-actions">✏️ 🗑</div>
+        </div>
+        <div class="ps-drop-card">
+          <div>
+            <div class="ps-drop-key">📋 hello-world</div>
+            <div class="ps-drop-meta">text · no expiry · 1 view</div>
+          </div>
+          <div class="ps-drop-actions">✏️ 🗑</div>
+        </div>
+        <div class="ps-label">Bookmarked</div>
+        <div class="ps-drop-card">
+          <div>
+            <div class="ps-drop-key">📄 shared-doc</div>
+            <div class="ps-drop-meta">saved 2d ago</div>
+          </div>
+          <div class="ps-drop-actions">🔖</div>
+        </div>
+      `
+    },
+    account: {
+      tabs: true, activeTab: 'account', html: `
+        <div class="ps-header">
+          <span class="ps-logo">Account</span>
+          <span class="ps-badge pro">Pro</span>
+        </div>
+        <div class="ps-muted" style="margin-bottom:8px">vic@example.com</div>
+        <hr class="ps-divider">
+        <div class="ps-label">Subscription</div>
+        <div class="ps-plan-card highlight">
+          <div class="ps-plan-name">Pro ✓</div>
+          <div class="ps-plan-features">Expiry · Password · Renew · Copy</div>
+        </div>
+        <button class="ps-btn secondary">Manage subscription →</button>
+        <hr class="ps-divider">
+        <button class="ps-btn secondary">Export drops</button>
+        <button class="ps-btn secondary">Import drops</button>
+        <hr class="ps-divider">
+        <button class="ps-btn danger">Log out</button>
+      `
+    },
   };
 
   const screenToPhone = {
-    auth: 'auth',
-    upload: 'upload',
-    drop: 'uploadresult',
-    drops: 'mydrops',
-    account: 'account',
-    plans: 'account',
-    bugreport: 'auth',
-    setup: 'upload',
-    style: 'mydrops',
+    auth:      'auth',
+    upload:    'upload',
+    drop_file: 'drop_file',
+    drop_clip: 'drop_clip',
+    drops:     'mydrops',
+    account:   'account',
+    plans:     'account',
+    setup:     'upload',
+    style:     'mydrops',
   };
 
-  function showPhone(key, showTabs) {
-    document.getElementById('phone-screen').innerHTML = phoneScreens[key] || '';
-    document.getElementById('phone-tabs').style.display = showTabs ? 'flex' : 'none';
-    if (showTabs) {
+  function renderPhone(phoneKey) {
+    const p = phoneScreens[phoneKey];
+    if (!p) return;
+    document.getElementById('phone-screen').innerHTML = p.html;
+    const tabBar = document.getElementById('phone-tabs');
+    tabBar.style.display = p.tabs ? 'flex' : 'none';
+    if (p.tabs && p.activeTab) {
       document.querySelectorAll('.ps-tab').forEach(t => t.classList.remove('active'));
-      const map = { upload: 0, mydrops: 1, account: 2 };
-      if (map[key] !== undefined) document.querySelectorAll('.ps-tab')[map[key]].classList.add('active');
+      const tabMap = { upload: 'tab-upload', mydrops: 'tab-mydrops', account: 'tab-account' };
+      const el = document.getElementById(tabMap[p.activeTab]);
+      if (el) el.classList.add('active');
     }
-  }
-
-  function phoneTab(key) {
-    document.querySelectorAll('.ps-tab').forEach(t => t.classList.remove('active'));
-    const map = { upload: 0, mydrops: 1, account: 2 };
-    document.querySelectorAll('.ps-tab')[map[key]].classList.add('active');
-    showPhone(key, true);
   }
 
   function showScreen(id, btn) {
@@ -1112,13 +1229,19 @@ Copy snackbar — "Copied!" for 2s, icon → checkmark</pre>
     document.querySelectorAll('.bp-nav button').forEach(b => b.classList.remove('active'));
     document.getElementById('screen-' + id).classList.add('active');
     btn.classList.add('active');
+    renderPhone(screenToPhone[id]);
+  }
 
-    const phoneKey = screenToPhone[id];
-    const showTabs = ['upload', 'drop', 'drops', 'account', 'plans'].includes(id);
-    showPhone(phoneKey, showTabs);
+  function tabClick(key) {
+    // Only update phone display — don't touch the docs panel
+    const phoneKey = key === 'upload' ? 'upload' : key === 'mydrops' ? 'mydrops' : 'account';
+    document.getElementById('phone-screen').innerHTML = phoneScreens[phoneKey].html;
+    document.querySelectorAll('.ps-tab').forEach(t => t.classList.remove('active'));
+    const tabMap = { upload: 'tab-upload', mydrops: 'tab-mydrops', account: 'tab-account' };
+    document.getElementById(tabMap[key]).classList.add('active');
   }
 
   // Init
-  showPhone('auth', false);
+  renderPhone('auth');
 </script>
 {% endblock %}
