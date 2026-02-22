@@ -276,6 +276,15 @@ def _do_refresh(config, SESSION_FILE) -> None:
         key=lambda d: d.get('created_at', ''),
         reverse=True,
     )
+
+    # Cap the cache at 200 entries. When trimming, evict unconfirmed
+    # (from_server=False) drops first, then oldest confirmed.
+    _CAP = 200
+    if len(merged) > _CAP:
+        confirmed   = [d for d in merged if d.get('from_server', False)]
+        unconfirmed = [d for d in merged if not d.get('from_server', False)]
+        merged = (confirmed + unconfirmed)[:_CAP]
+
     config.save_local_drops(merged)
 
     # Also persist collection slugs for tab completion.
