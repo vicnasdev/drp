@@ -17,7 +17,8 @@ drp setup && drp up "hello world"
 2. Set env vars (see below)
 3. Start command:
 ```
-   python manage.py collectstatic --noinput && python manage.py migrate && gunicorn project.wsgi --bind 0.0.0.0:$PORT --workers 17 --worker-class gthread --threads 2
+   python manage.py collectstatic --noinput && python manage.py migrate       
+   && gunicorn project.wsgi --bind 0.0.0.0:$PORT
 ```
 4. Create superuser via Railway shell: `python manage.py createsuperuser`
 
