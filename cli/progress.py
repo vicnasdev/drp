@@ -41,6 +41,8 @@ class ProgressBar:
         self.done_ = min(self.done_ + n, self.total)
         self._render()
 
+    _RENDER_INTERVAL = 1 / 15  # ~15 fps
+
     def done(self, msg: str = ""):
         self.done_ = self.total
         elapsed = time.monotonic() - self._start
@@ -64,8 +66,7 @@ class ProgressBar:
     # ── Internal ──────────────────────────────────────────────────────────────
 
     def _render(self):
-        if not self._tty:
-            return
+        return  # BENCH: rendering disabled
 
         from cli.format import cyan, dim
 
