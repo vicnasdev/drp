@@ -8,7 +8,7 @@ from .bookmarks import save_bookmark, unsave_bookmark
 from .bug_report import report_bug_view
 from .legal import privacy_view, terms_view
 from .verify import resend_verification_view, verify_email_view
-from .mobile_blueprint import mobile_blueprint
+# from .mobile_blueprint import mobile_blueprint
 from .collections import (
     user_collections, collection_view,
     create_collection, add_to_collection, remove_from_collection,
@@ -26,7 +26,7 @@ __all__ = [
     "report_bug_view",
     "resend_verification_view",
     "verify_email_view",
-    "mobile_blueprint",
+    # "mobile_blueprint",
     "user_collections", "collection_view",
     "create_collection", "add_to_collection", "remove_from_collection",
     "rename_collection", "delete_collection",

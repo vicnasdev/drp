@@ -19,7 +19,7 @@
     <a href="/" class="logo">drp</a>
     <nav>
       <a href="/help/">help</a>
-      {% if user.is_staff %}<a href="/admin/">admin</a> <a href="/staff/mobile/">mobile</a>{% endif %}
+      {% if user.is_staff %}<a href="/admin/">admin</a>{% endif %}
       {% if user.is_authenticated %}
         <a href="/auth/account/">
           {% if user.profile.is_paid %}<span class="plan-badge">{{ user.profile.plan }}</span> {% endif %}
