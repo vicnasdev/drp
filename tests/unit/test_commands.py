@@ -60,9 +60,9 @@ class TestCmdRm:
         args.clip = False
         return args
 
-    @patch('cli.commands.manage.config')
-    @patch('cli.commands.manage.requests')
-    @patch('cli.commands.manage.auto_login')
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
     @patch('cli.commands.manage.api')
     def test_rm_success_clipboard(self, mock_api, mock_login, mock_req, mock_config):
         mock_config.load.return_value = {'host': 'https://x.com'}
@@ -74,9 +74,9 @@ class TestCmdRm:
         mock_api.delete.assert_called_once_with('https://x.com', mock_req.Session(), 'hello', ns='c')
         mock_config.remove_local_drop.assert_called_once_with('hello')
 
-    @patch('cli.commands.manage.config')
-    @patch('cli.commands.manage.requests')
-    @patch('cli.commands.manage.auto_login')
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
     @patch('cli.commands.manage.api')
     def test_rm_success_file(self, mock_api, mock_login, mock_req, mock_config):
         mock_config.load.return_value = {'host': 'https://x.com'}
@@ -87,9 +87,9 @@ class TestCmdRm:
             m.cmd_rm(args)
         mock_api.delete.assert_called_once_with('https://x.com', mock_req.Session(), 'q3', ns='f')
 
-    @patch('cli.commands.manage.config')
-    @patch('cli.commands.manage.requests')
-    @patch('cli.commands.manage.auto_login')
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
     @patch('cli.commands.manage.api')
     def test_rm_failure_exits(self, mock_api, mock_login, mock_req, mock_config):
         mock_config.load.return_value = {'host': 'https://x.com'}
@@ -101,7 +101,7 @@ class TestCmdRm:
                 m.cmd_rm(args)
         assert exc.value.code == 1
 
-    @patch('cli.commands.manage.config')
+    @patch('cli.commands._context.config')
     def test_rm_no_host_exits(self, mock_config):
         mock_config.load.return_value = {}
         import cli.commands.manage as m
@@ -119,9 +119,9 @@ class TestCmdMv:
         args.clip = False
         return args
 
-    @patch('cli.commands.manage.config')
-    @patch('cli.commands.manage.requests')
-    @patch('cli.commands.manage.auto_login')
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
     @patch('cli.commands.manage.api')
     def test_mv_success(self, mock_api, mock_login, mock_req, mock_config):
         mock_config.load.return_value = {'host': 'https://x.com'}
@@ -134,9 +134,9 @@ class TestCmdMv:
         assert 'old' in output or 'new-key' in output
         mock_config.rename_local_drop.assert_called_once_with('old', 'new-key')
 
-    @patch('cli.commands.manage.config')
-    @patch('cli.commands.manage.requests')
-    @patch('cli.commands.manage.auto_login')
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
     @patch('cli.commands.manage.api')
     def test_mv_known_failure_exits_1(self, mock_api, mock_login, mock_req, mock_config):
         mock_config.load.return_value = {'host': 'https://x.com'}
@@ -148,9 +148,9 @@ class TestCmdMv:
                 m.cmd_mv(args)
         assert exc.value.code == 1
 
-    @patch('cli.commands.manage.config')
-    @patch('cli.commands.manage.requests')
-    @patch('cli.commands.manage.auto_login')
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
     @patch('cli.commands.manage.api')
     def test_mv_unknown_failure_exits_1(self, mock_api, mock_login, mock_req, mock_config):
         mock_config.load.return_value = {'host': 'https://x.com'}
@@ -165,9 +165,9 @@ class TestCmdMv:
 
 
 class TestCmdRenew:
-    @patch('cli.commands.manage.config')
-    @patch('cli.commands.manage.requests')
-    @patch('cli.commands.manage.auto_login')
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
     @patch('cli.commands.manage.api')
     def test_renew_success(self, mock_api, mock_login, mock_req, mock_config):
         mock_config.load.return_value = {'host': 'https://x.com'}
@@ -179,9 +179,9 @@ class TestCmdRenew:
         printed = ' '.join(str(c) for c in p.call_args_list)
         assert 'notes' in printed or 'renewed' in printed
 
-    @patch('cli.commands.manage.config')
-    @patch('cli.commands.manage.requests')
-    @patch('cli.commands.manage.auto_login')
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
     @patch('cli.commands.manage.api')
     def test_renew_failure_exits(self, mock_api, mock_login, mock_req, mock_config):
         mock_config.load.return_value = {'host': 'https://x.com'}
@@ -346,9 +346,9 @@ class TestLsHelpers:
 # ── cli.commands.cp: basic structure ─────────────────────────────────────────
 
 class TestCmdCp:
-    @patch('cli.commands.cp.config')
-    @patch('cli.commands.cp.requests')
-    @patch('cli.commands.cp.auto_login')
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
     def test_cp_no_host_exits(self, mock_login, mock_req, mock_config):
         mock_config.load.return_value = {}
         import cli.commands.cp as cp
@@ -356,9 +356,9 @@ class TestCmdCp:
             with patch('builtins.print'):
                 cp.cmd_cp(MagicMock(key='src', new_key='dst', file=False, clip=False))
 
-    @patch('cli.commands.cp.config')
-    @patch('cli.commands.cp.requests')
-    @patch('cli.commands.cp.auto_login')
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
     @patch('cli.commands.cp.get_csrf', return_value='csrf-token')
     def test_cp_posts_to_copy_endpoint(self, mock_csrf, mock_login, mock_req, mock_config):
         mock_config.load.return_value = {'host': 'https://x.com'}

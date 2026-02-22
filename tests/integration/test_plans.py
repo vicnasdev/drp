@@ -28,6 +28,7 @@ from conftest import HOST, unique_key
 from cli.api.text import upload_text, get_clipboard
 from cli.api.file import upload_file, get_file
 from cli.api.actions import renew
+from cli.api.auth import get_csrf
 
 from tests.integration.conftest import (
     HOST, unique_key, api_post,
