@@ -4,15 +4,25 @@ tests/unit/test_upload_views.py
 Unit tests for plan enforcement in core/views/drops.py.
 Uses Django's test client against an in-memory SQLite DB.
 No B2 calls — b2 functions are patched.
+
+Coverage:
+  - Text upload: anon, free, paid
+  - expiry_days ignored for free/anon, applied for paid, clamped at plan ceiling
+  - burn flag
+  - password on upload: ignored for free/anon, applied for paid
+  - set-password endpoint: 403 for free, 200 for paid
+  - Drop locking: paid drops locked to owner; others blocked
+  - Renew endpoint: blocked without expires_at; succeeds for paid drops with expiry
+  - is_test flag propagated to Drop
 """
 
 import json
-from unittest.mock import patch, MagicMock
-from io import BytesIO
+from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.test import TestCase, Client
-from django.urls import reverse
+from django.test import TestCase
+from django.utils import timezone
 
 from core.models import Drop, Plan, UserProfile
 
@@ -31,9 +41,18 @@ def _post_text(client, key, content, **extra):
                        HTTP_ACCEPT='application/json')
 
 
-# ── Text upload ───────────────────────────────────────────────────────────────
+def _set_password(client, key, password):
+    return client.post(
+        f'/{key}/set-password/',
+        json.dumps({'password': password}),
+        content_type='application/json',
+        HTTP_ACCEPT='application/json',
+    )
 
-class TestTextUploadPlanEnforcement(TestCase):
+
+# ── Text upload — basic ───────────────────────────────────────────────────────
+
+class TestTextUploadBasic(TestCase):
     def setUp(self):
         self.free_user    = _make_user('free_up',    Plan.FREE)
         self.starter_user = _make_user('starter_up', Plan.STARTER)
@@ -49,70 +68,157 @@ class TestTextUploadPlanEnforcement(TestCase):
         res = _post_text(self.client, 'free-key', 'hello')
         self.assertEqual(res.status_code, 200)
 
-    def test_free_custom_expiry_is_ignored(self):
-        """Free plan: server ignores expiry_days — upload must still succeed."""
+    def test_starter_can_upload_text(self):
+        self.client.force_login(self.starter_user)
+        res = _post_text(self.client, 'starter-key', 'hello')
+        self.assertEqual(res.status_code, 200)
+
+    def test_text_over_free_limit_rejected(self):
+        self.client.force_login(self.free_user)
+        big = 'x' * (600 * 1024)  # 600 KB > 500 KB free limit
+        res = _post_text(self.client, 'big-text', big)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('error', res.json())
+
+    def test_text_over_starter_limit_rejected(self):
+        self.client.force_login(self.starter_user)
+        big = 'x' * (3 * 1024 * 1024)  # 3 MB > 2 MB starter limit
+        res = _post_text(self.client, 'big-starter', big)
+        self.assertEqual(res.status_code, 400)
+
+    def test_burn_flag_set_on_drop(self):
+        res = _post_text(self.client, 'burn-key', 'ephemeral', burn='1')
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(Drop.objects.get(key='burn-key').burn)
+
+    def test_is_test_flag_set_on_drop(self):
+        res = _post_text(self.client, 'test-key', 'data', is_test='1')
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(Drop.objects.get(key='test-key').is_test)
+
+    def test_anon_drop_has_locked_until(self):
+        """Anon drops get a 24h creation lock."""
+        res = _post_text(self.client, 'anon-lock', 'hello')
+        self.assertEqual(res.status_code, 200)
+        drop = Drop.objects.get(key='anon-lock')
+        self.assertIsNotNone(drop.locked_until)
+
+
+# ── Custom expiry ─────────────────────────────────────────────────────────────
+
+class TestTextUploadExpiry(TestCase):
+    def setUp(self):
+        self.free_user    = _make_user('exp_free',    Plan.FREE)
+        self.starter_user = _make_user('exp_starter', Plan.STARTER)
+        self.pro_user     = _make_user('exp_pro',     Plan.PRO)
+
+    def test_free_expiry_ignored(self):
+        """Free plan: expiry_days sent but expires_at must remain None."""
         self.client.force_login(self.free_user)
         res = _post_text(self.client, 'free-exp', 'hello', expiry_days=30)
         self.assertEqual(res.status_code, 200)
-        drop = Drop.objects.get(key='free-exp')
-        # Free plan has no custom expiry — expires_at should be None
-        self.assertIsNone(drop.expires_at)
+        self.assertIsNone(Drop.objects.get(key='free-exp').expires_at)
 
-    def test_starter_custom_expiry_applied(self):
+    def test_anon_expiry_ignored(self):
+        res = _post_text(self.client, 'anon-exp', 'hello', expiry_days=30)
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNone(Drop.objects.get(key='anon-exp').expires_at)
+
+    def test_starter_expiry_applied(self):
         self.client.force_login(self.starter_user)
         res = _post_text(self.client, 'starter-exp', 'hello', expiry_days=30)
         self.assertEqual(res.status_code, 200)
-        drop = Drop.objects.get(key='starter-exp')
-        self.assertIsNotNone(drop.expires_at)
+        self.assertIsNotNone(Drop.objects.get(key='starter-exp').expires_at)
 
-    def test_pro_custom_expiry_applied(self):
+    def test_pro_expiry_applied(self):
         self.client.force_login(self.pro_user)
         res = _post_text(self.client, 'pro-exp', 'hello', expiry_days=90)
         self.assertEqual(res.status_code, 200)
-        drop = Drop.objects.get(key='pro-exp')
-        self.assertIsNotNone(drop.expires_at)
+        self.assertIsNotNone(Drop.objects.get(key='pro-exp').expires_at)
 
-    def test_expiry_capped_at_plan_maximum(self):
-        """Starter max is 365 days — 400 days should be capped, not rejected."""
+    def test_starter_expiry_clamped_at_365(self):
+        """400 days exceeds starter max — must be clamped to 365, not rejected."""
         self.client.force_login(self.starter_user)
         res = _post_text(self.client, 'starter-cap', 'hello', expiry_days=400)
         self.assertEqual(res.status_code, 200)
         drop = Drop.objects.get(key='starter-cap')
         if drop.expires_at:
-            from django.utils import timezone
-            from datetime import timedelta
             max_delta = timedelta(days=Plan.get(Plan.STARTER, 'max_expiry_days') + 1)
             self.assertLessEqual(drop.expires_at - timezone.now(), max_delta)
 
-    def test_text_over_limit_rejected(self):
-        self.client.force_login(self.free_user)
-        # Free limit is 500 KB — send 600 KB
-        big = 'x' * (600 * 1024)
-        res = _post_text(self.client, 'big-text', big)
-        self.assertEqual(res.status_code, 400)
-        self.assertIn('error', res.json())
-
-    def test_burn_flag_set(self):
-        res = _post_text(self.client, 'burn-key', 'ephemeral', burn='1')
+    def test_pro_expiry_clamped_at_3_years(self):
+        """2000 days exceeds pro max — must be clamped, not rejected."""
+        self.client.force_login(self.pro_user)
+        res = _post_text(self.client, 'pro-cap', 'hello', expiry_days=2000)
         self.assertEqual(res.status_code, 200)
-        drop = Drop.objects.get(key='burn-key')
-        self.assertTrue(drop.burn)
+        drop = Drop.objects.get(key='pro-cap')
+        if drop.expires_at:
+            max_delta = timedelta(days=Plan.get(Plan.PRO, 'max_expiry_days') + 1)
+            self.assertLessEqual(drop.expires_at - timezone.now(), max_delta)
 
-    def test_password_rejected_for_free_user(self):
+
+# ── Password protection ───────────────────────────────────────────────────────
+
+class TestPasswordProtection(TestCase):
+    def setUp(self):
+        self.free_user    = _make_user('pw_free',    Plan.FREE)
+        self.starter_user = _make_user('pw_starter', Plan.STARTER)
+
+    def test_password_on_upload_ignored_for_free(self):
+        """Free plan: password kwarg on upload must be silently ignored."""
         self.client.force_login(self.free_user)
-        res = _post_text(self.client, 'pw-free', 'secret content', password='mypassword')
+        res = _post_text(self.client, 'pw-free-up', 'secret', password='mypassword')
         self.assertEqual(res.status_code, 200)
-        drop = Drop.objects.get(key='pw-free')
-        # Free plan — password should NOT have been set
-        self.assertFalse(drop.is_password_protected)
+        self.assertFalse(Drop.objects.get(key='pw-free-up').is_password_protected)
 
-    def test_password_accepted_for_paid_user(self):
+    def test_password_on_upload_ignored_for_anon(self):
+        res = _post_text(self.client, 'pw-anon-up', 'secret', password='mypassword')
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(Drop.objects.get(key='pw-anon-up').is_password_protected)
+
+    def test_password_on_upload_applied_for_paid(self):
         self.client.force_login(self.starter_user)
-        res = _post_text(self.client, 'pw-paid', 'secret content', password='mypassword')
+        res = _post_text(self.client, 'pw-paid-up', 'secret', password='mypassword')
         self.assertEqual(res.status_code, 200)
-        drop = Drop.objects.get(key='pw-paid')
+        drop = Drop.objects.get(key='pw-paid-up')
         self.assertTrue(drop.is_password_protected)
         self.assertTrue(drop.check_password('mypassword'))
+
+    def test_set_password_endpoint_rejected_for_free(self):
+        self.client.force_login(self.free_user)
+        _post_text(self.client, 'sp-free', 'data')
+        res = _set_password(self.client, 'sp-free', 'secret')
+        self.assertEqual(res.status_code, 403)
+        self.assertFalse(Drop.objects.get(key='sp-free').is_password_protected)
+
+    def test_set_password_endpoint_rejected_for_anon(self):
+        _post_text(self.client, 'sp-anon', 'data')
+        res = _set_password(self.client, 'sp-anon', 'secret')
+        # Anon user has no profile — must be 403
+        self.assertIn(res.status_code, (403, 404))
+
+    def test_set_password_endpoint_accepted_for_paid(self):
+        self.client.force_login(self.starter_user)
+        _post_text(self.client, 'sp-paid', 'data')
+        res = _set_password(self.client, 'sp-paid', 'secret')
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(Drop.objects.get(key='sp-paid').is_password_protected)
+
+    def test_set_password_can_be_removed(self):
+        self.client.force_login(self.starter_user)
+        _post_text(self.client, 'sp-remove', 'data')
+        _set_password(self.client, 'sp-remove', 'secret')
+        res = _set_password(self.client, 'sp-remove', '')
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(Drop.objects.get(key='sp-remove').is_password_protected)
+
+    def test_non_owner_cannot_set_password(self):
+        other = _make_user('pw_other', Plan.STARTER)
+        self.client.force_login(self.starter_user)
+        _post_text(self.client, 'sp-owner', 'data')
+        self.client.force_login(other)
+        res = _set_password(self.client, 'sp-owner', 'hack')
+        self.assertEqual(res.status_code, 403)
 
 
 # ── Drop locking ──────────────────────────────────────────────────────────────
@@ -120,19 +226,33 @@ class TestTextUploadPlanEnforcement(TestCase):
 class TestDropLocking(TestCase):
     def setUp(self):
         self.paid_user = _make_user('paid_lock', Plan.STARTER)
+        self.free_user = _make_user('free_lock', Plan.FREE)
         self.other     = _make_user('other_lock', Plan.FREE)
 
-    def test_paid_drop_locked_to_owner(self):
+    def test_paid_drop_is_locked(self):
         self.client.force_login(self.paid_user)
-        _post_text(self.client, 'locked-drop', 'my content')
-        drop = Drop.objects.get(key='locked-drop')
-        self.assertTrue(drop.locked)
+        _post_text(self.client, 'locked-drop', 'mine')
+        self.assertTrue(Drop.objects.get(key='locked-drop').locked)
 
-    def test_other_user_cannot_overwrite_locked_drop(self):
+    def test_free_drop_not_permanently_locked(self):
+        """Free drops get a 24h creation lock, but locked=False (anyone can write after)."""
+        self.client.force_login(self.free_user)
+        _post_text(self.client, 'free-drop', 'open')
+        drop = Drop.objects.get(key='free-drop')
+        self.assertFalse(drop.locked)
+
+    def test_other_user_cannot_overwrite_paid_drop(self):
         self.client.force_login(self.paid_user)
         _post_text(self.client, 'protected', 'owner content')
         self.client.force_login(self.other)
         res = _post_text(self.client, 'protected', 'hijack attempt')
+        self.assertEqual(res.status_code, 403)
+
+    def test_anon_cannot_overwrite_paid_drop(self):
+        self.client.force_login(self.paid_user)
+        _post_text(self.client, 'paid-vs-anon', 'mine')
+        self.client.logout()
+        res = _post_text(self.client, 'paid-vs-anon', 'hijack')
         self.assertEqual(res.status_code, 403)
 
     def test_owner_can_overwrite_own_drop(self):
@@ -140,31 +260,51 @@ class TestDropLocking(TestCase):
         _post_text(self.client, 'my-drop', 'v1')
         res = _post_text(self.client, 'my-drop', 'v2')
         self.assertEqual(res.status_code, 200)
+        self.assertEqual(Drop.objects.get(key='my-drop').content, 'v2')
+
+    def test_anon_drop_overwritable_after_creation_window(self):
+        """Anon drops: once locked_until passes, anyone can overwrite."""
+        _post_text(self.client, 'open-anon', 'v1')
+        drop = Drop.objects.get(key='open-anon')
+        # Simulate the 24h window expiring
+        Drop.objects.filter(pk=drop.pk).update(locked_until=timezone.now() - timedelta(hours=1))
+        res = _post_text(self.client, 'open-anon', 'v2')
+        self.assertEqual(res.status_code, 200)
 
 
-# ── Renew ─────────────────────────────────────────────────────────────────────
+# ── Renew endpoint ────────────────────────────────────────────────────────────
 
 class TestRenewEndpoint(TestCase):
     def setUp(self):
-        self.free_user    = _make_user('renew_free', Plan.FREE)
+        self.free_user    = _make_user('renew_free',    Plan.FREE)
         self.starter_user = _make_user('renew_starter', Plan.STARTER)
+        self.other        = _make_user('renew_other',   Plan.FREE)
 
     def test_free_drop_without_expiry_cannot_be_renewed(self):
-        from django.utils import timezone
         self.client.force_login(self.free_user)
         _post_text(self.client, 'renew-free', 'content')
         res = self.client.post('/renew-free/renew/', HTTP_ACCEPT='application/json')
-        # No expires_at set — should return 400
         self.assertEqual(res.status_code, 400)
 
+    def test_anon_drop_cannot_be_renewed(self):
+        _post_text(self.client, 'renew-anon', 'content')
+        res = self.client.post('/renew-anon/renew/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 403)
+
     def test_paid_drop_with_expiry_can_be_renewed(self):
-        from django.utils import timezone
-        from datetime import timedelta
         self.client.force_login(self.starter_user)
         _post_text(self.client, 'renew-paid', 'content', expiry_days=7)
         drop = Drop.objects.get(key='renew-paid')
         if drop.expires_at:
+            exp_before = drop.expires_at
             res = self.client.post('/renew-paid/renew/', HTTP_ACCEPT='application/json')
             self.assertEqual(res.status_code, 200)
-            data = res.json()
-            self.assertIn('expires_at', data)
+            drop.refresh_from_db()
+            self.assertGreater(drop.expires_at, exp_before)
+
+    def test_non_owner_cannot_renew(self):
+        self.client.force_login(self.starter_user)
+        _post_text(self.client, 'renew-steal', 'content', expiry_days=7)
+        self.client.force_login(self.other)
+        res = self.client.post('/renew-steal/renew/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 403)

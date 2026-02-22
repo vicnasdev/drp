@@ -137,3 +137,95 @@
     gap: .3rem;
   }
 }
+/* ── Plans page: plan grid ── */
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .75rem;
+  margin: .5rem 0 1.5rem;
+}
+
+@media (max-width: 800px) {
+  .plan-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .plan-grid { grid-template-columns: 1fr; }
+}
+
+.plan-col {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+
+.plan-col--paid {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.plan-col--highlight {
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+.plan-col-head {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  padding-bottom: .75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.plan-name {
+  font-size: .82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+}
+
+.plan-col--paid .plan-name {
+  color: var(--accent);
+}
+
+.plan-price {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.5px;
+}
+
+.plan-price small {
+  font-size: .75rem;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+
+.plan-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+  font-size: .82rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.plan-features li::before {
+  content: '✓ ';
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.plan-features li.plan-no {
+  color: var(--muted);
+}
+
+.plan-features li.plan-no::before {
+  content: '– ';
+  color: var(--border);
+  font-weight: 400;
+}
