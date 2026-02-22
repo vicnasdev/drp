@@ -16,3 +16,9 @@ def pytest_configure(config):
             "NAME": ":memory:",
         }
     }
+    settings.DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
+    settings.STORAGES = {
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        }
+    }
