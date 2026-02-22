@@ -3,7 +3,8 @@ GITHUB_REPO := vicnasdev/drp
 -include .env
 export
 
-.PHONY: help dev test migrate cleanup install set-domain
+.PHONY: help dev test migrate cleanup install set-domain \
+        issues issues-full issue close reopen issue-new
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -45,7 +46,7 @@ set-domain: ## Swap default host: make set-domain NEW=drp.fyi
 	      -H "Authorization: token $$GITHUB_ISSUES_TOKEN" \
 	      -H "Accept: application/vnd.github+json" \
 	      "https://api.github.com/repos/$$GITHUB_REPO/hooks" \
-	      | jq -r '.[0].id // empty'); \
+	      | python3 -c "import sys,json; hooks=json.load(sys.stdin); print(hooks[0]['id'] if hooks else '')"); \
 	    if [ -n "$$hook_id" ]; then \
 	      curl -s -X PATCH \
 	        -H "Authorization: token $$GITHUB_ISSUES_TOKEN" \
@@ -63,3 +64,114 @@ set-domain: ## Swap default host: make set-domain NEW=drp.fyi
 	    fi; \
 	  fi; \
 	}
+
+# ── GitHub Issues ─────────────────────────────────────────────────────────────
+# Requires GITHUB_ISSUES_TOKEN in .env or environment.
+# Usage examples:
+#   make issues
+#   make issues STATE=closed
+#   make issue N=12
+#   make issue-new TITLE="bug: crash on upload" BODY="steps to reproduce..."
+#   make close N=12
+#   make reopen N=12
+
+_gh_check:
+	@test -n "$$GITHUB_ISSUES_TOKEN" || (echo "  ✗ GITHUB_ISSUES_TOKEN not set" && exit 1)
+
+issues: _gh_check ## List open issues (STATE=closed for closed)
+	@curl -sf \
+	  -H "Authorization: token $$GITHUB_ISSUES_TOKEN" \
+	  -H "Accept: application/vnd.github+json" \
+	  "https://api.github.com/repos/$(GITHUB_REPO)/issues?state=$(or $(STATE),open)&per_page=50" \
+	  | python3 -c "
+import sys, json
+issues = json.load(sys.stdin)
+if not issues:
+    print('  (none)')
+else:
+    for i in issues:
+        label_names = ', '.join(l['name'] for l in i.get('labels', []))
+        labels = f'  [{label_names}]' if label_names else ''
+        print(f\"  #{i['number']:<5} {i['title']}{labels}\")
+"
+
+issues-full: _gh_check ## List all open issues with full detail (STATE=closed for closed)
+	@curl -sf \
+	  -H "Authorization: token $$GITHUB_ISSUES_TOKEN" \
+	  -H "Accept: application/vnd.github+json" \
+	  "https://api.github.com/repos/$(GITHUB_REPO)/issues?state=$(or $(STATE),open)&per_page=50" \
+	  | python3 -c "
+import sys, json
+issues = json.load(sys.stdin)
+if not issues:
+    print('  (none)')
+for i in issues:
+    label_names = ', '.join(l['name'] for l in i.get('labels', []))
+    print(f\"#{i['number']} [{i['state'].upper()}] {i['title']}\")
+    print(f\"  opened by @{i['user']['login']}  |  comments: {i['comments']}\")
+    if label_names: print(f\"  labels: {label_names}\")
+    print()
+    print(i.get('body') or '(no description)')
+    print()
+    print(f\"  {i['html_url']}\")
+    print('-' * 60)
+"
+
+issue: _gh_check ## Show a single issue: make issue N=12
+	@test -n "$(N)" || (echo "  ✗ Usage: make issue N=<number>" && exit 1)
+	@curl -sf \
+	  -H "Authorization: token $$GITHUB_ISSUES_TOKEN" \
+	  -H "Accept: application/vnd.github+json" \
+	  "https://api.github.com/repos/$(GITHUB_REPO)/issues/$(N)" \
+	  | python3 -c "
+import sys, json
+i = json.load(sys.stdin)
+label_names = ', '.join(l['name'] for l in i.get('labels', []))
+print(f\"#{i['number']} [{i['state'].upper()}] {i['title']}\")
+print(f\"  opened by @{i['user']['login']}  |  comments: {i['comments']}\")
+if label_names: print(f\"  labels: {label_names}\")
+print()
+print(i.get('body') or '(no description)')
+print()
+print(f\"  {i['html_url']}\")
+"
+
+issue-new: _gh_check ## Create an issue: make issue-new TITLE="..." BODY="..."
+	@test -n "$(TITLE)" || (echo "  ✗ Usage: make issue-new TITLE=\"...\" BODY=\"...\"" && exit 1)
+	@curl -sf -X POST \
+	  -H "Authorization: token $$GITHUB_ISSUES_TOKEN" \
+	  -H "Accept: application/vnd.github+json" \
+	  "https://api.github.com/repos/$(GITHUB_REPO)/issues" \
+	  -d "{\"title\": \"$(TITLE)\", \"body\": \"$(BODY)\"}" \
+	  | python3 -c "
+import sys, json
+i = json.load(sys.stdin)
+print(f\"  ✓ Created #{i['number']}: {i['title']}\")
+print(f\"    {i['html_url']}\")
+"
+
+close: _gh_check ## Close an issue: make close N=12
+	@test -n "$(N)" || (echo "  ✗ Usage: make close N=<number>" && exit 1)
+	@curl -sf -X PATCH \
+	  -H "Authorization: token $$GITHUB_ISSUES_TOKEN" \
+	  -H "Accept: application/vnd.github+json" \
+	  "https://api.github.com/repos/$(GITHUB_REPO)/issues/$(N)" \
+	  -d '{"state": "closed"}' \
+	  | python3 -c "
+import sys, json
+i = json.load(sys.stdin)
+print(f\"  ✓ Closed #{i['number']}: {i['title']}\")
+"
+
+reopen: _gh_check ## Reopen an issue: make reopen N=12
+	@test -n "$(N)" || (echo "  ✗ Usage: make reopen N=<number>" && exit 1)
+	@curl -sf -X PATCH \
+	  -H "Authorization: token $$GITHUB_ISSUES_TOKEN" \
+	  -H "Accept: application/vnd.github+json" \
+	  "https://api.github.com/repos/$(GITHUB_REPO)/issues/$(N)" \
+	  -d '{"state": "open"}' \
+	  | python3 -c "
+import sys, json
+i = json.load(sys.stdin)
+print(f\"  ✓ Reopened #{i['number']}: {i['title']}\")
+"
