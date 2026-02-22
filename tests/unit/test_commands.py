@@ -64,15 +64,16 @@ class TestCmdRm:
     @patch('cli.commands._context.requests')
     @patch('cli.commands._context.auto_login')
     @patch('cli.commands.manage.api')
-    def test_rm_success_clipboard(self, mock_api, mock_login, mock_req, mock_config):
-        mock_config.load.return_value = {'host': 'https://x.com'}
+    @patch('cli.commands.manage.config')
+    def test_rm_success_clipboard(self, mock_manage_config, mock_api, mock_login, mock_req, mock_ctx_config):
+        mock_ctx_config.load.return_value = {'host': 'https://x.com'}
         mock_api.delete.return_value = True
         args = self._make_args('hello')
         import cli.commands.manage as m
         with patch('builtins.print') as mock_print:
             m.cmd_rm(args)
         mock_api.delete.assert_called_once_with('https://x.com', mock_req.Session(), 'hello', ns='c')
-        mock_config.remove_local_drop.assert_called_once_with('hello')
+        mock_manage_config.remove_local_drop.assert_called_once_with('hello')
 
     @patch('cli.commands._context.config')
     @patch('cli.commands._context.requests')
