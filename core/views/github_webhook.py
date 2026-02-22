@@ -73,6 +73,7 @@ def _send_fix_notification(report: BugReport, issue_url: str, issue_title: str) 
         return
 
     if not profile.notify_bug_fix:
+        logger.info('Bug fix notification skipped: user %s has opted out', user.email)
         return
 
     category_display = dict(BugReport.CATEGORY_CHOICES).get(report.category, report.category)
@@ -287,11 +288,26 @@ def github_webhook(request):
         return JsonResponse({'status': 'no issue url'})
 
     # Find all BugReports that link to this GitHub issue URL.
-    reports = BugReport.objects.filter(github_issue_url=issue_url).select_related('user__profile')
+    reports = list(
+        BugReport.objects
+        .filter(github_issue_url=issue_url)
+        .exclude(github_issue_url='')
+        .select_related('user__profile')
+    )
+
+    if not reports:
+        logger.warning(
+            'GitHub webhook: no BugReport found for issue %s — '
+            'was GITHUB_TOKEN set when the report was submitted?',
+            issue_url,
+        )
+        return JsonResponse({'status': 'ok', 'notified': 0, 'matched': 0})
+
     notified = 0
     for report in reports:
         _send_fix_notification(report, issue_url, issue_title)
         notified += 1
 
-    logger.info('GitHub webhook: issue closed %s — notified %d reporter(s)', issue_url, notified)
+    logger.info('GitHub webhook: issue closed %s — notified %d/%d reporter(s)',
+                issue_url, notified, len(reports))
     return JsonResponse({'status': 'ok', 'notified': notified})

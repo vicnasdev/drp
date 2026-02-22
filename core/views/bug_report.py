@@ -109,7 +109,7 @@ def report_bug_view(request):
     if request.method == 'POST':
         category    = request.POST.get('category', '').strip()
         description = request.POST.get('description', '').strip()
-        hide        = request.POST.get('hide_identity', '1') == '1'
+        hide        = request.POST.get('hide_identity', '0') == '1'
         ts_token    = request.POST.get('cf-turnstile-response', '')
 
         valid_categories = [c for c, _ in BugReport.CATEGORY_CHOICES]
