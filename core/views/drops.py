@@ -227,7 +227,8 @@ def _save_file(request, f, ns, key, existing, paid, anon_token):
         existing.file_url       = ""
         existing.filename       = f.name
         existing.filesize       = f.size
-        existing.save(update_fields=["file_public_id", "file_url", "filename", "filesize"])
+        existing.content_type   = content_type
+        existing.save(update_fields=["file_public_id", "file_url", "filename", "filesize", "content_type"])
         from core.views.b2 import invalidate_presigned
         invalidate_presigned(ns, key, filename=f.name)
         if existing.owner_id:
@@ -246,6 +247,7 @@ def _save_file(request, f, ns, key, existing, paid, anon_token):
             file_url="",
             filename=f.name,
             filesize=f.size,
+            content_type=content_type,
             owner=owner,
             locked=paid,
             locked_until=locked_until,
@@ -379,12 +381,13 @@ def upload_confirm(request):
     except (json.JSONDecodeError, UnicodeDecodeError):
         return JsonResponse({"error": "Invalid JSON."}, status=400)
 
-    key      = (data.get("key") or "").strip()
-    ns       = data.get("ns", Drop.NS_FILE)
-    filename = (data.get("filename") or key).strip()
-    burn     = bool(data.get("burn", False))
-    password = (data.get("password") or "").strip()
-    is_test  = bool(data.get("is_test", False))
+    key          = (data.get("key") or "").strip()
+    ns           = data.get("ns", Drop.NS_FILE)
+    filename     = (data.get("filename") or key).strip()
+    content_type = (data.get("content_type") or "application/octet-stream").strip()
+    burn         = bool(data.get("burn", False))
+    password     = (data.get("password") or "").strip()
+    is_test      = bool(data.get("is_test", False))
 
     if not key or ns not in (Drop.NS_CLIPBOARD, Drop.NS_FILE):
         return JsonResponse({"error": "key and valid ns required."}, status=400)
@@ -414,7 +417,8 @@ def upload_confirm(request):
         existing.file_url       = ""
         existing.filename       = filename
         existing.filesize       = actual_size
-        existing.save(update_fields=["file_public_id", "file_url", "filename", "filesize"])
+        existing.content_type   = content_type
+        existing.save(update_fields=["file_public_id", "file_url", "filename", "filesize", "content_type"])
         if existing.owner_id:
             from django.db import models as db_models
             from core.models import UserProfile
@@ -448,6 +452,7 @@ def upload_confirm(request):
             file_url="",
             filename=filename,
             filesize=actual_size,
+            content_type=content_type,
             owner=owner,
             locked=paid,
             locked_until=locked_until,

@@ -281,6 +281,7 @@ class Drop(models.Model):
     file_public_id = models.CharField(max_length=512, blank=True, default="")
     filename       = models.CharField(max_length=255, blank=True, default="")
     filesize       = models.PositiveBigIntegerField(default=0)
+    content_type   = models.CharField(max_length=255, blank=True, default="")
 
     created_at        = models.DateTimeField(auto_now_add=True)
     last_accessed_at  = models.DateTimeField(null=True, blank=True, db_index=True)
