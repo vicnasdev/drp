@@ -62,15 +62,6 @@ B2_BUCKET_NAME=drp-files
 B2_ENDPOINT_URL=https://s3.us-east-005.backblazeb2.com
 ```
 
-## Plans
-
-| | Free | Starter ($3/mo) | Pro ($8/mo) |
-|---|---|---|---|
-| Max file | 200 MB | 1 GB | 5 GB |
-| Storage | — | 5 GB | 20 GB |
-| Locked drops | ✗ | ✓ | ✓ |
-| Renewable | ✗ | ✓ | ✓ |
-
 ## License
 
 Server: source-available, personal/internal use only.  
