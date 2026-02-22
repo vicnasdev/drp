@@ -96,7 +96,7 @@ class TestAccessControl:
         res = anon.post(
             f'{HOST}/save/',
             data={'key': key, 'content': 'hijack', 'csrfmiddlewaretoken': csrf},
-            headers={'Accept': 'application/json'},
+            headers={'Accept': 'application/json', 'Referer': f'{HOST}/'},
         )
         assert res.status_code == 403
 
