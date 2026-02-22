@@ -79,3 +79,4 @@ def rename_local_drop(old_key, new_key):
         if d.get('key') == old_key:
             d['key'] = new_key
     save_local_drops(drops)
+    
