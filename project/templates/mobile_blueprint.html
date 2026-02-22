@@ -517,8 +517,7 @@ notify_billing=1</pre>
         </tr>
       </thead>
       <tbody>
-        {% with fields="max_file_mb,max_text_kb,max_expiry_days,clipboard_idle_hours,clipboard_max_lifetime_days,anon_file_lifetime_days,storage_gb,renewals,password_protection,max_collections" %}
-        {% for field in fields.split(",") %}
+        {% for field in plan_fields %}
         <tr>
           <td class="field">{{ field }}</td>
           {% for plan_key, limits in plans %}
@@ -534,7 +533,6 @@ notify_billing=1</pre>
           {% endfor %}
         </tr>
         {% endfor %}
-        {% endwith %}
       </tbody>
     </table>
 

@@ -22,7 +22,14 @@ def mobile_blueprint(request):
         (Plan.STARTER, limits.get(Plan.STARTER, {})),
         (Plan.PRO,     limits.get(Plan.PRO,     {})),
     ]
+    plan_fields = [
+        'max_file_mb', 'max_text_kb', 'max_expiry_days',
+        'clipboard_idle_hours', 'clipboard_max_lifetime_days',
+        'anon_file_lifetime_days', 'storage_gb', 'renewals',
+        'password_protection', 'max_collections',
+    ]
     return render(request, 'mobile_blueprint.html', {
-        'base_url': settings.SITE_URL,
-        'plans':    plans_ordered,
+        'base_url':    settings.SITE_URL,
+        'plans':       plans_ordered,
+        'plan_fields': plan_fields,
     })
