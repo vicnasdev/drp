@@ -66,15 +66,13 @@ def max_lifetime_secs(user, ns):
     """
     Max total lifetime in seconds for activity-based expiry.
     Only applies to clipboard (ns='c') anon/free drops.
+    Reads clipboard_max_lifetime_days from the DB-driven PlanLimit.
     """
     if ns != Drop.NS_CLIPBOARD:
         return None
     plan = user_plan(user)
-    if plan == Plan.ANON:
-        return 7 * 24 * 3600
-    if plan == Plan.FREE:
-        return 30 * 24 * 3600
-    return None
+    days = Plan.get(plan, "clipboard_max_lifetime_days")
+    return days * 24 * 3600 if days else None
 
 
 # ── Username validation ───────────────────────────────────────────────────────
@@ -159,13 +157,14 @@ def claim_anon_drops(user, token):
     count = drops.count()
     if not count:
         return 0
+    free_lifetime_secs = (Plan.get(Plan.FREE, "clipboard_max_lifetime_days") or 30) * 24 * 3600
     drops.update(
         owner=user,
         locked=True,
         locked_until=None,
         anon_token=None,
         max_lifetime_secs=db_models.Case(
-            db_models.When(ns=Drop.NS_CLIPBOARD, then=30 * 24 * 3600),
+            db_models.When(ns=Drop.NS_CLIPBOARD, then=free_lifetime_secs),
             default=None,
             output_field=db_models.IntegerField(),
         ),

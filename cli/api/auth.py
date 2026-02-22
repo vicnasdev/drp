@@ -2,6 +2,9 @@
 Authentication helpers: CSRF token fetching and login.
 """
 
+from .helpers import err
+
+
 def get_csrf(host, session):
     """Return csrftoken, fetching from server only if not already in session."""
     token = _first_csrf(session)
