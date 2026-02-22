@@ -124,8 +124,9 @@ class TestCmdMv:
     @patch('cli.commands._context.requests')
     @patch('cli.commands._context.auto_login')
     @patch('cli.commands.manage.api')
-    def test_mv_success(self, mock_api, mock_login, mock_req, mock_config):
-        mock_config.load.return_value = {'host': 'https://x.com'}
+    @patch('cli.commands.manage.config')
+    def test_mv_success(self, mock_manage_config, mock_api, mock_login, mock_req, mock_ctx_config):
+        mock_ctx_config.load.return_value = {'host': 'https://x.com'}
         mock_api.rename.return_value = 'new-key'  # string = success
         args = self._make_args('old', 'new-key')
         import cli.commands.manage as m
@@ -133,7 +134,7 @@ class TestCmdMv:
             m.cmd_mv(args)
         output = ' '.join(str(c) for c in p.call_args_list)
         assert 'old' in output or 'new-key' in output
-        mock_config.rename_local_drop.assert_called_once_with('old', 'new-key')
+        mock_manage_config.rename_local_drop.assert_called_once_with('old', 'new-key')
 
     @patch('cli.commands._context.config')
     @patch('cli.commands._context.requests')
