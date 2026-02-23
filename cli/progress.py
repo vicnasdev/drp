@@ -66,7 +66,12 @@ class ProgressBar:
     # ── Internal ──────────────────────────────────────────────────────────────
 
     def _render(self):
-        return  # BENCH: rendering disabled
+        if not self._tty:
+            return
+        now = time.monotonic()
+        if now - getattr(self, '_last_render', 0) < self._RENDER_INTERVAL:
+            return
+        self._last_render = now
 
         from cli.format import cyan, dim
 
