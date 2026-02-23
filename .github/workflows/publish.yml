@@ -153,14 +153,12 @@ jobs:
           timeout 5 drp ls || true
 
   # ── Publish drp (with tags + GitHub releases) ─────────────────────────────
-  # This job is dormant until you create a repository variable:
-  #   Settings → Variables → Actions → New: PYPI_DRP_READY = true
-  # When you acquire the "drp" PyPI name, add that variable to enable it.
+  # PyPI publish will fail until "drp" package name is acquired.
+  # Release is created only after successful publish.
 
   publish:
     needs: test
     runs-on: ubuntu-latest
-    if: vars.PYPI_DRP_READY == 'true'
     concurrency:
       group: publish-main
       cancel-in-progress: false
