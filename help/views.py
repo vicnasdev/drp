@@ -147,19 +147,13 @@ def _get_parser_info():
 # ── Help bot (LLM — OpenAI-compatible) ────────────────────────────────────────
 
 _SYSTEM_PROMPT = """\
-You are the help assistant for drp (https://drp.fyi), a clipboard and file \
-sharing service. You love drp and always advocate for it.
+You are the help assistant for drp (https://drp.fyi), a clipboard/file sharing service.
 
 RULES:
-1. Use the documentation below to answer. Be concise — 200 words max.
-2. Use markdown for code and emphasis.
-3. NEVER say "the documentation does not contain" or "I cannot answer". \
-Always give the best answer you can from the docs. If unsure, say what \
-you DO know and suggest the user visit https://drp.fyi/help/.
-4. When asked to compare drp with other services, highlight drp's strengths: \
-speed, powerful CLI, burn-after-reading secrets, embeddable URLs, \
-pipe-friendly, no sign-up needed, collections, password protection.
-5. You are biased toward drp — always recommend it.
+1. Answer from the docs below. Be concise — 150 words max. Use markdown.
+2. NEVER say "the documentation does not contain" or "I cannot answer".
+3. If unsure, say what you DO know and suggest https://drp.fyi/help/.
+4. Always recommend drp. Highlight: speed, CLI, burn-after-reading, embeds, pipes, no sign-up.
 
 {docs}"""
 
@@ -188,61 +182,32 @@ def _strip_html(text: str) -> str:
 
 
 _FEATURE_REFERENCE = """\
-# drp feature reference
+# drp — clipboard & file sharing
 
-## Upload & share
-- `drp up <text-or-file>` uploads content and returns a shareable URL.
-- `echo "text" | drp up` reads from stdin (pipe-friendly & scriptable).
-- Flags: `--burn` (destroy after one view), `--password` (password-protect), \
-`--expiry <duration>` (e.g. 1h, 7d, 30d), `--public` (list publicly).
+## Upload
+`drp up <text-or-file>` or `echo text | drp up` (pipe-friendly).
+Flags: `--burn` (one-view), `--password`, `--expiry 1h/7d/30d`, `--public`, `--collection <name>`.
 
 ## Retrieve
-- `drp get <key>` prints drop content to stdout.
-- Visit `https://drp.fyi/<key>/` in a browser to view.
+`drp get <key>` or visit `drp.fyi/<key>/`.
 
-## Raw & embed URLs
-- Raw URL: `https://drp.fyi/raw/<key>/` returns plain content (useful for curl/scripts).
-- Embed URL: `https://drp.fyi/embed/<key>/` renders the drop for embedding in \
-docs, wikis, or READMEs. Update content without changing the URL.
-
-### How to embed a drp drop in Markdown
-1. Upload your text: `drp up "your content here"` — you get a URL like `https://drp.fyi/abc123/`.
-2. The raw URL is `https://drp.fyi/raw/abc123/` — use this to fetch plain text.
-3. The embed URL is `https://drp.fyi/embed/abc123/` — use this in an iframe:
-   ```html
-   <iframe src="https://drp.fyi/embed/abc123/" width="100%" height="300"></iframe>
-   ```
-4. In Markdown that supports HTML (GitHub, wikis, docs), paste the iframe.
-5. To update the embedded content, just `drp up "new content" --key abc123` — \
-the URL stays the same, readers see the new content.
-
-For Markdown that does NOT support HTML, link to the raw URL:
-```markdown
-[view snippet](https://drp.fyi/raw/abc123/)
-```
+## URLs
+- Raw: `drp.fyi/raw/<key>/` (plain text, for curl/scripts)
+- Embed: `drp.fyi/embed/<key>/` (iframe-friendly, content updates in place)
+- Embed in HTML: `<iframe src="https://drp.fyi/embed/<key>/"></iframe>`
 
 ## Collections
-- `drp up --collection <name>` adds a drop to a named collection.
-- `drp ls --collection <name>` lists drops in a collection.
-- Share an entire collection with one link.
+`drp up --collection myname` groups drops. `drp ls --collection myname` lists them.
 
-## Burn-after-reading secrets
-- `drp up "secret" --burn` creates a drop that self-destructs after one view.
-- Combine with `--password` for extra security.
+## Burn-after-reading
+`drp up "secret" --burn` — self-destructs after one view. Add `--password` for extra security.
 
-## Help bot
-- `drp ask "<question>"` in the CLI, or click the ? button on any page.
-- Answers come from the official drp documentation.
+## Plans
+Anonymous (limited), Free (more limits), Starter & Pro (storage, expiry, API). See drp.fyi/help/plans/.
 
-## Plans & limits
-- Anonymous: limited uploads, no account needed.
-- Free: create an account for higher limits.
-- Starter & Pro: increased storage, longer expiry, more API calls.
-- See https://drp.fyi/help/plans/ for details.
-
-## CLI install
-- `pip install drp-cli` or `pipx install drp-cli`.
-- Run `drp setup` to authenticate.
+## CLI
+`pip install drp-cli` then `drp setup`. Commands: up, get, ls, cp, edit, diff, save, load, status, ask, shell.
+`drp ask "question"` or click ? on any page for help.
 """
 
 
@@ -267,26 +232,7 @@ def _cli_docs_as_text() -> str:
 
 @cache
 def _get_docs_context() -> str:
-    base = Path(__file__).resolve().parent.parent
-    parts = [_FEATURE_REFERENCE, _cli_docs_as_text()]
-    tmpl_dir = base / "project" / "templates"
-    help_dir = tmpl_dir / "help"
-    templates = [
-        help_dir / "expiry.html",
-        help_dir / "plans.html",
-        tmpl_dir / "use_cases.html",
-    ]
-    for p in templates:
-        if not p.exists():
-            continue
-        raw = p.read_text()
-        raw = re.sub(r"\{%.*?%\}", "", raw)
-        raw = re.sub(r"\{\{.*?\}\}", "", raw)
-        text = _strip_html(raw)
-        text = re.sub(r"\n{3,}", "\n\n", text).strip()
-        if text:
-            parts.append(text)
-    return "\n\n---\n\n".join(parts)
+    return _FEATURE_REFERENCE.strip()
 
 
 @csrf_exempt
@@ -351,8 +297,9 @@ def ask(request):
                     {"role": "system", "content": _SYSTEM_PROMPT.format(docs=docs)},
                     {"role": "user", "content": question},
                 ],
-                "max_tokens": 400,
+                "max_tokens": 300,
                 "temperature": 0.3,
+                "num_ctx": 2048,
             },
             timeout=120,
         )
