@@ -17,3 +17,8 @@ def ads(request):
         'adsense_client': getattr(settings, 'ADSENSE_CLIENT', ''),
         'adsense_slot':   getattr(settings, 'ADSENSE_SLOT', ''),
     }
+
+
+def domain(request):
+    """Expose settings.DOMAIN to every template."""
+    return {'domain': getattr(settings, 'DOMAIN', '') or 'localhost'}

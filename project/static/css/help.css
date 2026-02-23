@@ -21,7 +21,7 @@
 .help-nav a:hover { background: var(--surface); color: var(--text); }
 
 /* ── Help sections ── */
-.help-page section { margin-bottom: 2.5rem; scroll-margin-top: 1rem; }
+.help-page section { margin-bottom: 2.5rem; scroll-margin-top: 4.5rem; }
 .help-page section h2 { font-size: 1.1rem; font-weight: 700; color: var(--accent); margin-bottom: 1rem; padding-bottom: .35rem; border-bottom: 1px solid var(--border); }
 .help-page section h3 { font-size: .85rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 1.1rem 0 .4rem; }
 .help-page p { color: var(--text); line-height: 1.7; margin-bottom: .5rem; }
@@ -78,7 +78,7 @@
   flex-shrink: 0;
   width: 130px;
   position: sticky;
-  top: 1.5rem;
+  top: 4.5rem;
 }
 
 .help-sidenav-title {
