@@ -171,7 +171,7 @@ GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_WEBHOOK_SECRET', '')# Hardcoded p
 GITHUB_WEBHOOK_URL = f"https://{DOMAIN}/api/github-webhook/" if DOMAIN else ""
 # ── Help bot (LLM — OpenAI-compatible, e.g. Ollama) ──────────────────────────
 LLM_BASE_URL = os.environ.get('LLM_BASE_URL', '')   # e.g. http://ollama.railway.internal:11434/v1
-LLM_MODEL    = os.environ.get('LLM_MODEL', 'qwen2.5:0.5b')
+LLM_MODEL    = os.environ.get('LLM_MODEL', 'qwen2.5:1.5b')
 
 # ── Bug reports ───────────────────────────────────────────────────────────────
 BUG_REPORT_DAILY_LIMIT = 3   # max reports per user per day
