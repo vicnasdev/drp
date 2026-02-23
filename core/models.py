@@ -469,7 +469,24 @@ class Drop(models.Model):
                 self.save(update_fields=["expires_at"])
 
     def hard_delete(self):
-        """Delete from DB (and B2 via pre_delete signal)."""
+        """Delete from B2 first, then DB.
+
+        Returns False (and preserves DB record) when B2 delete fails,
+        so cleanup can retry on the next run.
+        The pre_delete signal is a safety net for admin / queryset deletes.
+        """
+        if self.ns == self.NS_FILE and self.file_public_id:
+            from core.views.b2 import delete_object
+            try:
+                if not delete_object(self.ns, self.key):
+                    return False
+            except Exception:
+                logger.error(
+                    "hard_delete: B2 error for %s/%s", self.ns, self.key,
+                )
+                return False
+            # Clear so pre_delete signal won't attempt a second B2 call.
+            self.file_public_id = ""
         self.delete()
         return True
 

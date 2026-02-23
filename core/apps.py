@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import threading
 import time
 
@@ -8,6 +9,13 @@ from django.apps import AppConfig
 logger = logging.getLogger(__name__)
 
 _scheduler_started = False
+
+
+def _is_server():
+    """True when running under gunicorn or manage.py runserver."""
+    if "gunicorn" in sys.modules:
+        return True
+    return len(sys.argv) > 1 and sys.argv[1] == "runserver"
 
 
 def _run_scheduler():
@@ -46,10 +54,11 @@ class CoreConfig(AppConfig):
         # ready() is invoked during collectstatic and migrate too, before the
         # app is fully initialised.
 
-        # Start background scheduler for cleanup + notifications.
-        # Enable with RUN_SCHEDULER=1 in env (e.g. on Railway).
+        # Background scheduler for cleanup + expiry notifications.
+        # Runs automatically when serving (gunicorn / runserver), skipped
+        # during management commands, migrations, collectstatic, tests, etc.
         global _scheduler_started
-        if os.environ.get("RUN_SCHEDULER") == "1" and not _scheduler_started:
+        if _is_server() and not _scheduler_started:
             _scheduler_started = True
             t = threading.Thread(target=_run_scheduler, daemon=True)
             t.start()

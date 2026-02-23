@@ -143,12 +143,14 @@ class TestHardDelete(TestCase):
             drop.hard_delete()
             mock_del.assert_not_called()
 
-    def test_b2_error_does_not_prevent_db_deletion(self):
+    def test_b2_error_preserves_db_record_for_retry(self):
+        """When B2 delete fails, hard_delete returns False and keeps DB row."""
         drop = _make_file_drop(key="b2-err")
         pk = drop.pk
         with patch("core.views.b2.delete_object", side_effect=Exception("network")):
-            drop.hard_delete()
-        self.assertFalse(Drop.objects.filter(pk=pk).exists())
+            result = drop.hard_delete()
+        self.assertFalse(result)
+        self.assertTrue(Drop.objects.filter(pk=pk).exists())
 
     def test_storage_decremented_on_delete(self):
         drop = _make_file_drop(key="size-del", owner=self.user, filesize=2048)
