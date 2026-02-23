@@ -296,6 +296,14 @@ def ask(request):
     if not base_url:
         return JsonResponse({"error": "Help bot is not configured."}, status=503)
 
+    # Normalise: bare hostname → http://host:11434/v1
+    if not base_url.startswith("http"):
+        base_url = f"http://{base_url}"
+    if ":" not in base_url.split("//", 1)[-1]:
+        base_url = f"{base_url}:11434"
+    if not base_url.endswith("/v1"):
+        base_url = f"{base_url.rstrip('/')}/v1"
+
     # ── auth + per-plan rate limit ────────────────────────────────────────
     from core.models import Plan
 
