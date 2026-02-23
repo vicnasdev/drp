@@ -229,10 +229,28 @@ class TestFileSizeLimits:
 # ── Password protection ───────────────────────────────────────────────────────
 
 class TestPasswordProtection:
-    """Paid accounts can set passwords. Free/anon cannot."""
+    """
+    Comprehensive password protection tests.
 
-    def test_paid_can_set_password(self, starter_user, anon):
-        key = unique_key('pw-set')
+    Covers two flows:
+      A) set-password endpoint (post-upload, paid only)
+      B) --password flag on upload (text and file, paid only)
+
+    Matrix:
+      - paid text: upload with password → blocked without, accessible with, owner bypasses
+      - paid text: set-password after upload → same guarantees
+      - paid file: upload with password → blocked without, accessible with
+      - free text: --password flag silently ignored → accessible without password
+      - free text: set-password endpoint → 403
+      - wrong password always → 401 password_required
+      - burn + password: content gone after first correct read
+    """
+
+    # ── A) set-password endpoint ──────────────────────────────────────────────
+
+    def test_set_password_blocks_anon(self, starter_user, anon):
+        """After set-password, unauthenticated fetch without password must be blocked."""
+        key = unique_key('pw-set-block')
         upload_text(HOST, starter_user.session, 'secret', key=key, is_test=True)
         csrf = get_csrf(HOST, starter_user.session)
         res = starter_user.session.post(
@@ -240,13 +258,13 @@ class TestPasswordProtection:
             json={'password': 'hunter2'},
             headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
         )
-        assert res.ok
-        # Anon fetch without password must be blocked
+        assert res.ok, f'set-password failed: {res.status_code} {res.text}'
         kind, _ = get_clipboard(HOST, anon, key)
         assert kind == 'password_required'
 
-    def test_correct_password_grants_access(self, starter_user, anon):
-        key = unique_key('pw-ok')
+    def test_set_password_correct_grants_access(self, starter_user, anon):
+        """Correct password via header grants access and returns content."""
+        key = unique_key('pw-set-ok')
         upload_text(HOST, starter_user.session, 'unlocked content', key=key, is_test=True)
         csrf = get_csrf(HOST, starter_user.session)
         starter_user.session.post(
@@ -255,10 +273,12 @@ class TestPasswordProtection:
             headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
         )
         kind, content = get_clipboard(HOST, anon, key, password='open sesame')
-        assert kind == 'text' and content == 'unlocked content'
+        assert kind == 'text', f'Expected text, got {kind}'
+        assert content == 'unlocked content'
 
-    def test_wrong_password_denied(self, starter_user, anon):
-        key = unique_key('pw-wrong')
+    def test_set_password_wrong_password_denied(self, starter_user, anon):
+        """Wrong password must return password_required, not content."""
+        key = unique_key('pw-set-wrong')
         upload_text(HOST, starter_user.session, 'locked', key=key, is_test=True)
         csrf = get_csrf(HOST, starter_user.session)
         starter_user.session.post(
@@ -269,9 +289,22 @@ class TestPasswordProtection:
         kind, _ = get_clipboard(HOST, anon, key, password='wrong')
         assert kind == 'password_required'
 
-    def test_free_cannot_set_password(self, free_user):
+    def test_set_password_owner_bypasses(self, starter_user):
+        """Drop owner must never be prompted for their own password."""
+        key = unique_key('pw-set-owner')
+        upload_text(HOST, starter_user.session, 'mine', key=key, is_test=True)
+        csrf = get_csrf(HOST, starter_user.session)
+        starter_user.session.post(
+            f'{HOST}/{key}/set-password/',
+            json={'password': 'secret'},
+            headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
+        )
+        kind, content = get_clipboard(HOST, starter_user.session, key)
+        assert kind == 'text' and content == 'mine'
+
+    def test_free_cannot_use_set_password_endpoint(self, free_user):
         """Free plan: set-password endpoint must reject with 403."""
-        key = unique_key('pw-free')
+        key = unique_key('pw-free-endpoint')
         upload_text(HOST, free_user.session, 'no lock', key=key, is_test=True)
         csrf = get_csrf(HOST, free_user.session)
         res = free_user.session.post(
@@ -281,26 +314,116 @@ class TestPasswordProtection:
         )
         assert res.status_code == 403
 
-    def test_upload_with_password_ignored_for_free(self, free_user, anon):
-        """Free plan: --password flag on upload must be silently ignored."""
-        key = unique_key('pw-up-free')
-        upload_text(HOST, free_user.session, 'not locked', key=key, password='secret', is_test=True)
-        # Must be accessible without a password
-        kind, content = get_clipboard(HOST, anon, key)
-        assert kind == 'text' and content == 'not locked'
+    # ── B) --password flag on text upload ────────────────────────────────────
 
-    def test_owner_bypasses_own_password(self, starter_user):
-        key = unique_key('pw-owner')
-        upload_text(HOST, starter_user.session, 'mine', key=key, is_test=True)
-        csrf = get_csrf(HOST, starter_user.session)
-        starter_user.session.post(
-            f'{HOST}/{key}/set-password/',
-            json={'password': 'secret'},
-            headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
-        )
-        # Owner must not be prompted
+    def test_paid_text_upload_password_blocks_anon(self, starter_user, anon):
+        """Paid user uploading text with --password: anon must be blocked."""
+        key = unique_key('pw-up-text-block')
+        upload_text(HOST, starter_user.session, 'protected content',
+                    key=key, password='mypassword', is_test=True)
+        kind, _ = get_clipboard(HOST, anon, key)
+        assert kind == 'password_required', \
+            'Drop should be password-protected but was accessible without password'
+
+    def test_paid_text_upload_password_correct_grants_access(self, starter_user, anon):
+        """Paid user uploading text with --password: correct password returns content."""
+        key = unique_key('pw-up-text-ok')
+        upload_text(HOST, starter_user.session, 'secret content',
+                    key=key, password='mypassword', is_test=True)
+        kind, content = get_clipboard(HOST, anon, key, password='mypassword')
+        assert kind == 'text', f'Expected text, got {kind}'
+        assert content == 'secret content'
+
+    def test_paid_text_upload_password_wrong_denied(self, starter_user, anon):
+        """Paid user uploading text with --password: wrong password must be denied."""
+        key = unique_key('pw-up-text-wrong')
+        upload_text(HOST, starter_user.session, 'secret',
+                    key=key, password='correct', is_test=True)
+        kind, _ = get_clipboard(HOST, anon, key, password='wrong')
+        assert kind == 'password_required'
+
+    def test_paid_text_upload_password_owner_bypasses(self, starter_user):
+        """Owner must access their own password-protected text drop without password."""
+        key = unique_key('pw-up-text-owner')
+        upload_text(HOST, starter_user.session, 'my secret',
+                    key=key, password='shh', is_test=True)
         kind, content = get_clipboard(HOST, starter_user.session, key)
-        assert kind == 'text' and content == 'mine'
+        assert kind == 'text' and content == 'my secret'
+
+    def test_free_text_upload_password_flag_ignored(self, free_user, anon):
+        """
+        Free plan: --password flag on upload must be silently ignored.
+        Verifies the drop is accessible WITHOUT a password (not just that
+        upload succeeded), which distinguishes 'ignored' from 'never sent'.
+        """
+        key = unique_key('pw-up-free-ignored')
+        result = upload_text(HOST, free_user.session, 'not locked',
+                             key=key, password='secret', is_test=True)
+        assert result is not None, 'Upload itself should succeed for free user'
+        # Must be readable without any password
+        kind, content = get_clipboard(HOST, anon, key)
+        assert kind == 'text', \
+            f'Expected drop to be unprotected (free plan), got {kind}'
+        assert content == 'not locked'
+        # Must also NOT be readable with the password (i.e. no password was set,
+        # not just that the wrong password was rejected)
+        kind2, content2 = get_clipboard(HOST, anon, key, password='secret')
+        assert kind2 == 'text' and content2 == 'not locked'
+
+    # ── C) --password flag on file upload ────────────────────────────────────
+
+    def test_paid_file_upload_password_blocks_anon(self, starter_user, anon):
+        """Paid user uploading a file with --password: anon must be blocked."""
+        path = _tmp_file(content=b'secret file content')
+        key  = unique_key('pw-up-file-block')
+        try:
+            upload_file(HOST, starter_user.session, path, key=key,
+                        password='filepass', is_test=True)
+        finally:
+            os.unlink(path)
+        kind, _ = get_file(HOST, anon, key)
+        assert kind == 'password_required', \
+            'File drop should be password-protected but was accessible without password'
+
+    def test_paid_file_upload_password_correct_grants_access(self, starter_user, anon):
+        """Paid user uploading a file with --password: correct password returns file."""
+        path = _tmp_file(content=b'secret file content')
+        key  = unique_key('pw-up-file-ok')
+        try:
+            upload_file(HOST, starter_user.session, path, key=key,
+                        password='filepass', is_test=True)
+        finally:
+            os.unlink(path)
+        kind, result = get_file(HOST, anon, key, password='filepass')
+        assert kind == 'file', f'Expected file, got {kind}'
+        content, filename = result
+        assert content == b'secret file content'
+
+    def test_paid_file_upload_password_wrong_denied(self, starter_user, anon):
+        """Paid user uploading a file with --password: wrong password must be denied."""
+        path = _tmp_file(content=b'locked')
+        key  = unique_key('pw-up-file-wrong')
+        try:
+            upload_file(HOST, starter_user.session, path, key=key,
+                        password='correct', is_test=True)
+        finally:
+            os.unlink(path)
+        kind, _ = get_file(HOST, anon, key, password='wrong')
+        assert kind == 'password_required'
+
+    # ── D) burn + password ────────────────────────────────────────────────────
+
+    def test_burn_and_password_content_gone_after_read(self, starter_user, anon):
+        """Burn + password: content must be gone after first correct read."""
+        key = unique_key('pw-burn')
+        upload_text(HOST, starter_user.session, 'one time secret',
+                    key=key, password='once', burn=True, is_test=True)
+        # First read with correct password — must succeed
+        kind, content = get_clipboard(HOST, anon, key, password='once')
+        assert kind == 'text' and content == 'one time secret'
+        # Second read — drop must be gone
+        kind2, _ = get_clipboard(HOST, anon, key, password='once')
+        assert kind2 is None, 'Burn drop should be deleted after first read'
 
 
 # ── drp serve (multi-file / glob upload) ─────────────────────────────────────
