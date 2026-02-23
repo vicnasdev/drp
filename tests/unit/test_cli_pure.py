@@ -549,6 +549,8 @@ class TestVersion:
     def test_version_is_semver(self):
         from cli import __version__
         parts = __version__.split('.')
-        assert len(parts) == 3
+        # Locally: "0.3" (major.minor from VERSION file)
+        # CI/installed: "0.3.42" (major.minor.run_number)
+        assert len(parts) >= 2
         for part in parts:
             assert part.isdigit()

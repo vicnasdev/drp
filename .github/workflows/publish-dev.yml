@@ -12,9 +12,6 @@ on:
       - 'VERSION'
       - '.github/workflows/publish-dev.yml'
 
-permissions:
-  contents: write
-
 jobs:
   test:
     strategy:
@@ -135,37 +132,25 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Bump patch version
-        id: bump
+      - name: Compute version
+        id: version
         run: |
-          current=$(cat VERSION | tr -d '[:space:]')
-          IFS='.' read -r major minor patch <<< "$current"
-          new_version="$major.$minor.$((patch + 1))"
-          echo "$new_version" > VERSION
-          echo "version=$new_version" >> "$GITHUB_OUTPUT"
+          base=$(cat VERSION | tr -d '[:space:]')
+          version="${base}.${{ github.run_number }}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing drp-cli $version"
 
-      - name: Commit version bump
+      - name: Stamp version into CLI
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add VERSION
-          git diff --cached --quiet && exit 0
-          git commit -m "bump: drp-cli v${{ steps.bump.outputs.version }}"
-          git pull --rebase origin dev
-          git push
+          sed -i "s/__version__ = _resolve_version()/__version__ = '${{ steps.version.outputs.version }}'/" cli/__init__.py
 
       - name: Build drp-cli
-        run: |
-          # Package name stays drp-cli (already in pyproject.toml)
-          pip install build && python -m build
+        run: pip install build && python -m build
 
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:

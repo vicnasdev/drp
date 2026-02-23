@@ -164,44 +164,26 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Bump patch version
-        id: bump
+      - name: Compute version
+        id: version
         run: |
-          current=$(cat VERSION | tr -d '[:space:]')
-          IFS='.' read -r major minor patch <<< "$current"
-          new_version="$major.$minor.$((patch + 1))"
-          # Skip if tag already exists (idempotent re-runs)
-          while git tag | grep -q "^v$new_version$"; do
-            patch=$((patch + 1))
-            new_version="$major.$minor.$patch"
-          done
-          echo "$new_version" > VERSION
-          echo "version=$new_version" >> "$GITHUB_OUTPUT"
-
-      - name: Commit, tag, and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add VERSION
-          git diff --cached --quiet && exit 0
-          git commit -m "v${{ steps.bump.outputs.version }}"
-          git tag "v${{ steps.bump.outputs.version }}"
-          git pull --rebase origin main
-          git push --follow-tags --force-with-lease
+          base=$(cat VERSION | tr -d '[:space:]')
+          version="${base}.${{ github.run_number }}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing drp $version"
 
       - name: Collect commits since last release
         run: |
-          prev_tag=$(git tag --sort=-v:refname | sed -n '2p')
+          prev_tag=$(git tag --sort=-v:refname | head -1)
           if [ -z "$prev_tag" ]; then
             log=$(git log --oneline --no-decorate HEAD)
           else
-            log=$(git log --oneline --no-decorate "$prev_tag"..HEAD~1)
+            log=$(git log --oneline --no-decorate "$prev_tag"..HEAD)
           fi
           {
             echo "$log"
@@ -214,18 +196,22 @@ jobs:
             echo '```'
           } > /tmp/release_notes.txt
 
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.bump.outputs.version }}
-          name: v${{ steps.bump.outputs.version }}
-          body_path: /tmp/release_notes.txt
+      - name: Stamp version into CLI
+        run: |
+          sed -i "s/__version__ = _resolve_version()/__version__ = '${{ steps.version.outputs.version }}'/" cli/__init__.py
 
       - name: Build and publish "drp" to PyPI
         run: |
           # Override package name from drp-cli → drp at build time
           sed -i 's/^name = "drp-cli"/name = "drp"/' pyproject.toml
           pip install build && python -m build
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body_path: /tmp/release_notes.txt
 
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:

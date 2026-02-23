@@ -1,7 +1,9 @@
 """drp CLI — command-line tool for drp."""
 
-# Version is read from the VERSION file during development.
-# CI stamps a literal string here before building the wheel.
+# VERSION file holds major.minor (e.g. "0.3") — only bumped manually.
+# CI computes full version (major.minor.run_number) and seds this line
+# to a literal before building: __version__ = '0.3.42'
+# Never auto-committed, so merges between dev↔main stay clean.
 # Fallback: importlib.metadata for installed packages.
 
 def _resolve_version():
