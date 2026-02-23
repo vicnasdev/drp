@@ -70,13 +70,15 @@ def cmd_collection(args):
 
         from cli.api.auth import get_csrf
         csrf = get_csrf(host, session)
+        from cli.spinner import Spinner
         try:
-            res = session.post(
-                f'{host}/collections/create/',
-                json={'name': name},
-                headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
-                timeout=10,
-            )
+            with Spinner('creating'):
+                res = session.post(
+                    f'{host}/collections/create/',
+                    json={'name': name},
+                    headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
+                    timeout=10,
+                )
         except Exception as e:
             err(f'Network error: {e}')
             sys.exit(1)
@@ -133,12 +135,13 @@ def cmd_collection(args):
         csrf   = get_csrf(host, session)
         action = 'add' if sub == 'add' else 'remove'
         try:
-            res = session.post(
-                f'{host}/collections/{collection_id}/{action}/',
-                json={'ns': ns, 'key': key},
-                headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
-                timeout=10,
-            )
+            with Spinner('updating'):
+                res = session.post(
+                    f'{host}/collections/{collection_id}/{action}/',
+                    json={'ns': ns, 'key': key},
+                    headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
+                    timeout=10,
+                )
         except Exception as e:
             err(f'Network error: {e}')
             sys.exit(1)

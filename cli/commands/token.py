@@ -38,12 +38,14 @@ def _create(args):
     if expires:
         payload["expires"] = expires
 
-    res = session.post(
-        f"{host}/auth/tokens/create/",
-        json=payload,
-        headers={"X-CSRFToken": csrf, "Referer": f"{host}/"},
-        timeout=15,
-    )
+    from cli.spinner import Spinner
+    with Spinner('creating'):
+        res = session.post(
+            f"{host}/auth/tokens/create/",
+            json=payload,
+            headers={"X-CSRFToken": csrf, "Referer": f"{host}/"},
+            timeout=15,
+        )
 
     if not res.ok:
         try:
@@ -67,11 +69,13 @@ def _create(args):
 def _list(args):
     cfg, host, session = load_context()
 
-    res = session.get(
-        f"{host}/auth/tokens/",
-        headers={"Accept": "application/json"},
-        timeout=15,
-    )
+    from cli.spinner import Spinner
+    with Spinner('loading'):
+        res = session.get(
+            f"{host}/auth/tokens/",
+            headers={"Accept": "application/json"},
+            timeout=15,
+        )
 
     if not res.ok:
         try:
@@ -101,11 +105,13 @@ def _revoke(args):
     cfg, host, session = load_context()
     csrf = get_csrf(host, session)
 
-    res = session.post(
-        f"{host}/auth/tokens/{token_id}/revoke/",
-        headers={"X-CSRFToken": csrf, "Referer": f"{host}/"},
-        timeout=15,
-    )
+    from cli.spinner import Spinner
+    with Spinner('revoking'):
+        res = session.post(
+            f"{host}/auth/tokens/{token_id}/revoke/",
+            headers={"X-CSRFToken": csrf, "Referer": f"{host}/"},
+            timeout=15,
+        )
 
     if not res.ok:
         try:

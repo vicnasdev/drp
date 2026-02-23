@@ -29,14 +29,16 @@ def cmd_load(args):
         sys.exit(1)
 
     from cli.api.auth import get_csrf
+    from cli.spinner import Spinner
     csrf = get_csrf(host, session)
     try:
-        res = session.post(
-            f'{host}/auth/account/import/',
-            json=data,
-            headers={'Content-Type': 'application/json', 'X-CSRFToken': csrf},
-            timeout=15,
-        )
+        with Spinner('importing'):
+            res = session.post(
+                f'{host}/auth/account/import/',
+                json=data,
+                headers={'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+                timeout=15,
+            )
     except Exception as e:
         print(f'  ✗ Request failed: {e}')
         sys.exit(1)

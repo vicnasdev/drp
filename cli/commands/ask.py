@@ -28,7 +28,9 @@ def cmd_ask(args):
 
     url = f"{host}/help/ask/"
     try:
-        resp = session.post(url, json={"question": question}, timeout=120)
+        from cli.spinner import Spinner
+        with Spinner('thinking'):
+            resp = session.post(url, json={"question": question}, timeout=120)
     except Exception as exc:
         print(f"  ✗ Network error: {exc}")
         sys.exit(1)
