@@ -6,6 +6,7 @@ drp ask — ask the help bot a question about drp.
 """
 
 import json
+import re
 import sys
 
 from cli.commands._context import load_context
@@ -27,7 +28,7 @@ def cmd_ask(args):
 
     url = f"{host}/help/ask/"
     try:
-        resp = session.post(url, json={"question": question}, timeout=20)
+        resp = session.post(url, json={"question": question}, timeout=120)
     except Exception as exc:
         print(f"  ✗ Network error: {exc}")
         sys.exit(1)
@@ -53,7 +54,6 @@ def cmd_ask(args):
     answer = data.get("answer", "")
 
     # Strip HTML tags for terminal display
-    import re
     text = re.sub(r"<[^>]+>", "", answer)
     text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
     text = text.replace("&#x27;", "'").replace("&quot;", '"')
