@@ -241,7 +241,7 @@ def ask(request):
 
     docs = _get_docs_context()
 
-    model = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash-lite")
+    model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash-lite")
     url = f"{_GEMINI_BASE}{model}:generateContent?key={api_key}"
 
     try:

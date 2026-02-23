@@ -171,7 +171,7 @@ GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_WEBHOOK_SECRET', '')# Hardcoded p
 GITHUB_WEBHOOK_URL = f"https://{DOMAIN}/api/github-webhook/" if DOMAIN else ""
 # ── Help bot (Gemini) ─────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-GEMINI_MODEL  = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash-lite')
+GEMINI_MODEL  = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash-lite')
 
 # ── Bug reports ───────────────────────────────────────────────────────────────
 BUG_REPORT_DAILY_LIMIT = 3   # max reports per user per day
