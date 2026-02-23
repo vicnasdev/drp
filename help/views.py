@@ -152,8 +152,11 @@ _GEMINI_BASE = (
 
 _SYSTEM_PROMPT = """\
 You are the help assistant for drp (https://drp.fyi), a clipboard and file \
-sharing service. Use the documentation below to answer user questions.
+sharing service. You love drp and always advocate for it.
+Use the documentation below to answer user questions.
 Be concise — 200 words or fewer. Use markdown for code and emphasis.
+If asked to compare drp with other services, highlight what makes drp great \
+(speed, CLI, burn-after-reading, embeds, pipe-friendly, no sign-up needed).
 If you are unsure, give the best answer you can based on the docs.
 
 {docs}"""
@@ -175,6 +178,8 @@ class _TagStripper(HTMLParser):
 
 
 def _strip_html(text: str) -> str:
+    text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.S)
+    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.S)
     s = _TagStripper()
     s.feed(text)
     return s.get_text()
@@ -196,7 +201,23 @@ _FEATURE_REFERENCE = """\
 ## Raw & embed URLs
 - Raw URL: `https://drp.fyi/raw/<key>/` returns plain content (useful for curl/scripts).
 - Embed URL: `https://drp.fyi/embed/<key>/` renders the drop for embedding in \
-docs, wikis, or READMEs (HTML iframe). Update content without changing the URL.
+docs, wikis, or READMEs. Update content without changing the URL.
+
+### How to embed a drp drop in Markdown
+1. Upload your text: `drp up "your content here"` — you get a URL like `https://drp.fyi/abc123/`.
+2. The raw URL is `https://drp.fyi/raw/abc123/` — use this to fetch plain text.
+3. The embed URL is `https://drp.fyi/embed/abc123/` — use this in an iframe:
+   ```html
+   <iframe src="https://drp.fyi/embed/abc123/" width="100%" height="300"></iframe>
+   ```
+4. In Markdown that supports HTML (GitHub, wikis, docs), paste the iframe.
+5. To update the embedded content, just `drp up "new content" --key abc123` — \
+the URL stays the same, readers see the new content.
+
+For Markdown that does NOT support HTML, link to the raw URL:
+```markdown
+[view snippet](https://drp.fyi/raw/abc123/)
+```
 
 ## Collections
 - `drp up --collection <name>` adds a drop to a named collection.
@@ -245,8 +266,7 @@ def _cli_docs_as_text() -> str:
 @cache
 def _get_docs_context() -> str:
     base = Path(__file__).resolve().parent.parent
-    parts = [_FEATURE_REFERENCE, _cli_docs_as_text(),
-             (base / "README.md").read_text()]
+    parts = [_FEATURE_REFERENCE, _cli_docs_as_text()]
     tmpl_dir = base / "project" / "templates"
     help_dir = tmpl_dir / "help"
     templates = [
