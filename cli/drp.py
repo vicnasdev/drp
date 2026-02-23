@@ -20,6 +20,7 @@ from cli.commands.shell import cmd_shell
 from cli.commands.collection import cmd_collection
 from cli.commands.token import cmd_token
 from cli.commands.ask import cmd_ask
+from cli.commands.cache import cmd_cache, cmd_rmcache
 
 COMMANDS = [
     ('setup',      cmd_setup,       'Configure host and log in'),
@@ -41,6 +42,8 @@ COMMANDS = [
     ('collection', cmd_collection,  'Manage drop collections (paid accounts)'),
     ('token',      cmd_token,       'Manage API tokens (paid accounts)'),
     ('ask',        cmd_ask,         'Ask the help bot a question about drp'),
+    ('cache',      cmd_cache,       'View the local drop cache'),
+    ('rmcache',    cmd_rmcache,     'Remove entries from the local drop cache'),
     ('shell',      cmd_shell,       'Interactive shell with ls, rm, cp, cd and more'),
 ]
 
@@ -54,6 +57,7 @@ COMMAND_GROUPS = [
     ('account',            ['save', 'ls', 'load', 'collection', 'token']),
     ('info',               ['status', 'ping']),
     ('help',               ['ask']),
+    ('cache',              ['cache', 'rmcache']),
     ('setup',              ['setup', 'login', 'logout']),
     ('shell',              ['shell']),
 ]
@@ -305,6 +309,13 @@ def _configure_subparsers(sub):
     p_ask = sub._name_parser_map['ask']
     p_ask.add_argument('question', nargs='?', default=None,
                        help='Question to ask (prompted if omitted)')
+
+    # rmcache subcommand
+    p_rmcache = sub._name_parser_map['rmcache']
+    p_rmcache.add_argument('key', nargs='?', default=None,
+                           help='Drop key to remove from cache')
+    p_rmcache.add_argument('--all', '-a', action='store_true',
+                           help='Clear the entire cache')
 
 
 _HANDLERS = {name: handler for name, handler, _ in COMMANDS}

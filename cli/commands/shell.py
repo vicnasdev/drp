@@ -17,6 +17,9 @@ Commands available inside the shell:
   help                      list available commands
   exit / quit / ^D          leave the shell
 
+  All other drp commands (up, get, edit, save, etc.) are also available
+  directly; they are delegated to the same handlers as the top-level CLI.
+
 Pipe subset (inline, no bash delegation):
   <cmd> | grep <pattern>
   <cmd> | sort
@@ -29,6 +32,40 @@ import sys
 
 from cli.commands._context import load_context
 from cli.api.helpers import err, ok
+
+# Sentinel for commands _dispatch does not handle natively.
+_NOT_HANDLED = object()
+
+# ── Shell command names for autocomplete ──────────────────────────────────────
+# Built-in shell commands
+_BUILTIN_CMDS = [
+    'ls', 'cat', 'rm', 'cp', 'mv', 'add', 'open', 'status',
+    'cd', 'pwd', 'help', 'exit', 'quit',
+]
+
+# Delegated drp commands (handled by the top-level CLI parser/handlers)
+_DELEGATED_CMDS = [
+    'up', 'get', 'edit', 'save', 'renew', 'serve',
+    'collection', 'token', 'ask', 'load', 'ping',
+    'setup', 'login', 'logout', 'cache', 'rmcache',
+]
+
+ALL_SHELL_CMDS = sorted(set(_BUILTIN_CMDS + _DELEGATED_CMDS))
+
+# Sub-commands for multi-level completion
+_SUB_CMDS = {
+    'collection': ['ls', 'new', 'add', 'rm', 'open'],
+    'token':      ['create', 'list', 'revoke'],
+}
+
+# Commands whose first positional arg is a drop key
+_KEY_CMDS = {
+    'cat', 'rm', 'cp', 'mv', 'add', 'open', 'status',
+    'get', 'edit', 'save', 'renew',
+}
+
+# Commands whose first positional arg is a collection slug
+_SLUG_CMDS = {'cd'}
 
 
 def cmd_shell(args):
@@ -82,7 +119,39 @@ def cmd_shell(args):
 
     # ── REPL loop ─────────────────────────────────────────────────────────────
     try:
-        import readline  # enables arrow keys / history on Unix
+        import readline
+
+        def _completer(text, state):
+            """Context-aware tab completer for the shell."""
+            try:
+                buf = readline.get_line_buffer().lstrip()
+                tokens = buf.split()
+
+                # Completing the first word → command names
+                if not tokens or (len(tokens) == 1 and not buf.endswith(' ')):
+                    matches = [c + ' ' for c in ALL_SHELL_CMDS if c.startswith(text)]
+                else:
+                    cmd = tokens[0].lower()
+                    # Sub-command completion (collection ls/new/add/rm, token create/list/revoke)
+                    if cmd in _SUB_CMDS and len(tokens) <= 2 and not (len(tokens) == 2 and buf.endswith(' ')):
+                        matches = [s + ' ' for s in _SUB_CMDS[cmd] if s.startswith(text)]
+                    # Drop key completion
+                    elif cmd in _KEY_CMDS:
+                        from cli.completion import _read_cache
+                        matches = [k + ' ' for k in _read_cache(None, text)]
+                    # Collection slug completion
+                    elif cmd in _SLUG_CMDS:
+                        from cli.completion import _read_collection_cache
+                        matches = [s + ' ' for s in _read_collection_cache(text)]
+                    else:
+                        matches = []
+
+                return matches[state] if state < len(matches) else None
+            except Exception:
+                return None
+
+        readline.set_completer(_completer)
+        readline.set_completer_delims(' \t')
         readline.parse_and_bind('tab: complete')
     except ImportError:
         pass
@@ -162,6 +231,12 @@ def cmd_shell(args):
 
             if output_lines is None:
                 continue  # command handled its own output
+
+            # _dispatch returns _NOT_HANDLED for unknown native commands;
+            # delegate them to the top-level CLI parser/handlers.
+            if output_lines is _NOT_HANDLED:
+                _delegate_to_cli(cmd, rest)
+                continue
 
             if pipe_filter:
                 output_lines = _apply_pipe(output_lines, pipe_filter)
@@ -330,7 +405,32 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
         except Exception as e:
             return [f'  {red("✗")} {e}']
 
-    return [f'  {red("✗")} unknown command: {cmd}  (type help)']
+    # ── Delegate to top-level CLI handler if recognized ─────────────────────
+    return _NOT_HANDLED
+
+
+def _delegate_to_cli(cmd, rest):
+    """
+    Run a drp CLI command by reusing the top-level parser and handler.
+    Returns True if the command was handled, False if not a valid drp command.
+    """
+    from cli.drp import build_parser, _HANDLERS
+
+    if cmd not in _HANDLERS:
+        from cli.format import red
+        print(f'  {red("✗")} unknown command: {cmd}  (type help)')
+        return False
+
+    try:
+        parser = build_parser()
+        args = parser.parse_args([cmd] + list(rest))
+        _HANDLERS[cmd](args)
+    except SystemExit:
+        pass  # argparse calls sys.exit on --help or bad args
+    except Exception as e:
+        from cli.format import red
+        print(f'  {red("✗")} {e}')
+    return True
 
 
 def _ls_drops(host, session, long_fmt):
@@ -516,7 +616,27 @@ def _print_shell_help():
     w = max(len(c) for c, _ in cmds) + 2
     for cmd_name, desc in cmds:
         print(f'    {cyan(cmd_name):<{w + 10}}  {dim(desc)}')
+
+    print()
+    print(f'  {bold("all drp commands are also available")}')
+    print(f'  {dim("─" * 40)}')
+    delegated = [
+        ('up <target>',        'upload text or file'),
+        ('get <key>',          'fetch a drop'),
+        ('edit <key>',         'edit in $EDITOR'),
+        ('save <key>',         'bookmark a drop'),
+        ('renew <key>',        'renew expiry'),
+        ('serve <targets>',    'upload dir / file list'),
+        ('collection <cmd>',   'manage collections'),
+        ('token <cmd>',        'manage API tokens'),
+        ('ask <question>',     'ask the help bot'),
+        ('load <file>',        'import exported drops'),
+        ('ping',               'check connectivity'),
+    ]
+    for cmd_name, desc in delegated:
+        print(f'    {cyan(cmd_name):<{w + 10}}  {dim(desc)}')
     print()
     print(f'  {dim("pipe subset:")}  grep · sort · head · tail')
     print(f'  {dim("example:")}      ls | grep notes')
+    print(f'  {dim("tab:")}          press tab to autocomplete commands and keys')
     print()

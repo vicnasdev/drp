@@ -697,3 +697,173 @@ class TestCLISmokeStatus:
         _drop_status(args, 'skey')
         out = capsys.readouterr().out
         assert 'skey' in out
+
+
+# ── Shell autocomplete + delegation ──────────────────────────────────────────
+
+class TestShellCommandLists:
+    """Validate shell command constants are consistent."""
+
+    def test_all_shell_cmds_includes_builtins(self):
+        from cli.commands.shell import ALL_SHELL_CMDS, _BUILTIN_CMDS
+        for cmd in _BUILTIN_CMDS:
+            assert cmd in ALL_SHELL_CMDS
+
+    def test_all_shell_cmds_includes_delegated(self):
+        from cli.commands.shell import ALL_SHELL_CMDS, _DELEGATED_CMDS
+        for cmd in _DELEGATED_CMDS:
+            assert cmd in ALL_SHELL_CMDS
+
+    def test_no_overlap_between_builtin_and_delegated(self):
+        from cli.commands.shell import _BUILTIN_CMDS, _DELEGATED_CMDS
+        overlap = set(_BUILTIN_CMDS) & set(_DELEGATED_CMDS)
+        assert not overlap, f'Overlap: {overlap}'
+
+
+class TestShellDelegation:
+    """Test _delegate_to_cli routes correctly."""
+
+    @patch('cli.drp._HANDLERS')
+    @patch('cli.drp.build_parser')
+    def test_delegate_known_command(self, mock_build, mock_handlers, capsys):
+        from cli.commands.shell import _delegate_to_cli
+        # Make 'ping' a recognized handler
+        mock_handlers.__contains__ = lambda self, k: k == 'ping'
+        mock_handlers.__getitem__ = lambda self, k: MagicMock()
+        mock_parser = MagicMock()
+        ns = MagicMock()
+        mock_parser.parse_args.return_value = ns
+        mock_build.return_value = mock_parser
+        assert _delegate_to_cli('ping', []) is True
+
+    def test_delegate_unknown_command(self, capsys):
+        from cli.commands.shell import _delegate_to_cli
+        result = _delegate_to_cli('nonexistent_xyz', [])
+        assert result is False
+        out = capsys.readouterr().out
+        assert 'unknown command' in out
+
+
+class TestShellNotHandled:
+    """_dispatch returns _NOT_HANDLED for commands it doesn't recognise."""
+
+    def test_dispatch_unknown_returns_sentinel(self):
+        from cli.commands.shell import _dispatch, _NOT_HANDLED
+        result = _dispatch('foobar_xyz', [], 'http://x', MagicMock(), {}, None, 'u')
+        assert result is _NOT_HANDLED
+
+
+# ── drp cache / drp rmcache ──────────────────────────────────────────────────
+
+class TestCmdCache:
+    """Tests for cmd_cache and cmd_rmcache (isolated tmp files)."""
+
+    def setup_method(self):
+        import tempfile
+        self._tmp = tempfile.mktemp(suffix='.json')
+        import cli.config as cfg
+        self._orig_drops = cfg.DROPS_FILE
+        self._orig_dir   = cfg.CONFIG_DIR
+        cfg.DROPS_FILE   = Path(self._tmp)
+        cfg.CONFIG_DIR   = Path(self._tmp).parent
+
+    def teardown_method(self):
+        import cli.config as cfg
+        try:
+            Path(self._tmp).unlink(missing_ok=True)
+        except Exception:
+            pass
+        cfg.DROPS_FILE = self._orig_drops
+        cfg.CONFIG_DIR = self._orig_dir
+
+    def test_cache_empty(self, capsys):
+        from cli.commands.cache import cmd_cache
+        cmd_cache(MagicMock())
+        out = capsys.readouterr().out
+        assert 'empty' in out
+
+    def test_cache_lists_drops(self, capsys):
+        from cli import config
+        from cli.commands.cache import cmd_cache
+        config.save_local_drops([
+            {'key': 'hello', 'ns': 'c', 'kind': 'text', 'from_server': True},
+            {'key': 'pic', 'ns': 'f', 'kind': 'file', 'from_server': False},
+        ])
+        cmd_cache(MagicMock())
+        out = capsys.readouterr().out
+        assert 'hello' in out
+        assert 'pic' in out
+
+    def test_rmcache_specific_key(self, capsys):
+        from cli import config
+        from cli.commands.cache import cmd_rmcache
+        config.save_local_drops([
+            {'key': 'keep', 'ns': 'c'},
+            {'key': 'gone', 'ns': 'c'},
+        ])
+        args = MagicMock()
+        args.all = False
+        args.key = 'gone'
+        cmd_rmcache(args)
+        out = capsys.readouterr().out
+        assert '✓' in out
+        remaining = config.load_local_drops()
+        assert len(remaining) == 1
+        assert remaining[0]['key'] == 'keep'
+
+    def test_rmcache_not_found(self, capsys):
+        from cli import config
+        from cli.commands.cache import cmd_rmcache
+        config.save_local_drops([{'key': 'a', 'ns': 'c'}])
+        args = MagicMock()
+        args.all = False
+        args.key = 'nope'
+        cmd_rmcache(args)
+        out = capsys.readouterr().out
+        assert 'not found' in out
+
+    def test_rmcache_all(self, capsys):
+        from cli import config
+        from cli.commands.cache import cmd_rmcache
+        config.save_local_drops([
+            {'key': 'a', 'ns': 'c'},
+            {'key': 'b', 'ns': 'f'},
+        ])
+        args = MagicMock()
+        args.all = True
+        args.key = None
+        cmd_rmcache(args)
+        out = capsys.readouterr().out
+        assert '✓' in out
+        assert config.load_local_drops() == []
+
+    def test_rmcache_no_args(self, capsys):
+        from cli.commands.cache import cmd_rmcache
+        args = MagicMock()
+        args.all = False
+        args.key = None
+        cmd_rmcache(args)
+        out = capsys.readouterr().out
+        assert 'Usage' in out
+
+
+class TestBuildParserIncludesCache:
+    """Ensure cache + rmcache are registered in the parser."""
+
+    def test_cache_in_commands(self):
+        from cli.drp import COMMANDS
+        names = [name for name, _, _ in COMMANDS]
+        assert 'cache' in names
+        assert 'rmcache' in names
+
+    def test_rmcache_parser_accepts_all(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['rmcache', '--all'])
+        assert args.all is True
+
+    def test_rmcache_parser_accepts_key(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['rmcache', 'mykey'])
+        assert args.key == 'mykey'
