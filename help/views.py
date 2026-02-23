@@ -354,7 +354,7 @@ def ask(request):
                 "max_tokens": 400,
                 "temperature": 0.3,
             },
-            timeout=30,
+            timeout=120,
         )
     except requests.ConnectionError as exc:
         log.exception("LLM connection error")

@@ -23,5 +23,12 @@ MODEL="${OLLAMA_MODEL:-qwen2.5:0.5b}"
 echo "Pulling model: $MODEL"
 ollama pull "$MODEL"
 
+# Warm up: load model into RAM so first real request is fast
+echo "Warming up model..."
+curl -sf http://localhost:${PORT:-11434}/api/generate \
+  -d "{\"model\": \"$MODEL\", \"prompt\": \"hi\", \"stream\": false}" \
+  > /dev/null 2>&1 || true
+echo "Model warm — ready for traffic"
+
 # Keep container alive (ollama serve is backgrounded)
 wait
