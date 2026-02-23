@@ -1,16 +1,16 @@
-name: Publish drp to PyPI
+name: Publish drp-cli to PyPI
 
-# Main branch → publishes "drp" package.
-# Creates Git tags and GitHub releases.
+# Dev branch → publishes "drp-cli" package.
+# No tags, no GitHub releases — just PyPI.
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
     paths:
       - 'cli/**'
       - 'pyproject.toml'
       - 'VERSION'
-      - '.github/workflows/publish.yml'
+      - '.github/workflows/publish-dev.yml'
 
 permissions:
   contents: write
@@ -125,40 +125,13 @@ jobs:
           drp rm -f "$KEY"
           rm -f ci_test_file.txt ci_downloaded.txt
 
-      - name: Smoke — authenticated session persists
-        if: ${{ env.DRP_SMOKE_HOST != '' && env.DRP_SMOKE_EMAIL != '' }}
-        env:
-          DRP_SMOKE_HOST:     ${{ secrets.DRP_SMOKE_HOST }}
-          DRP_SMOKE_EMAIL:    ${{ secrets.DRP_SMOKE_EMAIL }}
-          DRP_SMOKE_PASSWORD: ${{ secrets.DRP_SMOKE_PASSWORD }}
-        shell: bash
-        run: |
-          python -c "
-          import requests
-          from cli import api, config
-          from cli.session import save_session
-          cfg = config.load()
-          host = cfg['host']
-          session = requests.Session()
-          ok = api.login(host, session, '${{ secrets.DRP_SMOKE_EMAIL }}', '${{ secrets.DRP_SMOKE_PASSWORD }}')
-          assert ok, 'Login failed'
-          cfg['email'] = '${{ secrets.DRP_SMOKE_EMAIL }}'
-          config.save(cfg)
-          save_session(session)
-          print('Logged in, session saved')
-          "
-
-          timeout 15 drp ls || { echo "drp ls timed out or failed"; exit 1; }
-          drp logout
-          timeout 5 drp ls || true
-
-  # ── Publish drp (with tags + GitHub releases) ─────────────────────────────
+  # ── Publish drp-cli (no tags, no releases) ────────────────────────────────
 
   publish:
     needs: test
     runs-on: ubuntu-latest
     concurrency:
-      group: publish-main
+      group: publish-dev
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -176,57 +149,24 @@ jobs:
           current=$(cat VERSION | tr -d '[:space:]')
           IFS='.' read -r major minor patch <<< "$current"
           new_version="$major.$minor.$((patch + 1))"
-          # Skip if tag already exists (idempotent re-runs)
-          while git tag | grep -q "^v$new_version$"; do
-            patch=$((patch + 1))
-            new_version="$major.$minor.$patch"
-          done
           echo "$new_version" > VERSION
           echo "version=$new_version" >> "$GITHUB_OUTPUT"
 
-      - name: Commit, tag, and push
+      - name: Commit version bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add VERSION
           git diff --cached --quiet && exit 0
-          git commit -m "v${{ steps.bump.outputs.version }}"
-          git tag "v${{ steps.bump.outputs.version }}"
-          git pull --rebase origin main
-          git push --follow-tags --force-with-lease
+          git commit -m "bump: drp-cli v${{ steps.bump.outputs.version }}"
+          git pull --rebase origin dev
+          git push
 
-      - name: Collect commits since last release
+      - name: Build drp-cli
         run: |
-          prev_tag=$(git tag --sort=-v:refname | sed -n '2p')
-          if [ -z "$prev_tag" ]; then
-            log=$(git log --oneline --no-decorate HEAD)
-          else
-            log=$(git log --oneline --no-decorate "$prev_tag"..HEAD~1)
-          fi
-          {
-            echo "$log"
-            echo ""
-            echo "Install / upgrade:"
-            echo '```'
-            echo 'pipx install drp'
-            echo '# or upgrade:'
-            echo 'pipx upgrade drp'
-            echo '```'
-          } > /tmp/release_notes.txt
-
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.bump.outputs.version }}
-          name: v${{ steps.bump.outputs.version }}
-          body_path: /tmp/release_notes.txt
-
-      - name: Build and publish "drp" to PyPI
-        run: |
-          # Override package name from drp-cli → drp at build time
-          sed -i 's/^name = "drp-cli"/name = "drp"/' pyproject.toml
+          # Package name stays drp-cli (already in pyproject.toml)
           pip install build && python -m build
 
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_DRP_TOKEN }}
+          password: ${{ secrets.PYPI_API_TOKEN }}
