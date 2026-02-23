@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from functools import cache
 from html.parser import HTMLParser
@@ -13,6 +14,8 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+
+log = logging.getLogger(__name__)
 
 
 def index(request):
@@ -235,16 +238,42 @@ def ask(request):
             },
             timeout=15,
         )
-        resp.raise_for_status()
-        data = resp.json()
-    except requests.RequestException:
+    except requests.ConnectionError:
+        log.exception("Gemini connection error")
         return JsonResponse(
             {"error": "Could not reach the AI service."}, status=502,
+        )
+    except requests.Timeout:
+        log.warning("Gemini request timed out")
+        return JsonResponse(
+            {"error": "AI service timed out — try again."}, status=504,
+        )
+    except requests.RequestException:
+        log.exception("Gemini request failed")
+        return JsonResponse(
+            {"error": "Could not reach the AI service."}, status=502,
+        )
+
+    if resp.status_code != 200:
+        log.error(
+            "Gemini API %s: %s", resp.status_code, resp.text[:500],
+        )
+        return JsonResponse(
+            {"error": "AI service error — try again later."}, status=502,
+        )
+
+    try:
+        data = resp.json()
+    except ValueError:
+        log.error("Gemini returned non-JSON: %s", resp.text[:300])
+        return JsonResponse(
+            {"error": "AI service error — try again later."}, status=502,
         )
 
     try:
         text = data["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError):
+        log.warning("Gemini unexpected shape: %s", json.dumps(data)[:500])
         return JsonResponse(
             {"answer": "<p>I couldn't answer that — try rephrasing.</p>"},
         )

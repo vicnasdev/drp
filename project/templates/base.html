@@ -56,5 +56,115 @@
   </footer>
   <script src="{% static 'js/main.js' %}"></script>
   {% block scripts %}{% endblock %}
+
+  {% if gemini_enabled and user.is_authenticated %}
+  {# ── Help bot widget (global) ── #}
+  <div class="hb" id="helpbot">
+    <div class="hb-panel" id="hb-panel" role="dialog" aria-label="Help chat">
+      <div class="hb-head">
+        <span>ask about drp</span>
+        <span>
+          <button class="hb-clear" id="hb-clear" title="Clear history">clear</button>
+          <button class="hb-x" id="hb-close" title="Close">&times;</button>
+        </span>
+      </div>
+      <div class="hb-log" id="hb-log"></div>
+      <form class="hb-form" id="hb-form">
+        <input type="text" id="hb-q" placeholder="How do I upload a file?" autocomplete="off" maxlength="300">
+        <button type="submit">ask</button>
+      </form>
+    </div>
+    <button class="hb-fab" id="hb-fab" aria-label="Ask a question" aria-expanded="false">?</button>
+  </div>
+
+  <script>
+  (function () {
+    var KEY = 'drp_hb', MAX = 20;
+    var fab = document.getElementById('hb-fab');
+    var panel = document.getElementById('hb-panel');
+    var closeBtn = document.getElementById('hb-close');
+    var clearBtn = document.getElementById('hb-clear');
+    var form = document.getElementById('hb-form');
+    var input = document.getElementById('hb-q');
+    var log = document.getElementById('hb-log');
+
+    function hist() {
+      try { return JSON.parse(localStorage.getItem(KEY) || '[]'); }
+      catch (e) { return []; }
+    }
+    function save(h) {
+      try { localStorage.setItem(KEY, JSON.stringify(h.slice(-MAX))); }
+      catch (e) {}
+    }
+
+    function render() {
+      var h = hist();
+      log.innerHTML = '';
+      if (!h.length) {
+        log.innerHTML = '<p class="hb-empty">Ask anything about drp — commands, plans, expiry, etc.</p>';
+        clearBtn.style.display = 'none';
+        return;
+      }
+      clearBtn.style.display = '';
+      h.forEach(function (m) {
+        var q = document.createElement('div'); q.className = 'hb-q'; q.textContent = m.q; log.appendChild(q);
+        var a = document.createElement('div'); a.className = 'hb-a'; a.innerHTML = m.a; log.appendChild(a);
+      });
+      log.scrollTop = log.scrollHeight;
+    }
+
+    fab.onclick = function () {
+      var open = panel.classList.toggle('open');
+      fab.setAttribute('aria-expanded', open);
+      if (open) { render(); input.focus(); }
+    };
+    closeBtn.onclick = function () {
+      panel.classList.remove('open');
+      fab.setAttribute('aria-expanded', 'false');
+    };
+    clearBtn.onclick = function () {
+      try { localStorage.removeItem(KEY); } catch (e) {}
+      render();
+    };
+
+    form.onsubmit = function (e) {
+      e.preventDefault();
+      var q = input.value.trim(); if (!q) return;
+      input.value = ''; input.disabled = true;
+      var btn = form.querySelector('button[type=submit]'); btn.disabled = true;
+
+      var qd = document.createElement('div'); qd.className = 'hb-q'; qd.textContent = q; log.appendChild(qd);
+      var ld = document.createElement('div'); ld.className = 'hb-a hb-loading'; ld.textContent = 'thinking\u2026'; log.appendChild(ld);
+      log.scrollTop = log.scrollHeight;
+
+      fetch('/help/ask/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q })
+      })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        ld.remove();
+        var ad = document.createElement('div'); ad.className = 'hb-a';
+        if (res.ok && res.data.answer) {
+          ad.innerHTML = res.data.answer;
+          var h = hist(); h.push({ q: q, a: res.data.answer }); save(h);
+        } else {
+          ad.textContent = res.data.error || 'Something went wrong.';
+          ad.classList.add('hb-error');
+        }
+        log.appendChild(ad); log.scrollTop = log.scrollHeight;
+      })
+      .catch(function () {
+        ld.remove();
+        var ed = document.createElement('div'); ed.className = 'hb-a hb-error';
+        ed.textContent = 'Network error \u2014 try again.';
+        log.appendChild(ed);
+      })
+      .finally(function () { input.disabled = false; btn.disabled = false; input.focus(); });
+    };
+  })();
+  </script>
+  {% endif %}
 </body>
 </html>
