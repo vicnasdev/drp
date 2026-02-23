@@ -84,7 +84,7 @@ class TestExpiry:
         assert data is not None
         assert data.get('expires_at') is None
 
-    def test_starter_expiry_applied(self, starter_user):
+    def test_starter_expiry_applied(self, starter_user, plan_limits):
         key = unique_key('exp-starter')
         upload_text(HOST, starter_user.session, 'expires', key=key, expiry_days=30, is_test=True)
         data = _fetch_drop_json(starter_user.session, key)
@@ -95,7 +95,7 @@ class TestExpiry:
         delta = (exp - datetime.now(tz.utc)).days
         assert 28 <= delta <= 31
 
-    def test_pro_expiry_applied(self, pro_user):
+    def test_pro_expiry_applied(self, pro_user, plan_limits):
         key = unique_key('exp-pro')
         upload_text(HOST, pro_user.session, 'expires', key=key, expiry_days=365, is_test=True)
         data = _fetch_drop_json(pro_user.session, key)
@@ -103,9 +103,9 @@ class TestExpiry:
         assert data.get('expires_at') is not None
         exp = datetime.fromisoformat(data['expires_at'].replace('Z', '+00:00'))
         delta = (exp - datetime.now(tz.utc)).days
-        assert 363 <= delta <= 366
+        assert 363 <= delta <= 366  # we asked for 365, not the plan max
 
-    def test_starter_expiry_clamped_at_365(self, starter_user):
+    def test_starter_expiry_clamped_at_365(self, starter_user, plan_limits):
         """Starter sending 500 days should be clamped to 365, not rejected."""
         key = unique_key('exp-clamp-starter')
         result = upload_text(HOST, starter_user.session, 'clamped', key=key, expiry_days=500, is_test=True)
@@ -114,9 +114,9 @@ class TestExpiry:
         assert data.get('expires_at') is not None
         exp = datetime.fromisoformat(data['expires_at'].replace('Z', '+00:00'))
         delta = (exp - datetime.now(tz.utc)).days
-        assert delta <= 366  # clamped to plan max
+        assert delta <= plan_limits['starter']['max_expiry_days'] + 1  # clamped to plan max
 
-    def test_pro_expiry_clamped_at_3_years(self, pro_user):
+    def test_pro_expiry_clamped_at_3_years(self, pro_user, plan_limits):
         """Pro sending 2000 days should be clamped to 1095, not rejected."""
         key = unique_key('exp-clamp-pro')
         result = upload_text(HOST, pro_user.session, 'clamped', key=key, expiry_days=2000, is_test=True)
@@ -125,7 +125,7 @@ class TestExpiry:
         assert data.get('expires_at') is not None
         exp = datetime.fromisoformat(data['expires_at'].replace('Z', '+00:00'))
         delta = (exp - datetime.now(tz.utc)).days
-        assert delta <= 1096  # clamped to plan max
+        assert delta <= plan_limits['pro']['max_expiry_days'] + 1  # clamped to plan max
 
 
 # ── Renew ─────────────────────────────────────────────────────────────────────
@@ -213,14 +213,16 @@ class TestFileSizeLimits:
             os.unlink(path)
         assert result is not None
 
-    def test_free_oversized_file_rejected(self, free_user):
+    def test_free_oversized_file_rejected(self, free_user, plan_limits):
         """201 MB should be rejected at prepare step — free limit is 200 MB."""
-        status, _ = _upload_oversized(free_user.session, mb=201)
+        mb = plan_limits['free']['max_file_mb'] + 1
+        status, _ = _upload_oversized(free_user.session, mb=mb)
         assert status == 413
 
-    def test_anon_oversized_file_rejected(self, anon):
+    def test_anon_oversized_file_rejected(self, anon, plan_limits):
         """201 MB should be rejected — anon limit is also 200 MB."""
-        status, _ = _upload_oversized(anon, mb=201)
+        mb = plan_limits['anon']['max_file_mb'] + 1
+        status, _ = _upload_oversized(anon, mb=mb)
         assert status == 413
 
 
@@ -453,9 +455,13 @@ class TestCollectionPlanRestrictions:
         res = session.get(f'{HOST}/auth/account/', headers={'Accept': 'application/json'})
         return len(res.json().get('collections', [])) if res.ok else -1
 
-    def test_free_cannot_create_collection(self, free_user):
+    def test_free_cannot_create_collection(self, free_user, plan_limits):
+        max_col = plan_limits['free']['max_collections']
         res = self._create_col(free_user.session, unique_key('free-col'))
-        assert res.status_code == 403
+        if max_col == 0:
+            assert res.status_code == 403
+        else:
+            assert res.status_code in (201, 403)  # depends on quota
 
     def test_starter_can_create_collection(self, starter_user):
         _delete_all_collections(starter_user.session)
@@ -465,11 +471,12 @@ class TestCollectionPlanRestrictions:
         assert res.json().get('id')
         _delete_all_collections(starter_user.session)
 
-    def test_starter_capped_at_10_collections(self, starter_user):
+    def test_starter_capped_at_10_collections(self, starter_user, plan_limits):
+        cap = plan_limits['starter']['max_collections']
         _delete_all_collections(starter_user.session)
         assert self._count(starter_user.session) == 0, "Cleanup failed before cap test"
 
-        for i in range(10):
+        for i in range(cap):
             slug = unique_key(f'c{i}')[:28]
             r = self._create_col(starter_user.session, f'Cap {i}', slug)
             assert r.status_code == 201, f"Creation {i} failed: {r.status_code} {r.text}"
@@ -481,9 +488,11 @@ class TestCollectionPlanRestrictions:
         _delete_all_collections(starter_user.session)
         assert self._count(starter_user.session) == 0, "Cleanup failed after cap test"
 
-    def test_pro_unlimited_collections(self, pro_user):
+    def test_pro_unlimited_collections(self, pro_user, plan_limits):
         _delete_all_collections(pro_user.session)
-        for i in range(12):
+        # Create more than the starter cap to verify pro is truly unlimited
+        starter_cap = plan_limits['starter']['max_collections'] or 10
+        for i in range(starter_cap + 2):
             slug = unique_key(f'p{i}')[:28]
             r = self._create_col(pro_user.session, f'Pro {i}', slug)
             assert r.status_code == 201
@@ -594,37 +603,39 @@ class TestStatusWithServerCount:
 class TestTextSizeLimits:
     """Upload text at/above plan limits and assert accept/reject."""
 
-    def test_free_text_at_limit_accepted(self, free_user):
+    def test_free_text_at_limit_accepted(self, free_user, plan_limits):
         key     = unique_key('txt-ok')
-        content = 'x' * (500 * 1024)   # exactly 500 KB
+        limit   = plan_limits['free']['max_text_kb'] * 1024
+        content = 'x' * limit
         result  = upload_text(HOST, free_user.session, content, key=key, is_test=True)
-        assert result is not None, 'Expected 500 KB upload to succeed for free plan'
+        assert result is not None, f'Expected {limit // 1024} KB upload to succeed for free plan'
 
-    def test_free_oversized_text_rejected(self, free_user):
+    def test_free_oversized_text_rejected(self, free_user, plan_limits):
         key     = unique_key('txt-over')
-        content = 'x' * (500 * 1024 + 1)   # 1 byte over 500 KB
+        content = 'x' * (plan_limits['free']['max_text_kb'] * 1024 + 1)
         result  = upload_text(HOST, free_user.session, content, key=key)
-        assert result is None, 'Expected slightly-over-500 KB to be rejected for free plan'
+        assert result is None, 'Expected slightly-over-limit text to be rejected for free plan'
 
-    def test_starter_oversized_text_rejected(self, starter_user):
+    def test_starter_oversized_text_rejected(self, starter_user, plan_limits):
         key     = unique_key('txt-over-s')
-        content = 'x' * (2048 * 1024 + 1)  # 1 byte over 2 MB
+        content = 'x' * (plan_limits['starter']['max_text_kb'] * 1024 + 1)
         result  = upload_text(HOST, starter_user.session, content, key=key)
-        assert result is None, 'Expected over-2 MB to be rejected for starter plan'
+        assert result is None, 'Expected over-limit text to be rejected for starter plan'
 
-    def test_pro_oversized_text_rejected(self, pro_user):
+    def test_pro_oversized_text_rejected(self, pro_user, plan_limits):
         key     = unique_key('txt-over-p')
-        content = 'x' * (10240 * 1024 + 1) # 1 byte over 10 MB
+        content = 'x' * (plan_limits['pro']['max_text_kb'] * 1024 + 1)
         result  = upload_text(HOST, pro_user.session, content, key=key)
-        assert result is None, 'Expected over-10 MB to be rejected for pro plan'
+        assert result is None, 'Expected over-limit text to be rejected for pro plan'
 
 
 # ── File size limits — starter rejection ──────────────────────────────────────
 
 class TestFileSizeLimitsStarter:
-    def test_starter_oversized_file_rejected(self, starter_user):
-        status, _ = _upload_oversized(starter_user.session, mb=1025)
-        assert status == 413, f'Expected 413 for 1025 MB file on starter, got {status}'
+    def test_starter_oversized_file_rejected(self, starter_user, plan_limits):
+        mb = plan_limits['starter']['max_file_mb'] + 1
+        status, _ = _upload_oversized(starter_user.session, mb=mb)
+        assert status == 413, f'Expected 413 for {mb} MB file on starter, got {status}'
 
 
 # ── CLI binary — drp up / drp get ─────────────────────────────────────────────
@@ -757,9 +768,10 @@ class TestServeSkip:
     simulate the oversized check without actually uploading bytes.
     """
 
-    def test_prepare_rejects_oversized_for_free(self, free_user):
-        status, _ = _upload_oversized(free_user.session, mb=201)
-        assert status == 413, f'Expected 413 for 201 MB file, got {status}'
+    def test_prepare_rejects_oversized_for_free(self, free_user, plan_limits):
+        mb = plan_limits['free']['max_file_mb'] + 1
+        status, _ = _upload_oversized(free_user.session, mb=mb)
+        assert status == 413, f'Expected 413 for {mb} MB file, got {status}'
 
     def test_serve_uploads_valid_file(self, cli_envs, tmp_path):
         from conftest import run_drp

@@ -287,3 +287,18 @@ def _delete_all_collections(session):
                 r = api_post(session, f'{HOST}/collections/{col_id}/delete/')
                 if not r.ok:
                     raise RuntimeError(f'Delete collection {col_id} failed: {r.status_code}')
+
+
+@pytest.fixture(scope='session')
+def plan_limits():
+    """
+    Fetch live plan limits straight from the DB via Django shell.
+    Tests use this instead of hardcoding values so they stay correct
+    when limits are changed in the admin.
+    """
+    output = _manage("""
+import json
+from core.models import PlanLimit
+print(json.dumps({row.plan: row.as_dict() for row in PlanLimit.objects.all()}))
+""")
+    return json.loads(output)
