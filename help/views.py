@@ -299,7 +299,7 @@ def ask(request):
                 ],
                 "max_tokens": 300,
                 "temperature": 0.3,
-                "num_ctx": 2048,
+                "options": {"num_ctx": 2048},
             },
             timeout=120,
         )
