@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}explore — drp{% endblock %}
+
+{% block content %}
+<div class="drop-page" style="max-width:700px;margin:2rem auto">
+  <h2 style="margin-bottom:1rem">explore public drops</h2>
+
+  <form method="get" action="/explore/" style="display:flex;gap:.5rem;margin-bottom:1.5rem;flex-wrap:wrap">
+    <input name="q" type="text" value="{{ q }}" placeholder="search drops…"
+           style="flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:.9rem;padding:.5rem .7rem;outline:none">
+    <input name="tag" type="text" value="{{ tag }}" placeholder="tag…"
+           style="width:120px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:.9rem;padding:.5rem .7rem;outline:none">
+    <button type="submit" class="btn">search</button>
+  </form>
+
+  {% if drops %}
+  <div class="drops-list">
+    {% for drop in drops %}
+    <div style="padding:.6rem 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+        <a href="/{% if drop.ns == 'f' %}f/{% endif %}{{ drop.key }}/"
+           style="color:var(--text);text-decoration:none;font-weight:500">
+          {% if drop.kind == 'text' %}📋{% else %}📎{% endif %}
+          /{% if drop.ns == 'f' %}f/{% endif %}{{ drop.key }}/
+        </a>
+        <span class="muted" style="font-size:.8rem">
+          {% if drop.owner %}@{{ drop.owner.username }}{% else %}anon{% endif %}
+        </span>
+      </div>
+      {% if drop.tags %}
+      <div style="margin-top:.25rem">
+        {% for t in drop.tags.split:',' %}
+          <span style="font-size:.75rem;background:var(--surface);padding:.1rem .4rem;border-radius:4px;margin-right:.3rem">{{ t|striptags }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if drop.kind == 'text' and drop.content %}
+      <pre style="font-size:.8rem;color:var(--muted);margin-top:.3rem;max-height:3rem;overflow:hidden">{{ drop.content|truncatechars:200 }}</pre>
+      {% elif drop.filename %}
+      <span class="muted" style="font-size:.82rem">{{ drop.filename }} ({{ drop.filesize|filesizeformat }})</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No public drops found{% if q or tag %} matching your search{% endif %}.</p>
+  {% endif %}
+</div>
+{% endblock %}

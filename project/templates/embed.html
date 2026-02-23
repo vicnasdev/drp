@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>drp embed — {{ drop.key }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      background: #1a1a1a; color: #e8e8e8;
+      padding: .5rem; overflow: auto;
+    }
+    pre { white-space: pre-wrap; word-wrap: break-word; font-size: .85rem; line-height: 1.5; }
+    code { display: block; }
+    .embed-footer {
+      margin-top: .5rem; padding-top: .3rem;
+      border-top: 1px solid #333; font-size: .7rem; color: #666;
+    }
+    .embed-footer a { color: #888; text-decoration: none; }
+    .embed-footer a:hover { color: #aaa; }
+    img { max-width: 100%; height: auto; }
+    .file-info { font-size: .85rem; color: #aaa; }
+    .file-info a { color: #7eb8da; text-decoration: none; }
+    .render-md { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: .9rem; line-height: 1.6; }
+    .render-md h1, .render-md h2, .render-md h3 { margin: .8rem 0 .4rem; }
+    .render-md p { margin-bottom: .5rem; }
+    .render-md pre { background: #111; padding: .5rem; border-radius: 4px; margin-bottom: .5rem; }
+    .render-md code { font-family: 'SF Mono', monospace; font-size: .82rem; }
+    .render-md a { color: #7eb8da; }
+  </style>
+</head>
+<body>
+  {% if drop.kind == 'text' %}
+    <pre><code id="code">{{ drop.content }}</code></pre>
+  {% else %}
+    {% with ext=drop.filename|lower %}
+    {% if '.png' in ext or '.jpg' in ext or '.jpeg' in ext or '.gif' in ext or '.webp' in ext or '.svg' in ext %}
+      <img src="/f/{{ drop.key }}/raw/" alt="{{ drop.filename }}">
+    {% else %}
+      <div class="file-info">
+        <span>📎 {{ drop.filename }}</span>
+        <span>({{ drop.filesize|filesizeformat }})</span>
+        <a href="/f/{{ drop.key }}/download/">download</a>
+      </div>
+    {% endif %}
+    {% endwith %}
+  {% endif %}
+
+  <div class="embed-footer">
+    <a href="/{% if ns == 'f' %}f/{% endif %}{{ drop.key }}/" target="_blank">open on drp</a>
+  </div>
+
+  {% if drop.kind == 'text' %}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const block = document.getElementById('code');
+      if (block && typeof hljs !== 'undefined') hljs.highlightElement(block);
+    });
+  </script>
+  {% endif %}
+</body>
+</html>

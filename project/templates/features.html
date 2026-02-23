@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% block title %}drp — feature requests{% endblock %}
+
+{% block content %}
+<div style="max-width:700px;margin:0 auto;padding:2rem 1rem">
+  <h1 style="font-size:1.3rem;margin-bottom:.3rem">feature requests</h1>
+  <p class="muted" style="font-size:.85rem;margin-bottom:1.5rem">Vote on what gets built next. Paid plans get 3× vote weight.</p>
+
+  {% if can_vote %}
+  <details style="margin-bottom:1.5rem;background:var(--surface);border-radius:var(--radius);padding:1rem">
+    <summary style="cursor:pointer;font-weight:600;font-size:.9rem">+ propose a feature</summary>
+    <form id="proposalForm" style="margin-top:.8rem">
+      {% csrf_token %}
+      <input type="text" name="title" placeholder="Feature title" maxlength="200"
+             style="width:100%;padding:.5rem;font-size:.9rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);margin-bottom:.5rem" required>
+      <textarea name="description" placeholder="Description (optional)" rows="3"
+                style="width:100%;padding:.5rem;font-size:.85rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);resize:vertical;margin-bottom:.5rem"></textarea>
+      <button type="submit" class="btn" style="font-size:.85rem;padding:.4rem 1rem">submit</button>
+      <span id="proposalMsg" class="muted" style="margin-left:.5rem;font-size:.82rem"></span>
+    </form>
+  </details>
+  {% else %}
+  <p class="muted" style="font-size:.85rem;margin-bottom:1.5rem">
+    <a href="/auth/login/">log in</a> to submit proposals and vote.
+  </p>
+  {% endif %}
+
+  <div class="drop-list">
+    {% for proposal in proposals %}
+    <div class="drop-item" style="align-items:flex-start;gap:.8rem;padding:.8rem">
+      <div style="text-align:center;min-width:3rem">
+        {% if can_vote %}
+        <button class="vote-btn{% if proposal.id in user_votes %} voted{% endif %}"
+                data-id="{{ proposal.id }}"
+                style="background:none;border:none;cursor:pointer;font-size:1.2rem;padding:0;color:{% if proposal.id in user_votes %}var(--accent){% else %}var(--muted){% endif %}">
+          ▲
+        </button>
+        {% else %}
+        <span style="font-size:1.2rem;color:var(--muted)">▲</span>
+        {% endif %}
+        <div class="vote-score" data-id="{{ proposal.id }}" style="font-size:.9rem;font-weight:600;color:var(--text)">{{ proposal.score }}</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+          {% if proposal.staff_pick %}<span style="font-size:.75rem;background:var(--accent);color:#fff;padding:.1rem .4rem;border-radius:3px">staff pick</span>{% endif %}
+          <strong style="font-size:.9rem">{{ proposal.title }}</strong>
+        </div>
+        {% if proposal.description %}
+        <p class="muted" style="font-size:.82rem;margin-top:.3rem;white-space:pre-wrap">{{ proposal.description|truncatechars:300 }}</p>
+        {% endif %}
+        <span class="muted" style="font-size:.75rem">
+          {% if proposal.proposed_by %}by @{{ proposal.proposed_by.username }}{% endif %}
+        </span>
+      </div>
+    </div>
+    {% empty %}
+    <p class="muted" style="padding:1rem;font-size:.9rem">No proposals yet. Be the first!</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.vote-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.id;
+    const res = await fetch(`/features/${id}/vote/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': '{{ csrf_token }}'},
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const scoreEl = document.querySelector(`.vote-score[data-id="${id}"]`);
+    if (scoreEl) scoreEl.textContent = data.score;
+    if (data.action === 'voted') {
+      btn.classList.add('voted');
+      btn.style.color = 'var(--accent)';
+    } else {
+      btn.classList.remove('voted');
+      btn.style.color = 'var(--muted)';
+    }
+  });
+});
+
+const form = document.getElementById('proposalForm');
+if (form) {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = form.querySelector('[name=title]').value.trim();
+    const description = form.querySelector('[name=description]').value.trim();
+    const msg = document.getElementById('proposalMsg');
+    if (!title) return;
+    const res = await fetch('/features/submit/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': '{{ csrf_token }}',
+      },
+      body: JSON.stringify({title, description}),
+    });
+    if (res.ok) {
+      msg.textContent = '✓ submitted — reload to see it';
+      form.reset();
+    } else {
+      const data = await res.json();
+      msg.textContent = data.error || 'error';
+    }
+  });
+}
+</script>
+{% endblock %}

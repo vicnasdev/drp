@@ -26,6 +26,7 @@ class TestPlanLimitsSchema(TestCase):
         "max_expiry_days", "clipboard_idle_hours", "clipboard_max_lifetime_days",
         "anon_file_lifetime_days",
         "storage_gb", "renewals", "password_protection", "max_collections",
+        "max_groups", "webhooks", "api_keys", "scheduled_drops",
     ]
 
     def setUp(self):

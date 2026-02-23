@@ -34,6 +34,17 @@ def _parse_expires(value: str) -> int | None:
         return None
 
 
+def _fetch_template(host, session, slug):
+    """Fetch a drop template by slug. Returns dict or None."""
+    try:
+        res = session.get(f'{host}/auth/templates/{slug}/', timeout=10)
+        if res.ok:
+            return res.json()
+    except Exception:
+        pass
+    return None
+
+
 def _copy_to_clipboard(text: str) -> bool:
     if not sys.stdout.isatty():
         return False
@@ -64,28 +75,94 @@ def cmd_up(args):
     password   = getattr(args, 'password', None) or ''
     force_file = getattr(args, 'file', False)
     force_clip = getattr(args, 'clip', False)
+    schedule   = getattr(args, 'schedule', None)
+    webhook    = getattr(args, 'webhook', None)
+    notify     = getattr(args, 'notify', None)
+    alias      = getattr(args, 'alias', None)
+    template   = getattr(args, 'template', None)
+    is_public  = getattr(args, 'public', False)
+    tags       = getattr(args, 'tag', None)
 
     if target is None or target == '-':
         if sys.stdin.isatty():
-            print('  ✗ No input. Provide text, a file path, a URL, or pipe via stdin.')
-            sys.exit(1)
-        target = sys.stdin.read()
+            # No stdin and no target — check if template provides content
+            if template:
+                tpl = _fetch_template(host, session, template)
+                if not tpl:
+                    print(f'  ✗ Template "{template}" not found.')
+                    sys.exit(1)
+                if tpl.get("content"):
+                    target = tpl["content"]
+                if tpl.get("burn") and not burn:
+                    burn = True
+                if tpl.get("expiry_days") and not getattr(args, 'expires', None):
+                    args.expires = f'{tpl["expiry_days"]}d'
+                if tpl.get("password") and not password:
+                    password = '__prompt__'
+                template = None  # already applied
+                if target is None:
+                    print('  ✗ No input. Provide text, a file path, a URL, or pipe via stdin.')
+                    sys.exit(1)
+            else:
+                print('  ✗ No input. Provide text, a file path, a URL, or pipe via stdin.')
+                sys.exit(1)
+        else:
+            target = sys.stdin.read()
 
-    elif not force_clip and (target.startswith('http://') or target.startswith('https://')):
-        _upload_url(host, session, target, key, cfg, args, password)
+    # Apply template defaults (overridden by explicit flags)
+    if template:
+        tpl = _fetch_template(host, session, template)
+        if tpl:
+            if tpl.get("burn") and not burn:
+                burn = True
+            if tpl.get("expiry_days") and not getattr(args, 'expires', None):
+                args.expires = f'{tpl["expiry_days"]}d'
+            if tpl.get("password") and not password:
+                password = '__prompt__'
+        else:
+            print(f'  ✗ Template "{template}" not found.')
+            sys.exit(1)
+
+    if not force_clip and (target.startswith('http://') or target.startswith('https://')):
+        _upload_url(host, session, target, key, cfg, args, password,
+                    schedule=schedule, webhook=webhook, notify=notify,
+                    is_public=is_public, tags=tags)
         return
 
     elif not force_clip and (force_file or os.path.isfile(target)):
-        _upload_file(host, session, target, key, cfg, args, password)
+        _upload_file(host, session, target, key, cfg, args, password,
+                     schedule=schedule, webhook=webhook, notify=notify,
+                     is_public=is_public, tags=tags)
         return
 
-    _upload_text(host, session, target, key, cfg, args, burn=burn, password=password)
+    _upload_text(host, session, target, key, cfg, args, burn=burn, password=password,
+                 schedule=schedule, webhook=webhook, notify=notify,
+                 is_public=is_public, tags=tags)
+
+    # Create alias after upload if requested
+    if alias and key:
+        from cli.api.auth import get_csrf
+        csrf = get_csrf(host, session)
+        import json
+        res = session.post(
+            f'{host}/auth/aliases/create/',
+            json={'alias': alias, 'key': key, 'ns': 'c'},
+            headers={'X-CSRFToken': csrf, 'Referer': f'{host}/'},
+            timeout=15,
+        )
+        if res.ok:
+            from cli.format import dim
+            print(f'  {dim("alias created:")} @{cfg.get("username", "?")}/{alias}')
 
 
-def _upload_url(host, session, url, key, cfg, args, password=''):
+def _upload_url(host, session, url, key, cfg, args, password='',
+                schedule=None, webhook=None, notify=None,
+                is_public=False, tags=None):
     from cli.progress import ProgressBar
     from cli.format import dim
     import mimetypes, tempfile
+
+    _test_mode = os.environ.get('DRP_TEST_MODE') == '1'
 
     print(f'  {dim("fetching")} {url}')
 
@@ -119,7 +196,10 @@ def _upload_url(host, session, url, key, cfg, args, password=''):
 
     try:
         result_key = api.upload_file(host, session, tmp_path, key=key,
-                                     expiry_days=expiry_days, password=password or None)
+                                     expiry_days=expiry_days, password=password or None,
+                                     is_test=_test_mode, schedule=schedule,
+                                     webhook_url=webhook, notify=notify,
+                                     is_public=is_public, tags=tags)
     finally:
         try:
             os.unlink(tmp_path)
@@ -136,14 +216,20 @@ def _upload_url(host, session, url, key, cfg, args, password=''):
     config.record_drop(result_key, 'file', ns='f', filename=filename, host=host)
 
 
-def _upload_file(host, session, path, key, cfg, args, password=''):
+def _upload_file(host, session, path, key, cfg, args, password='',
+                 schedule=None, webhook=None, notify=None,
+                 is_public=False, tags=None):
     if not key:
         key = api.slug(os.path.basename(path))
 
     expiry_days = _parse_expires(getattr(args, 'expires', None))
+    _test_mode = os.environ.get('DRP_TEST_MODE') == '1'
 
     result_key = api.upload_file(host, session, path, key=key,
-                                 expiry_days=expiry_days, password=password or None)
+                                 expiry_days=expiry_days, password=password or None,
+                                 is_test=_test_mode, schedule=schedule,
+                                 webhook_url=webhook, notify=notify,
+                                 is_public=is_public, tags=tags)
     if not result_key:
         report_outcome('up', 'upload_file returned None (prepare/confirm flow failed)')
         sys.exit(1)
@@ -155,14 +241,23 @@ def _upload_file(host, session, path, key, cfg, args, password=''):
                        filename=os.path.basename(path), host=host)
 
 
-def _upload_text(host, session, text, key, cfg, args, burn=False, password=''):
+def _upload_text(host, session, text, key, cfg, args, burn=False, password='',
+                 schedule=None, webhook=None, notify=None,
+                 is_public=False, tags=None):
     expiry_days = _parse_expires(getattr(args, 'expires', None))
+    _test_mode = os.environ.get('DRP_TEST_MODE') == '1'
 
     result_key = api.upload_text(
         host, session, text, key=key,
         expiry_days=expiry_days,
         burn=burn,
         password=password or None,
+        is_test=_test_mode,
+        schedule=schedule,
+        webhook_url=webhook,
+        notify=notify,
+        is_public=is_public,
+        tags=tags,
     )
     if not result_key:
         report_outcome('up', 'upload_text returned None for clipboard drop')

@@ -3,7 +3,7 @@ GITHUB_REPO := vicnasdev/drp
 -include .env
 export
 
-.PHONY: help dev test migrate cleanup install set-domain \
+.PHONY: help dev test migrate cleanup install \
         issues issues-full issue close reopen issue-new
 
 help: ## Show available commands
@@ -27,43 +27,6 @@ cleanup: ## Delete expired drops (DB + B2)
 
 install: ## Install drp CLI locally (editable)
 	pip install -e .
-
-# ── Domain migration ──────────────────────────────────────────────────────────
-
-set-domain: ## Swap default host: make set-domain NEW=drp.fyi
-	@test -n "$(NEW)" || (echo "  ✗ Usage: make set-domain NEW=drp.fyi" && exit 1)
-	old=$$(grep -oP "(?<=DEFAULT_HOST = 'https://).*(?=')" cli/__init__.py); \
-	sed -i "s|https://$$old|https://$(NEW)|g" cli/__init__.py pyproject.toml
-	link=$$(grep -oP '(?<=# \[drp\]\().*(?=\) )' README.md); \
-	sed -i "s|$${link}|https://$(NEW)|g" README.md
-	@echo "  ✓ Code and README updated."
-	@{ \
-	  if [ -z "$$GITHUB_ISSUES_TOKEN" ]; then \
-	    echo "  ✗ GITHUB_ISSUES_TOKEN not set — skipping webhook"; \
-	  else \
-	    payload_url="https://$(NEW)/api/github-webhook/"; \
-	    hook_id=$$(curl -s \
-	      -H "Authorization: token $$GITHUB_ISSUES_TOKEN" \
-	      -H "Accept: application/vnd.github+json" \
-	      "https://api.github.com/repos/$$GITHUB_REPO/hooks" \
-	      | python3 -c "import sys,json; h=json.load(sys.stdin); print(h[0]['id'] if h else '')"); \
-	    if [ -n "$$hook_id" ]; then \
-	      curl -s -X PATCH \
-	        -H "Authorization: token $$GITHUB_ISSUES_TOKEN" \
-	        -H "Accept: application/vnd.github+json" \
-	        "https://api.github.com/repos/$$GITHUB_REPO/hooks/$$hook_id" \
-	        -d "{\"config\":{\"url\":\"$$payload_url\",\"content_type\":\"json\"},\"active\":true}" \
-	        > /dev/null && echo "  ✓ GitHub webhook updated → $$payload_url"; \
-	    else \
-	      curl -s -X POST \
-	        -H "Authorization: token $$GITHUB_ISSUES_TOKEN" \
-	        -H "Accept: application/vnd.github+json" \
-	        "https://api.github.com/repos/$$GITHUB_REPO/hooks" \
-	        -d "{\"name\":\"web\",\"active\":true,\"events\":[\"issues\"],\"config\":{\"url\":\"$$payload_url\",\"content_type\":\"json\"}}" \
-	        > /dev/null && echo "  ✓ GitHub webhook created → $$payload_url"; \
-	    fi; \
-	  fi; \
-	}
 
 # ── GitHub Issues ─────────────────────────────────────────────────────────────
 # Requires GITHUB_ISSUES_TOKEN in .env or environment.

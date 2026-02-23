@@ -15,10 +15,10 @@ from cli.commands.load import cmd_load
 from cli.commands.status import cmd_status, cmd_ping
 from cli.commands.edit import cmd_edit
 from cli.commands.cp import cmd_cp
-from cli.commands.diff import cmd_diff
 from cli.commands.serve import cmd_serve
 from cli.commands.shell import cmd_shell
 from cli.commands.collection import cmd_collection
+from cli.commands.token import cmd_token
 
 COMMANDS = [
     ('setup',      cmd_setup,       'Configure host and log in'),
@@ -36,9 +36,9 @@ COMMANDS = [
     ('renew',      cmd_renew,       'Renew expiry (paid accounts only)'),
     ('ls',         cmd_ls,          'List your drops'),
     ('load',       cmd_load,        'Import a shared export as saved drops (requires login)'),
-    ('diff',       cmd_diff,        'Diff two clipboard drops'),
     ('serve',      cmd_serve,       'Upload a directory or file list, print URL table'),
     ('collection', cmd_collection,  'Manage drop collections (paid accounts)'),
+    ('token',      cmd_token,       'Manage API tokens (paid accounts)'),
     ('shell',      cmd_shell,       'Interactive shell with ls, rm, cp, cd and more'),
 ]
 
@@ -48,8 +48,8 @@ COMMANDS = [
 
 COMMAND_GROUPS = [
     ('upload / download',  ['up', 'get', 'edit', 'serve']),
-    ('manage',             ['rm', 'mv', 'cp', 'renew', 'diff']),
-    ('account',            ['save', 'ls', 'load', 'collection']),
+    ('manage',             ['rm', 'mv', 'cp', 'renew']),
+    ('account',            ['save', 'ls', 'load', 'collection', 'token']),
     ('info',               ['status', 'ping']),
     ('setup',              ['setup', 'login', 'logout']),
     ('shell',              ['shell']),
@@ -69,7 +69,6 @@ EXAMPLES = [
     ('drp get',     '-f q3 -o my-report.pdf',         'download file with custom name'),
     ('drp get',     'secret --password mypass',       'supply password for protected drop'),
     ('drp edit',    'notes',                          'open in $EDITOR, re-upload on save'),
-    ('drp diff',    'v1 v2',                          'unified diff of two clipboard drops'),
     ('drp cp',      'notes notes-backup',             'duplicate clipboard drop'),
     ('drp cp',      '-f q3 q3-backup',               'duplicate file drop (server-side)'),
     ('drp serve',   './dist/',                        'upload all files in dir, print URLs'),
@@ -88,8 +87,8 @@ EXAMPLES = [
     ('drp collection', 'ls',                          'list collections'),
     ('drp collection', 'new "my notes"',              'create a collection'),
     ('drp collection', 'add my-notes key',            'add drop to collection'),
-    ('drp shell',   '',                               'interactive shell (ls, rm, cd, …)'),
-]
+    ('drp shell',   '',                               'interactive shell (ls, rm, cd, …)'),    ('drp token',   'create --expires 90d',            'create an API key'),
+    ('',            'DRP_API_KEY=xxx drp up file.py',  'upload with API key (no login)'),]
 
 
 def _build_epilog():
@@ -186,6 +185,20 @@ def _configure_subparsers(sub):
                       help='Delete after first view (all plans)')
     p_up.add_argument('--password', '-p', default=None, metavar='PASSWORD',
                       help='Password-protect this drop (paid accounts only)')
+    p_up.add_argument('--schedule', default=None, metavar='DURATION',
+                      help='Schedule drop visibility: 2h, 30m, 1d (paid)')
+    p_up.add_argument('--webhook', default=None, metavar='URL',
+                      help='POST to URL on access (paid)')
+    p_up.add_argument('--notify', default=None, metavar='DURATION',
+                      help='Email before expiry: 7d, 24h (paid)')
+    p_up.add_argument('--template', default=None, metavar='SLUG',
+                      help='Use a drop template')
+    p_up.add_argument('--alias', default=None, metavar='NAME',
+                      help='Create alias after upload: @handle/alias → drop')
+    p_up.add_argument('--public', action='store_true', default=False,
+                      help='Make drop visible in public feed')
+    p_up.add_argument('--tag', default=None, metavar='TAGS',
+                      help='Comma-separated tags for public discovery')
 
     p_get = sub._name_parser_map['get']
     p_get.add_argument('-f', '--file', action='store_true')
@@ -244,10 +257,6 @@ def _configure_subparsers(sub):
     p_load = sub._name_parser_map['load']
     p_load.add_argument('file')
 
-    p_diff = sub._name_parser_map['diff']
-    _attach(p_diff.add_argument('key1', help='First clipboard key'), 'clip_key')
-    _attach(p_diff.add_argument('key2', help='Second clipboard key'), 'clip_key')
-
     p_serve = sub._name_parser_map['serve']
     p_serve.add_argument('targets', nargs='+',
                          help='Files, directories, or glob patterns')
@@ -270,6 +279,18 @@ def _configure_subparsers(sub):
     p_col_rm.add_argument('-f', '--file', action='store_true')
     p_col_open = col_sub.add_parser('open', help='Print collection URL')
     _attach(p_col_open.add_argument('slug'), 'collection_slug')
+
+    # token subcommand
+    p_token = sub._name_parser_map['token']
+    tok_sub = p_token.add_subparsers(dest='token_action')
+    p_tok_create = tok_sub.add_parser('create', help='Create an API token')
+    p_tok_create.add_argument('--expires', '-e', default=None, metavar='DURATION',
+                              help='90d, 24h, 365d')
+    p_tok_create.add_argument('--label', '-l', default=None,
+                              help='Label for identification')
+    tok_sub.add_parser('list', help='List API tokens')
+    p_tok_revoke = tok_sub.add_parser('revoke', help='Revoke an API token')
+    p_tok_revoke.add_argument('token_id', type=int, help='Token ID (from drp token list)')
 
 
 _HANDLERS = {name: handler for name, handler, _ in COMMANDS}

@@ -13,6 +13,7 @@ Password protection:
 """
 
 import secrets
+import threading
 from datetime import timedelta
 from functools import cache
 
@@ -23,7 +24,7 @@ from django.shortcuts import render, redirect
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from core.views.b2 import object_exists, object_size
+from core.views.b2 import object_exists, object_size, object_head
 from core.views.b2 import object_key as b2_object_key
 from core.models import Drop, Plan, SavedDrop
 from .helpers import (
@@ -36,6 +37,63 @@ ANON_COOKIE = "drp_anon"
 
 # Session key prefix for unlocked password-protected drops
 _PW_SESSION_PREFIX = "drp_pw_ok:"
+
+
+def _parse_schedule(value: str):
+    """Parse '2h', '30m', '1d' into a datetime offset from now."""
+    if not value:
+        return None
+    value = value.strip().lower()
+    try:
+        if value.endswith("h"):
+            return timezone.now() + timedelta(hours=int(value[:-1]))
+        if value.endswith("m"):
+            return timezone.now() + timedelta(minutes=int(value[:-1]))
+        if value.endswith("d"):
+            return timezone.now() + timedelta(days=int(value[:-1]))
+        return timezone.now() + timedelta(hours=int(value))
+    except (ValueError, OverflowError):
+        return None
+
+
+def _parse_notify(value: str):
+    """Parse '7d', '24h' into seconds before expiry."""
+    if not value:
+        return None
+    value = value.strip().lower()
+    try:
+        if value.endswith("d"):
+            return int(value[:-1]) * 86400
+        if value.endswith("h"):
+            return int(value[:-1]) * 3600
+        return int(value) * 86400
+    except (ValueError, OverflowError):
+        return None
+
+
+def _fire_webhook(drop):
+    """POST to the drop's webhook_url in a background thread. Best-effort."""
+    if not drop.webhook_url:
+        return
+    import requests as http_requests
+
+    def _post():
+        try:
+            http_requests.post(
+                drop.webhook_url,
+                json={
+                    "event": "drop.accessed",
+                    "key": drop.key,
+                    "ns": drop.ns,
+                    "kind": drop.kind,
+                    "view_count": drop.view_count,
+                },
+                timeout=10,
+            )
+        except Exception:
+            pass
+
+    threading.Thread(target=_post, daemon=True).start()
 
 
 def _drop_pw_session_key(ns: str, key: str) -> str:
@@ -99,12 +157,65 @@ def home(request):
             .prefetch_related("memberships")
             .order_by("-created_at")[:50]
         )
+
+    # Public feed
+    public_drops = (
+        Drop.objects
+        .filter(is_public=True, burn=False)
+        .exclude(password_hash__gt="")
+        .select_related("owner")
+        .order_by("-created_at")[:20]
+    )
+
     return render(request, "home.html", {
         "server_drops": server_drops,
         "saved_drops": saved_drops,
         "collections": collections,
         "claimed": claimed,
+        "public_drops": public_drops,
     })
+
+
+# ── Public search ─────────────────────────────────────────────────────────────
+
+def public_feed(request):
+    """GET /explore/?q=search&tag=python — public drop search/feed."""
+    from django.db.models import Q
+
+    q   = request.GET.get("q", "").strip()
+    tag = request.GET.get("tag", "").strip().lower()
+
+    qs = (
+        Drop.objects
+        .filter(is_public=True, burn=False)
+        .exclude(password_hash__gt="")
+        .select_related("owner")
+    )
+
+    if q:
+        qs = qs.filter(Q(key__icontains=q) | Q(content__icontains=q) | Q(filename__icontains=q))
+    if tag:
+        qs = qs.filter(tags__icontains=tag)
+
+    drops = qs.order_by("-created_at")[:50]
+
+    if "application/json" in request.headers.get("Accept", ""):
+        return JsonResponse({
+            "drops": [
+                {
+                    "key": d.key,
+                    "ns": d.ns,
+                    "kind": d.kind,
+                    "owner": d.owner.username if d.owner else None,
+                    "tags": d.tags,
+                    "created_at": d.created_at.isoformat(),
+                    "url": f"/{'f/' if d.ns == 'f' else ''}{d.key}/",
+                }
+                for d in drops
+            ]
+        })
+
+    return render(request, "explore.html", {"drops": drops, "q": q, "tag": tag})
 
 
 # ── Check key ─────────────────────────────────────────────────────────────────
@@ -274,6 +385,11 @@ def _save_text(request, ns, key, existing, paid, anon_token):
 
     burn    = request.POST.get("burn") in ("1", "true", "True")
     is_test = request.POST.get("is_test") in ("1", "true", "True")
+    webhook_url = request.POST.get("webhook_url", "").strip()
+    schedule    = request.POST.get("schedule", "").strip()
+    notify      = request.POST.get("notify", "").strip()
+    is_public   = request.POST.get("is_public") in ("1", "true", "True")
+    tags        = request.POST.get("tags", "").strip()
 
     if existing:
         existing.content = text
@@ -283,6 +399,11 @@ def _save_text(request, ns, key, existing, paid, anon_token):
     else:
         expires_at, locked_until = _expiry_and_lock(request, paid)
         owner = request.user if request.user.is_authenticated else None
+
+        visible_from = _parse_schedule(schedule) if paid and schedule else None
+        wh = webhook_url if paid and webhook_url else ""
+        notify_secs = _parse_notify(notify) if paid and notify else None
+
         drop = Drop.objects.create(
             ns=ns, key=key, kind=Drop.TEXT, content=text,
             owner=owner,
@@ -293,6 +414,11 @@ def _save_text(request, ns, key, existing, paid, anon_token):
             anon_token=anon_token,
             burn=burn,
             is_test=is_test,
+            visible_from=visible_from,
+            webhook_url=wh,
+            notify_before_secs=notify_secs,
+            is_public=is_public if request.user.is_authenticated else False,
+            tags=tags if request.user.is_authenticated else "",
         )
 
     # Set password if provided and caller is owner on paid plan
@@ -388,17 +514,23 @@ def upload_confirm(request):
     burn         = bool(data.get("burn", False))
     password     = (data.get("password") or "").strip()
     is_test      = bool(data.get("is_test", False))
+    webhook_url  = (data.get("webhook_url") or "").strip()
+    schedule     = (data.get("schedule") or "").strip()
+    notify       = (data.get("notify") or "").strip()
+    is_public    = bool(data.get("is_public", False))
+    tags         = (data.get("tags") or "").strip()
 
     if not key or ns not in (Drop.NS_CLIPBOARD, Drop.NS_FILE):
         return JsonResponse({"error": "key and valid ns required."}, status=400)
 
-    if not object_exists(ns, key):
+    head = object_head(ns, key)
+    if head is None:
         return JsonResponse(
             {"error": "File not found in storage. Upload may have failed or expired."},
             status=404,
         )
 
-    actual_size = object_size(ns, key)
+    actual_size = head["size"]
 
     if not storage_ok(request.user, actual_size):
         delete_from_b2(ns, key)
@@ -444,7 +576,10 @@ def upload_confirm(request):
         elif not request.user.is_authenticated:
             locked_until = timezone.now() + timedelta(hours=24)
 
-        
+        visible_from = _parse_schedule(schedule) if paid and schedule else None
+        wh = webhook_url if paid and webhook_url else ""
+        notify_secs = _parse_notify(notify) if paid and notify else None
+
         owner = request.user if request.user.is_authenticated else None
         drop = Drop.objects.create(
             ns=ns, key=key, kind=Drop.FILE,
@@ -461,6 +596,11 @@ def upload_confirm(request):
             anon_token=anon_token,
             burn=burn,
             is_test=is_test,
+            visible_from=visible_from,
+            webhook_url=wh,
+            notify_before_secs=notify_secs,
+            is_public=is_public if owner else False,
+            tags=tags if owner else "",
         )
         add_storage(request.user, actual_size)
 
@@ -542,6 +682,12 @@ def _drop_response(request, drop):
             return JsonResponse({"error": "Drop has expired."}, status=410)
         return render(request, "expired.html", {"key": drop.key})
 
+    # Scheduled drops — pending until visible_from
+    if not drop.is_visible and not _is_owner(request, drop):
+        if "application/json" in request.headers.get("Accept", ""):
+            return JsonResponse({"error": "This drop is not yet available."}, status=403)
+        raise Http404
+
     # Password gate — owner bypasses automatically
     pw_response = _check_drop_password(request, drop)
     if pw_response is not None:
@@ -549,6 +695,7 @@ def _drop_response(request, drop):
 
     should_burn = drop.burn
     drop.touch()
+    _fire_webhook(drop)
 
     if "application/json" in request.headers.get("Accept", ""):
         data = {
@@ -565,6 +712,8 @@ def _drop_response(request, drop):
             "view_count":        drop.view_count,
             "last_viewed_at":    (drop.last_viewed_at.isoformat()
                                   if drop.last_viewed_at else None),
+            "is_public":         drop.is_public,
+            "tags":              drop.tags,
         }
         if drop.kind == Drop.TEXT:
             data["content"] = drop.content
@@ -741,7 +890,7 @@ def set_drop_password(request, ns, key):
     if not _is_owner(request, drop):
         return JsonResponse({"error": "Only the owner can set a password."}, status=403)
 
-    if not request.user.profile.is_paid:
+    if not hasattr(request.user, "profile") or not request.user.profile.is_paid:
         return JsonResponse(
             {"error": "Password protection is a paid feature."}, status=403
         )
@@ -759,4 +908,35 @@ def set_drop_password(request, ns, key):
     return JsonResponse({
         "password_protected": drop.is_password_protected,
         "message": "Password set." if drop.is_password_protected else "Password removed.",
+    })
+
+
+# ── Embed view ────────────────────────────────────────────────────────────────
+
+def embed_view(request, key):
+    """
+    GET /embed/<key>/ — minimal iframe-friendly view for text/code/image drops.
+    No chrome, no nav, no edit controls. Read-only.
+    """
+    # Try clipboard first, then file
+    drop = Drop.objects.filter(ns=Drop.NS_CLIPBOARD, key=key).first()
+    ns = "c"
+    if not drop:
+        drop = Drop.objects.filter(ns=Drop.NS_FILE, key=key).first()
+        ns = "f"
+    if not drop:
+        return HttpResponse("not found", status=404, content_type="text/plain")
+    if drop.is_expired():
+        drop.hard_delete()
+        return HttpResponse("expired", status=410, content_type="text/plain")
+    if drop.is_password_protected:
+        return HttpResponse("password protected", status=401, content_type="text/plain")
+    if not drop.is_visible:
+        return HttpResponse("not yet available", status=403, content_type="text/plain")
+
+    drop.touch()
+
+    return render(request, "embed.html", {
+        "drop": drop,
+        "ns": ns,
     })

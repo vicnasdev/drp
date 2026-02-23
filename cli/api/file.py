@@ -31,7 +31,9 @@ def _touch_session():
 
 # ── Upload ────────────────────────────────────────────────────────────────────
 
-def upload_file(host, session, filepath, key=None, expiry_days=None, password=None, is_test=False):
+def upload_file(host, session, filepath, key=None, expiry_days=None, password=None,
+                is_test=False, schedule=None, webhook_url=None, notify=None,
+                is_public=False, tags=None):
     """
     Upload a file using the prepare → direct-PUT → confirm flow.
     Returns the drop key string on success, None on failure.
@@ -131,6 +133,16 @@ def upload_file(host, session, filepath, key=None, expiry_days=None, password=No
         confirm_payload["password"] = password
     if is_test:
         confirm_payload["is_test"] = True
+    if schedule:
+        confirm_payload["schedule"] = schedule
+    if webhook_url:
+        confirm_payload["webhook_url"] = webhook_url
+    if notify:
+        confirm_payload["notify"] = notify
+    if is_public:
+        confirm_payload["is_public"] = True
+    if tags:
+        confirm_payload["tags"] = tags
 
     try:
         csrf = get_csrf(host, session)

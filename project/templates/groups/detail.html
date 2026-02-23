@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% block title %}drp — @{{ group.handle }}{% endblock %}
+{% block content %}
+<div class="collections-page">
+  <div class="collections-header">
+    <h1>@{{ group.handle }}</h1>
+    <p class="muted">{{ group.name }}</p>
+  </div>
+
+  {% if is_member %}
+    {% if is_admin %}
+    <div class="group-admin-actions">
+      <button class="btn-sm" id="inviteBtn">+ invite member</button>
+    </div>
+
+    <div id="inviteForm" class="new-collection-form hidden">
+      <select id="inviteRole">
+        <option value="reader">Reader</option>
+        <option value="writer">Writer</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button class="btn-sm" id="createInviteBtn">generate invite link</button>
+      <button class="btn-sm" id="cancelInviteBtn">cancel</button>
+      <p id="inviteResult" class="hidden"></p>
+    </div>
+    {% endif %}
+
+    <h2>Members</h2>
+    <div class="collection-list">
+      {% for m in members %}
+      <div class="collection-item">
+        <span>@{{ m.user.username }}</span>
+        <span class="muted">{{ m.role }}</span>
+        {% if is_admin and m.user.pk != request.user.pk %}
+        <button class="btn-sm btn-danger" data-uid="{{ m.user.pk }}">remove</button>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if collections %}
+    <h2>Collections</h2>
+    <div class="collection-list">
+      {% for col in collections %}
+      <div class="collection-item">
+        <a href="{{ col.url_path }}">{{ col.name }}</a>
+        <span class="muted">{{ col.slug }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  {% else %}
+    <div class="group-join-prompt">
+      <h2>Join @{{ group.handle }}</h2>
+      <p>You need an invite token to join this group.</p>
+      {% if request.user.is_authenticated %}
+      <form id="joinForm">
+        <input type="text" id="inviteToken" placeholder="paste invite token" />
+        <button class="btn-sm" type="submit">join</button>
+        <p id="joinError" class="error hidden"></p>
+      </form>
+      {% else %}
+      <p><a href="{% url 'login' %}">Log in</a> first, then enter your invite token.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
+{% if is_admin %}
+<script>
+document.getElementById('inviteBtn')?.addEventListener('click', () => {
+  document.getElementById('inviteForm').classList.toggle('hidden');
+});
+document.getElementById('cancelInviteBtn')?.addEventListener('click', () => {
+  document.getElementById('inviteForm').classList.add('hidden');
+});
+document.getElementById('createInviteBtn')?.addEventListener('click', async () => {
+  const role = document.getElementById('inviteRole').value;
+  const res = await fetch('/groups/{{ group.pk }}/invite/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+    body: JSON.stringify({role, max_uses: 1, expires_hours: 72}),
+  });
+  const data = await res.json();
+  const el = document.getElementById('inviteResult');
+  if (res.ok) {
+    el.textContent = 'Token: ' + data.token;
+    el.classList.remove('hidden');
+  } else {
+    el.textContent = data.error;
+    el.classList.remove('hidden');
+  }
+});
+</script>
+{% endif %}
+
+{% if not is_member and request.user.is_authenticated %}
+<script>
+document.getElementById('joinForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const token = document.getElementById('inviteToken').value;
+  const res = await fetch('/groups/join/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+    body: JSON.stringify({token}),
+  });
+  const data = await res.json();
+  if (res.ok) {
+    location.reload();
+  } else {
+    const el = document.getElementById('joinError');
+    el.textContent = data.error;
+    el.classList.remove('hidden');
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

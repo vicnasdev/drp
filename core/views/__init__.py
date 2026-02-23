@@ -10,9 +10,9 @@ from .legal import privacy_view, terms_view
 from .verify import resend_verification_view, verify_email_view
 # from .mobile_blueprint import mobile_blueprint
 from .collections import (
-    user_collections, collection_view,
+    user_collections, collection_view, collection_or_alias_view,
     create_collection, add_to_collection, remove_from_collection,
-    rename_collection, delete_collection,
+    rename_collection, delete_collection, toggle_inbox,
 )
 
 __all__ = [
@@ -27,7 +27,7 @@ __all__ = [
     "resend_verification_view",
     "verify_email_view",
     # "mobile_blueprint",
-    "user_collections", "collection_view",
+    "user_collections", "collection_view", "collection_or_alias_view",
     "create_collection", "add_to_collection", "remove_from_collection",
-    "rename_collection", "delete_collection",
+    "rename_collection", "delete_collection", "toggle_inbox",
 ]

@@ -15,7 +15,9 @@ def _touch_session():
 
 
 def upload_text(host, session, text, key=None, timer=None, expiry_days=None,
-                burn=False, password=None, is_test=False):
+                burn=False, password=None, is_test=False,
+                schedule=None, webhook_url=None, notify=None,
+                is_public=False, tags=None):
     """
     Upload text content.
     Returns the key string on success, None on failure.
@@ -34,6 +36,16 @@ def upload_text(host, session, text, key=None, timer=None, expiry_days=None,
         data['password'] = password
     if is_test:
         data['is_test'] = '1'
+    if schedule:
+        data['schedule'] = schedule
+    if webhook_url:
+        data['webhook_url'] = webhook_url
+    if notify:
+        data['notify'] = notify
+    if is_public:
+        data['is_public'] = '1'
+    if tags:
+        data['tags'] = tags
     try:
         res = session.post(f'{host}/save/', data=data, timeout=30)
         if timer:

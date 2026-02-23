@@ -9,7 +9,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-changeme")
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 
+# Environment: "dev" or "prod" — drives domain, webhooks, and B2 bucket selection.
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
+
 DOMAIN = os.environ.get("DOMAIN")
+if not DOMAIN:
+    # Sensible defaults per environment
+    DOMAIN = {"prod": "drp.fyi", "dev": "drp.vicnas.me"}.get(ENVIRONMENT)
 if DOMAIN:
     ALLOWED_HOSTS       = [DOMAIN]
     CSRF_TRUSTED_ORIGINS = [f"https://{DOMAIN}", f"http://{DOMAIN}"]
@@ -36,6 +42,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "core.middleware.APITokenAuthMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -157,7 +164,7 @@ TURNSTILE_SITE_KEY   = os.environ.get('TURNSTILE_SITE_KEY', '')
 TURNSTILE_SECRET_KEY = os.environ.get('TURNSTILE_SECRET_KEY', '')
 
 # ── GitHub webhook ────────────────────────────────────────────────────────────
-GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_WEBHOOK_SECRET', '')
-
+GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_WEBHOOK_SECRET', '')# Hardcoded per environment — no more `make set-domain`
+GITHUB_WEBHOOK_URL = f"https://{DOMAIN}/api/github-webhook/" if DOMAIN else ""
 # ── Bug reports ───────────────────────────────────────────────────────────────
 BUG_REPORT_DAILY_LIMIT = 3   # max reports per user per day

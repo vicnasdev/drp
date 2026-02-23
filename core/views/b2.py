@@ -107,6 +107,21 @@ def upload_fileobj(file_obj, ns: str, drop_key: str,
     return key
 
 
+def object_head(ns: str, drop_key: str) -> dict | None:
+    """
+    Single HEAD request. Returns {"exists": True, "size": int} or None if not found.
+    Replaces separate object_exists() + object_size() calls.
+    """
+    client, bucket = _b2()
+    try:
+        resp = client.head_object(Bucket=bucket, Key=object_key(ns, drop_key))
+        return {"exists": True, "size": resp.get("ContentLength", 0)}
+    except ClientError as e:
+        if e.response["Error"]["Code"] in ("404", "NoSuchKey"):
+            return None
+        raise
+
+
 def object_exists(ns: str, drop_key: str) -> bool:
     client, bucket = _b2()
     try:

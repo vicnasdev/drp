@@ -13,3 +13,4 @@ __pycache__/
 staticfiles/
 !statifiles/.gitkeep
 *.egg-info/
+TODO.md

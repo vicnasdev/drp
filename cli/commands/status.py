@@ -119,15 +119,25 @@ def _drop_status(args, key):
     sep = dim('─' * (len(key) + len(prefix) + 3))
     print(f'  {bold("/" + prefix + key + "/")}')
     print(f'  {sep}')
+    print(f'  {dim("kind")}        {data.get("kind", "?")}')
+    if data.get("filename"):
+        print(f'  {dim("file")}        {data["filename"]}')
     print(f'  {dim("views")}       {green(str(views)) if views else dim("0")}')
     print(f'  {dim("last seen")}   {human_time(last) if last else dim("never")}')
     print(f'  {dim("created")}     {human_time(data.get("created_at"))}')
     if data.get('expires_at'):
         print(f'  {dim("expires")}     {human_time(data.get("expires_at"))}')
     else:
-        kind = data.get('kind', 'text')
-        idle = dim('activity-based' if kind == 'text' else 'activity-based expiry')
-        print(f'  {dim("expires")}     {idle}')
+        print(f'  {dim("expires")}     {dim("activity-based")}')
+    if data.get('burn'):
+        from cli.format import red
+        print(f'  {dim("burn")}        {red("yes — deletes after first view")}')
+    if data.get('password_protected'):
+        print(f'  {dim("password")}    yes')
+    if data.get('is_public'):
+        print(f'  {dim("public")}      yes')
+    if data.get('tags'):
+        print(f'  {dim("tags")}        {data["tags"]}')
 
 
 def _sync_local_cache(cfg) -> None:

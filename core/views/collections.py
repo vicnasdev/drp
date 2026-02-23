@@ -4,11 +4,13 @@ Collection views.
 URL patterns (all under /@<username>/):
   GET  /@username/                           — list user's collections (public)
   GET  /@username/<slug>/                    — view collection (public)
+  POST /@username/<slug>/                    — inbox: drop into public_inbox collection (anyone)
   POST /collections/create/                  — create collection (owner, paid)
   POST /collections/<id>/add/                — add drop to collection (owner)
   POST /collections/<id>/remove/             — remove drop from collection (owner)
   POST /collections/<id>/delete/             — delete collection (owner)
   POST /collections/<id>/rename/             — rename collection (owner)
+  POST /collections/<id>/toggle-inbox/       — toggle public_inbox (owner)
 
 Auth rules:
   - Anyone can view a collection page and its public drop list.
@@ -16,9 +18,12 @@ Auth rules:
     when clicked through — we never bypass individual drop auth here.
   - Creating/editing collections requires login + paid plan.
   - Free users can view collections shared with them but cannot create.
+  - Anyone can POST to a public_inbox collection (text only for safety).
 """
 
+import json
 import re
+import uuid
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -58,9 +63,43 @@ def user_collections(request, username):
 
 
 def collection_view(request, username, slug):
-    """GET /@username/<slug>/ — view a single collection."""
+    """GET /@username/<slug>/ — view a single collection.
+       POST /@username/<slug>/ — drop into public inbox (if enabled)."""
     owner      = get_object_or_404(User, username__iexact=username)
     collection = get_object_or_404(Collection, owner=owner, slug=slug)
+
+    # ── Inbox POST (anyone can drop into public_inbox collections) ──
+    if request.method == "POST":
+        if not collection.public_inbox:
+            return JsonResponse({"error": "This collection does not accept submissions."}, status=403)
+
+        try:
+            data = json.loads(request.body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JsonResponse({"error": "Invalid JSON."}, status=400)
+
+        content = (data.get("content") or "").strip()
+        if not content:
+            return JsonResponse({"error": "Content is required."}, status=400)
+        if len(content) > 50_000:
+            return JsonResponse({"error": "Inbox drops limited to 50KB."}, status=400)
+
+        key = uuid.uuid4().hex[:8]
+        drop = Drop.objects.create(
+            ns=Drop.NS_CLIPBOARD,
+            key=key,
+            content=content,
+            kind="text",
+            owner=owner,  # owned by collection owner
+        )
+        CollectionMembership.objects.create(
+            collection=collection,
+            ns=Drop.NS_CLIPBOARD,
+            key=key,
+        )
+        return JsonResponse({"key": key, "url": f"/{key}/"}, status=201)
+
+    # ── GET ──
     memberships = collection.memberships.all()
 
     # Resolve drops — skip any that have since been deleted
@@ -254,3 +293,37 @@ def delete_collection(request, collection_id):
 
     collection.delete()
     return JsonResponse({"deleted": True})
+
+
+@login_required
+@require_POST
+def toggle_inbox(request, collection_id):
+    """POST /collections/<id>/toggle-inbox/ — toggle public_inbox flag."""
+    collection = get_object_or_404(Collection, pk=collection_id)
+    if not collection.can_edit(request.user):
+        return JsonResponse({"error": "Only the owner can change inbox settings."}, status=403)
+    collection.public_inbox = not collection.public_inbox
+    collection.save(update_fields=["public_inbox"])
+    return JsonResponse({
+        "public_inbox": collection.public_inbox,
+        "message": "Inbox enabled." if collection.public_inbox else "Inbox disabled.",
+    })
+
+
+def collection_or_alias_view(request, username, slug):
+    """
+    GET /@username/<slug>/
+    Try collection first. If no collection found, try alias resolution.
+    """
+    try:
+        owner = User.objects.get(username__iexact=username)
+    except User.DoesNotExist:
+        raise Http404
+
+    collection = Collection.objects.filter(owner=owner, slug=slug).first()
+    if collection:
+        return collection_view(request, username, slug)
+
+    # Try alias
+    from core.views.aliases import resolve_alias
+    return resolve_alias(request, username, slug)

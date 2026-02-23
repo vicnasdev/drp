@@ -70,10 +70,14 @@
         <button class="btn-sm" onclick="downloadText()">download .txt</button>
         {% if can_edit %}<button class="btn-sm" onclick="toggleEdit()">edit</button>{% endif %}
         <button class="btn-sm" id="compareBtn" onclick="toggleCompare()">compare</button>
+        <button class="btn-sm" id="renderTextBtn" onclick="toggleRenderText()">render</button>
         {% load drop_tags %}
         {% include "partials/bookmark_btn.html" with drop=drop ns=drop.ns key=drop.key %}
       </div>
     </div>
+
+    <!-- Render pane for text drops (markdown / code) -->
+    <div id="renderTextPane" class="render-pane" style="display:none;margin-top:1rem"></div>
 
     <!-- Compare panel -->
     <div id="comparePanel" style="display:none;margin-top:1rem">
@@ -187,6 +191,7 @@
 {% if drop.kind == 'text' %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/diff2html/3.4.47/bundles/css/diff2html.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/diff2html/3.4.47/bundles/js/diff2html-ui.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.1.0/diff.min.js"></script>
@@ -257,6 +262,42 @@ document.addEventListener('DOMContentLoaded', () => {
   const block = document.getElementById('clipContent');
   if (block && typeof hljs !== 'undefined') hljs.highlightElement(block);
 });
+
+// ── Render text (markdown / code) ─────────────────────────────────────────────
+let _textRendered = false;
+function toggleRenderText() {
+  const pane = document.getElementById('renderTextPane');
+  const btn  = document.getElementById('renderTextBtn');
+  const pre  = document.getElementById('clipPre');
+  if (!pane || !btn) return;
+
+  if (_textRendered) {
+    pane.style.display = 'none';
+    if (pre) pre.style.display = '';
+    btn.textContent = 'render';
+    _textRendered = false;
+    return;
+  }
+
+  const raw = document.getElementById('clipContent')?.innerText || '';
+  pane.innerHTML = '';
+
+  if (typeof marked !== 'undefined') {
+    pane.innerHTML = marked.parse(raw);
+    pane.className = 'render-pane render-pane--md';
+    // Highlight code blocks inside rendered markdown
+    if (typeof hljs !== 'undefined') {
+      pane.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
+    }
+  } else {
+    pane.textContent = raw;
+  }
+
+  pane.style.display = 'block';
+  if (pre) pre.style.display = 'none';
+  btn.textContent = 'source';
+  _textRendered = true;
+}
 {% endif %}
 
 // ── Rename ────────────────────────────────────────────────────────────────────

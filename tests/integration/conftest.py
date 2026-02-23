@@ -178,6 +178,7 @@ def cli_envs(cli_config_root, users):
         env = {**os.environ, **_env}
         env['XDG_CONFIG_HOME'] = str(cli_config_root / name)
         env['NO_COLOR'] = '1'
+        env['DRP_TEST_MODE'] = '1'
         envs[name] = env
     return envs
 
@@ -190,6 +191,7 @@ def anon_cli_env(cli_config_root):
     env = {**os.environ, **_env}
     env['XDG_CONFIG_HOME'] = str(cli_config_root / 'anon')
     env['NO_COLOR'] = '1'
+    env['DRP_TEST_MODE'] = '1'
     return env
 
 

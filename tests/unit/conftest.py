@@ -27,3 +27,14 @@ def pytest_configure(config):
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
         }
     }
+
+
+import pytest
+
+@pytest.fixture(autouse=True)
+def _invalidate_plan_cache():
+    """Reset the PlanLimit in-process cache between tests."""
+    from core.models import PlanLimit
+    PlanLimit.invalidate_cache()
+    yield
+    PlanLimit.invalidate_cache()

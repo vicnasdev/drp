@@ -262,6 +262,10 @@ def _drop_dict(d):
         'locked':         d.locked,
         'view_count':     d.view_count,
         'last_viewed_at': d.last_viewed_at.isoformat() if d.last_viewed_at else None,
+        'burn':           d.burn,
+        'password_protected': d.is_password_protected,
+        'is_public':      d.is_public,
+        'tags':           d.tags,
     }
 
 

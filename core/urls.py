@@ -3,8 +3,16 @@ from django.contrib.auth import views as auth_views
 from core import views
 from core.views.error_reporting import report_error
 from core.views.github_webhook import github_webhook
-from core.views.drops import raw_view, raw_file, set_drop_password
+from core.views.drops import raw_view, raw_file, set_drop_password, embed_view, public_feed
 from core.views.legal import privacy_view, terms_view
+from core.views.groups import (
+    resolve_handle, create_group, create_invite, join_group,
+    change_member_role, remove_member,
+)
+from core.views.tokens import create_token, list_tokens, revoke_token
+from core.views.aliases import create_alias, list_aliases, delete_alias, resolve_alias
+from core.views.templates import create_template, list_templates, get_template, delete_template
+from core.views.features import feature_list, feature_submit, feature_vote
 
 KEY = r"(?P<key>[^/\s]+)"
 
@@ -17,6 +25,8 @@ urlpatterns = [
     path("upload/prepare/",     views.upload_prepare,   name="upload_prepare"),
     path("upload/confirm/",     views.upload_confirm,   name="upload_confirm"),
     re_path(rf"^raw/{KEY}/$",   raw_view,               name="raw_view"),
+    re_path(rf"^embed/{KEY}/$", embed_view,             name="embed_view"),
+    path("explore/",            public_feed,            name="public_feed"),
     path("privacy/",            privacy_view,           name="privacy"),
     path("terms/",              terms_view,             name="terms"),
     path("auth/register/",      views.register_view,    name="register"),
@@ -26,9 +36,26 @@ urlpatterns = [
     path("auth/account/export/", views.export_drops,    name="export_drops"),
     path("auth/account/import/", views.import_drops,    name="import_drops"),
     path("auth/account/settings/", views.update_account_settings, name="account_settings"),
+    # API tokens
+    path("auth/tokens/",                  list_tokens,    name="token_list"),
+    path("auth/tokens/create/",           create_token,   name="token_create"),
+    path("auth/tokens/<int:token_id>/revoke/", revoke_token, name="token_revoke"),
+    # Aliases
+    path("auth/aliases/",                   list_aliases,   name="alias_list"),
+    path("auth/aliases/create/",            create_alias,   name="alias_create"),
+    path("auth/aliases/<int:alias_id>/delete/", delete_alias, name="alias_delete"),
+    # Drop templates
+    path("auth/templates/",                        list_templates,   name="template_list"),
+    path("auth/templates/create/",                 create_template,  name="template_create"),
+    path("auth/templates/<slug:slug>/",            get_template,     name="template_get"),
+    path("auth/templates/<int:template_id>/delete/", delete_template, name="template_delete"),
     path("auth/verify/resend/", views.resend_verification_view, name="verify_resend"),
     re_path(r"^auth/verify/(?P<token>[^/]+)/$", views.verify_email_view, name="verify_email"),
     path("report-bug/",         views.report_bug_view,  name="report_bug"),
+    # Feature voting board
+    path("features/",                          feature_list,    name="feature_list"),
+    path("features/submit/",                   feature_submit,  name="feature_submit"),
+    path("features/<int:proposal_id>/vote/",   feature_vote,    name="feature_vote"),
     path("auth/forgot-password/",
          auth_views.PasswordResetView.as_view(
              template_name="registration/password_reset_form.html",
@@ -51,14 +78,21 @@ urlpatterns = [
              template_name="registration/password_reset_complete.html",
          ),
          name="password_reset_complete"),
+    # Groups
+    path("groups/create/",                              create_group,          name="group_create"),
+    path("groups/join/",                                join_group,            name="group_join"),
+    path("groups/<int:group_id>/invite/",               create_invite,         name="group_invite"),
+    path("groups/<int:group_id>/members/<int:user_id>/role/",    change_member_role, name="group_member_role"),
+    path("groups/<int:group_id>/members/<int:user_id>/remove/",  remove_member,      name="group_member_remove"),
     # Collections — must be before the /<key>/ catch-all
     path("collections/create/",                   views.create_collection,        name="collection_create"),
     path("collections/<int:collection_id>/add/",   views.add_to_collection,        name="collection_add"),
     path("collections/<int:collection_id>/remove/", views.remove_from_collection,  name="collection_remove"),
     path("collections/<int:collection_id>/rename/", views.rename_collection,       name="collection_rename"),
     path("collections/<int:collection_id>/delete/", views.delete_collection,       name="collection_delete"),
-    re_path(r"^@(?P<username>[^/]+)/$",             views.user_collections,         name="user_collections"),
-    re_path(r"^@(?P<username>[^/]+)/(?P<slug>[^/]+)/$", views.collection_view,     name="collection_view"),
+    path("collections/<int:collection_id>/toggle-inbox/", views.toggle_inbox,     name="collection_toggle_inbox"),
+    re_path(r"^@(?P<handle>[^/]+)/$",                    resolve_handle,         name="resolve_handle"),
+    re_path(r"^@(?P<username>[^/]+)/(?P<slug>[^/]+)/$", views.collection_or_alias_view, name="collection_view"),
     re_path(rf"^f/{KEY}/download/$",      views.download_drop,                         name="download_drop"),
     re_path(rf"^f/{KEY}/raw/$",            raw_file,                                    name="raw_file"),
     re_path(rf"^f/{KEY}/rename/$",        views.rename_drop,    {"ns": "f"},           name="rename_file"),

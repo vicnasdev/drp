@@ -508,24 +508,6 @@ class TestCpCommand:
         assert _url('https://drp.test', 'f', 'mykey') == 'https://drp.test/f/mykey/copy/'
 
 
-# ── cli.commands.diff ─────────────────────────────────────────────────────────
-
-class TestDiffCommand:
-    """diff uses stdlib difflib — verify the integration exits 0 on identical, 1 on diff."""
-
-    def _run_diff(self, content_a, content_b):
-        import difflib
-        lines_a = content_a.splitlines(keepends=True)
-        lines_b = content_b.splitlines(keepends=True)
-        return list(difflib.unified_diff(lines_a, lines_b, fromfile='/a/', tofile='/b/'))
-
-    def test_identical_produces_empty_diff(self):
-        assert self._run_diff('hello\n', 'hello\n') == []
-
-    def test_different_produces_nonempty_diff(self):
-        assert self._run_diff('hello\n', 'world\n') != []
-
-
 # ── cli.commands.load ─────────────────────────────────────────────────────────
 
 class TestLoadCommand:

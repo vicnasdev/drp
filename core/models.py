@@ -23,34 +23,36 @@ class Plan:
             "price_monthly":              0,
             "max_file_mb":                200,
             "max_text_kb":                500,
-            # No user-settable expiry date; clipboard drops expire by idle/max rules.
             "max_expiry_days":            None,
-            # Clipboard drops: 24 h idle window, 7-day hard ceiling.
             "clipboard_idle_hours":       24,
             "clipboard_max_lifetime_days": 7,
-            # File drops: hard ceiling from creation date. None = never expire.
             "anon_file_lifetime_days":    90,
             "storage_gb":                 None,
             "renewals":                   0,
             "password_protection":        False,
             "max_collections":            0,
+            "max_groups":                 0,
+            "webhooks":                   False,
+            "api_keys":                   0,
+            "scheduled_drops":            0,
         },
         FREE: {
             "label":                      "Free",
             "price_monthly":              0,
             "max_file_mb":                200,
             "max_text_kb":                500,
-            # No user-settable expiry date; clipboard drops expire by idle/max rules.
             "max_expiry_days":            None,
-            # Clipboard drops: 48 h idle window, 30-day hard ceiling.
             "clipboard_idle_hours":       48,
             "clipboard_max_lifetime_days": 30,
-            # File drops: hard ceiling from creation date. None = never expire.
             "anon_file_lifetime_days":    90,
             "storage_gb":                 None,
             "renewals":                   0,
             "password_protection":        False,
             "max_collections":            0,
+            "max_groups":                 0,
+            "webhooks":                   False,
+            "api_keys":                   0,
+            "scheduled_drops":            0,
         },
         STARTER: {
             "label":                      "Starter",
@@ -58,13 +60,17 @@ class Plan:
             "max_file_mb":                1024,
             "max_text_kb":                2048,
             "max_expiry_days":            365,
-            "clipboard_idle_hours":       None,   # explicit expiry only
-            "clipboard_max_lifetime_days": None,  # explicit expiry only
-            "anon_file_lifetime_days":    None,   # never expire by time (quota is the limit)
+            "clipboard_idle_hours":       None,
+            "clipboard_max_lifetime_days": None,
+            "anon_file_lifetime_days":    None,
             "storage_gb":                 5,
-            "renewals":                   None,   # unlimited
+            "renewals":                   None,
             "password_protection":        True,
             "max_collections":            10,
+            "max_groups":                 3,
+            "webhooks":                   True,
+            "api_keys":                   5,
+            "scheduled_drops":            10,
         },
         PRO: {
             "label":                      "Pro",
@@ -74,11 +80,15 @@ class Plan:
             "max_expiry_days":            365 * 3,
             "clipboard_idle_hours":       None,
             "clipboard_max_lifetime_days": None,
-            "anon_file_lifetime_days":    None,   # never expire by time (quota is the limit)
+            "anon_file_lifetime_days":    None,
             "storage_gb":                 20,
-            "renewals":                   None,   # unlimited
+            "renewals":                   None,
             "password_protection":        True,
-            "max_collections":            None,   # unlimited
+            "max_collections":            None,
+            "max_groups":                 None,
+            "webhooks":                   True,
+            "api_keys":                   None,
+            "scheduled_drops":            None,
         },
     }
 
@@ -116,6 +126,13 @@ class PlanLimit(models.Model):
     password_protection        = models.BooleanField(default=False)
     max_collections            = models.PositiveIntegerField(null=True, blank=True,
                                      help_text="null = unlimited, 0 = none")
+    max_groups                 = models.PositiveIntegerField(null=True, blank=True, default=0,
+                                     help_text="null = unlimited, 0 = none")
+    webhooks                   = models.BooleanField(default=False)
+    api_keys                   = models.PositiveIntegerField(null=True, blank=True, default=0,
+                                     help_text="null = unlimited, 0 = none")
+    scheduled_drops            = models.PositiveIntegerField(null=True, blank=True, default=0,
+                                     help_text="null = unlimited, 0 = none")
 
     class Meta:
         ordering = ["price_monthly"]
@@ -137,13 +154,18 @@ class PlanLimit(models.Model):
             "renewals":                    self.renewals,
             "password_protection":         self.password_protection,
             "max_collections":             self.max_collections,
+            "max_groups":                  self.max_groups,
+            "webhooks":                    self.webhooks,
+            "api_keys":                    self.api_keys,
+            "scheduled_drops":             self.scheduled_drops,
         }
 
     @classmethod
     def _load_cache(cls):
         global _plan_limit_cache
         try:
-            _plan_limit_cache = {row.plan: row.as_dict() for row in cls.objects.all()}
+            loaded = {row.plan: row.as_dict() for row in cls.objects.all()}
+            _plan_limit_cache = loaded if loaded else dict(Plan.LIMITS)
         except Exception:
             # Table may not exist yet during first migrate — fall back to hardcoded dict
             _plan_limit_cache = dict(Plan.LIMITS)
@@ -272,6 +294,12 @@ class Drop(models.Model):
         on_delete=models.SET_NULL,
         related_name="drops",
     )
+    owner_group = models.ForeignKey(
+        "Group", null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="drops",
+        help_text="Group that owns this drop (alongside or instead of user owner).",
+    )
 
     anon_token = models.CharField(max_length=64, null=True, blank=True, db_index=True)
 
@@ -293,6 +321,36 @@ class Drop(models.Model):
     renewal_count = models.PositiveIntegerField(default=0)
 
     burn = models.BooleanField(default=False, help_text="Delete after first view")
+
+    # ── Scheduled drops ───────────────────────────────────────────────────────
+    visible_from = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Drop is pending/hidden until this time. null = immediately visible.",
+    )
+
+    # ── Webhooks (paid) ───────────────────────────────────────────────────────
+    webhook_url = models.URLField(
+        blank=True, default="",
+        help_text="POST to this URL on drop access. Empty = no webhook.",
+    )
+    notify_before_secs = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Seconds before expiry to send notification. null = no notification.",
+    )
+    notified_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the expiry notification was sent. null = not yet sent.",
+    )
+
+    # ── Public drops ──────────────────────────────────────────────────────────
+    is_public = models.BooleanField(
+        default=False, db_index=True,
+        help_text="Visible in public feed and searchable.",
+    )
+    tags = models.CharField(
+        max_length=500, blank=True, default="",
+        help_text="Comma-separated tags for public discovery. e.g. 'python,snippet'.",
+    )
 
     is_test = models.BooleanField(default=False, db_index=True,
                                   help_text="Created by the integration test suite. Purged at deploy.")
@@ -341,6 +399,13 @@ class Drop(models.Model):
         if self.owner_id and hasattr(self.owner, "profile"):
             return self.owner.profile.is_paid
         return False
+
+    @property
+    def is_visible(self):
+        """False if the drop is scheduled and the time hasn't come yet."""
+        if self.visible_from and timezone.now() < self.visible_from:
+            return False
+        return True
 
     def is_expired(self):
         now = timezone.now()
@@ -481,8 +546,18 @@ def cleanup_collection_memberships(sender, instance, **kwargs):
 
 class Collection(models.Model):
     owner      = models.ForeignKey(User, on_delete=models.CASCADE, related_name="collections")
+    owner_group = models.ForeignKey(
+        "Group", null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="collections",
+        help_text="Group that owns this collection (alongside or instead of user owner).",
+    )
     slug       = models.SlugField(max_length=60)
     name       = models.CharField(max_length=120)
+    public_inbox = models.BooleanField(
+        default=False,
+        help_text="Anyone can drop into this collection; only owner/members can read.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -596,3 +671,173 @@ class BugReport(models.Model):
 
     def __str__(self):
         return f'[{self.category}] by {self.user.email if self.user else "anon"} @ {self.created_at:%Y-%m-%d}'
+
+
+# ── Group ────────────────────────────────────────────────────────────────────────
+
+class Group(models.Model):
+    """A named group that can own drops and collections."""
+    handle     = models.CharField(max_length=60, unique=True, db_index=True,
+                                  help_text="Unique @handle for the group.")
+    name       = models.CharField(max_length=120)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                   related_name="created_groups")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"@{self.handle}"
+
+
+class GroupMembership(models.Model):
+    ROLE_READER = "reader"
+    ROLE_WRITER = "writer"
+    ROLE_ADMIN  = "admin"
+    ROLE_CHOICES = [
+        (ROLE_READER, "Reader"),
+        (ROLE_WRITER, "Writer"),
+        (ROLE_ADMIN,  "Admin"),
+    ]
+
+    group    = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="memberships")
+    user     = models.ForeignKey(User, on_delete=models.CASCADE, related_name="group_memberships")
+    role     = models.CharField(max_length=8, choices=ROLE_CHOICES, default=ROLE_READER)
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("group", "user")]
+        ordering = ["role", "joined_at"]
+
+    def __str__(self):
+        return f"{self.user.username} → @{self.group.handle} [{self.role}]"
+
+
+class GroupInviteToken(models.Model):
+    """A single-use or limited-use invite token for joining a group."""
+    group      = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="invite_tokens")
+    token      = models.CharField(max_length=64, unique=True, db_index=True)
+    role       = models.CharField(max_length=8, choices=GroupMembership.ROLE_CHOICES,
+                                  default=GroupMembership.ROLE_READER)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    max_uses   = models.PositiveIntegerField(null=True, blank=True,
+                                             help_text="null = unlimited, 1 = single-use")
+    use_count  = models.PositiveIntegerField(default=0)
+
+    def is_expired(self):
+        if self.expires_at and timezone.now() > self.expires_at:
+            return True
+        if self.max_uses is not None and self.use_count >= self.max_uses:
+            return True
+        return False
+
+    def __str__(self):
+        return f"Invite to @{self.group.handle} [{self.role}]"
+
+
+# ── APIToken (paid) ─────────────────────────────────────────────────────────────
+
+class APIToken(models.Model):
+    """Static API token for CI/scripts. Paid accounts only."""
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name="api_tokens")
+    token_hash = models.CharField(max_length=256, unique=True,
+                                  help_text="SHA-256 hash of the token. Never store plaintext.")
+    prefix     = models.CharField(max_length=8, db_index=True,
+                                  help_text="First 8 chars of the token for identification.")
+    label      = models.CharField(max_length=120, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    last_used  = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def is_expired(self):
+        return self.expires_at is not None and timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"APIToken {self.prefix}... ({self.user.username})"
+
+
+# ── Alias ────────────────────────────────────────────────────────────────────────
+
+class Alias(models.Model):
+    """Server-side alias: /@handle/alias → a drop key."""
+    owner      = models.ForeignKey(User, on_delete=models.CASCADE, related_name="aliases")
+    alias      = models.CharField(max_length=120)
+    ns         = models.CharField(max_length=1, choices=Drop.NS_CHOICES, default=Drop.NS_CLIPBOARD)
+    key        = models.CharField(max_length=120, help_text="Drop key this alias points to.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("owner", "alias")]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"@{self.owner.username}/{self.alias} → /{self.key}/"
+
+
+# ── DropTemplate ──────────────────────────────────────────────────────────────────
+
+class DropTemplate(models.Model):
+    """Reusable drop template. User or group owned."""
+    owner       = models.ForeignKey(User, null=True, blank=True,
+                                    on_delete=models.CASCADE, related_name="drop_templates")
+    owner_group = models.ForeignKey(Group, null=True, blank=True,
+                                    on_delete=models.CASCADE, related_name="drop_templates")
+    slug        = models.SlugField(max_length=60)
+    name        = models.CharField(max_length=120)
+    content     = models.TextField(blank=True, default="",
+                                   help_text="Default content for clipboard drops.")
+    burn        = models.BooleanField(default=False)
+    expiry_days = models.PositiveIntegerField(null=True, blank=True)
+    password    = models.BooleanField(default=False,
+                                      help_text="Prompt for password when using this template.")
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        owner = self.owner.username if self.owner else (f"@{self.owner_group.handle}" if self.owner_group else "?")
+        return f"{owner}/{self.slug}"
+
+
+# ── FeatureProposal + FeatureVote ────────────────────────────────────────────────
+
+class FeatureProposal(models.Model):
+    title       = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default="")
+    proposed_by = models.ForeignKey(User, null=True, blank=True,
+                                    on_delete=models.SET_NULL, related_name="feature_proposals")
+    staff_pick  = models.BooleanField(default=False, help_text="Weekly staff highlight")
+    created_at  = models.DateTimeField(auto_now_add=True)
+    closed      = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def total_weight(self):
+        return self.votes.aggregate(total=models.Sum("weight"))["total"] or 0
+
+    def __str__(self):
+        return self.title
+
+
+class FeatureVote(models.Model):
+    """One vote per user per proposal. Weight: free=1, paid=3."""
+    proposal   = models.ForeignKey(FeatureProposal, on_delete=models.CASCADE, related_name="votes")
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name="feature_votes")
+    weight     = models.PositiveSmallIntegerField(default=1,
+                                                  help_text="free=1, paid=3")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("proposal", "user")]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.username} voted on '{self.proposal.title}' (w={self.weight})"

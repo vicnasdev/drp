@@ -516,24 +516,6 @@ class TestCli:
         kind, content = get_clipboard(HOST, free_user.session, new_key)
         assert kind == 'text' and content == 'copy me'
 
-    def test_diff_identical(self, free_user, cli_envs):
-        from conftest import run_drp
-        key1 = unique_key('diff-a')
-        key2 = unique_key('diff-b')
-        upload_text(HOST, free_user.session, 'same', key=key1, is_test=True)
-        upload_text(HOST, free_user.session, 'same', key=key2, is_test=True)
-        result = run_drp('diff', key1, key2, env=cli_envs['free'])
-        assert result.returncode == 0  # 0 = identical
-
-    def test_diff_different(self, free_user, cli_envs):
-        from conftest import run_drp
-        key1 = unique_key('diffd-a')
-        key2 = unique_key('diffd-b')
-        upload_text(HOST, free_user.session, 'aaa', key=key1, is_test=True)
-        upload_text(HOST, free_user.session, 'bbb', key=key2, is_test=True)
-        result = run_drp('diff', key1, key2, env=cli_envs['free'])
-        assert result.returncode == 1  # 1 = different
-
     def test_status_shows_key(self, free_user, cli_envs):
         from conftest import run_drp
         key = unique_key('stat')

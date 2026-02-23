@@ -7,7 +7,13 @@ from django.shortcuts import render, redirect
 from django.urls import path
 from django.utils.html import format_html
 
-from .models import UserProfile, Drop, BugReport, EmailVerification, Collection, CollectionMembership, PlanLimit
+from .models import (
+    UserProfile, Drop, BugReport, EmailVerification,
+    Collection, CollectionMembership, PlanLimit,
+    Group, GroupMembership, GroupInviteToken,
+    APIToken, Alias, DropTemplate,
+    FeatureProposal, FeatureVote,
+)
 
 
 # ── Broadcast email form ──────────────────────────────────────────────────────
@@ -144,11 +150,11 @@ admin.site.register(User, UserAdmin)
 
 @admin.register(Drop)
 class DropAdmin(admin.ModelAdmin):
-    list_display = ('key', 'kind', 'owner', 'locked', 'filesize', 'created_at', 'expires_at')
-    list_filter = ('kind', 'locked')
+    list_display = ('key', 'kind', 'owner', 'owner_group', 'locked', 'is_public', 'filesize', 'created_at', 'expires_at', 'visible_from')
+    list_filter = ('kind', 'locked', 'is_public', 'burn')
     search_fields = ('key', 'owner__email', 'filename')
-    readonly_fields = ('created_at', 'last_accessed_at', 'renewal_count')
-    raw_id_fields = ('owner',)
+    readonly_fields = ('created_at', 'last_accessed_at', 'renewal_count', 'view_count', 'last_viewed_at')
+    raw_id_fields = ('owner', 'owner_group')
 
 
 # ── UserProfile admin ─────────────────────────────────────────────────────────
@@ -224,11 +230,11 @@ class CollectionMembershipInline(admin.TabularInline):
 
 @admin.register(Collection)
 class CollectionAdmin(admin.ModelAdmin):
-    list_display  = ('__str__', 'owner', 'slug', 'member_count', 'created_at')
-    list_filter   = ('owner__profile__plan',)
+    list_display  = ('__str__', 'owner', 'owner_group', 'slug', 'public_inbox', 'member_count', 'created_at')
+    list_filter   = ('owner__profile__plan', 'public_inbox')
     search_fields = ('slug', 'name', 'owner__username', 'owner__email')
     readonly_fields = ('created_at',)
-    raw_id_fields = ('owner',)
+    raw_id_fields = ('owner', 'owner_group')
     inlines = (CollectionMembershipInline,)
 
     @admin.display(description='drops')
@@ -240,7 +246,8 @@ class PlanLimitAdmin(admin.ModelAdmin):
     list_display = (
         'plan', 'label', 'price_monthly',
         'max_file_mb', 'max_text_kb', 'storage_gb',
-        'max_collections', 'password_protection',
+        'max_collections', 'max_groups', 'webhooks', 'api_keys', 'scheduled_drops',
+        'password_protection',
     )
     ordering = ('price_monthly',)
 
@@ -251,3 +258,84 @@ class PlanLimitAdmin(admin.ModelAdmin):
     def delete_model(self, request, obj):
         super().delete_model(request, obj)
         PlanLimit.invalidate_cache()
+
+
+# ── Group admin ─────────────────────────────────────────────────────────────────
+
+class GroupMembershipInline(admin.TabularInline):
+    model = GroupMembership
+    extra = 0
+    fields = ('user', 'role', 'joined_at')
+    readonly_fields = ('joined_at',)
+    raw_id_fields = ('user',)
+
+
+class GroupInviteTokenInline(admin.TabularInline):
+    model = GroupInviteToken
+    extra = 0
+    fields = ('token', 'role', 'max_uses', 'use_count', 'expires_at', 'created_at')
+    readonly_fields = ('created_at', 'use_count')
+
+
+@admin.register(Group)
+class GroupAdmin(admin.ModelAdmin):
+    list_display = ('handle', 'name', 'created_by', 'member_count', 'created_at')
+    search_fields = ('handle', 'name')
+    readonly_fields = ('created_at',)
+    raw_id_fields = ('created_by',)
+    inlines = (GroupMembershipInline, GroupInviteTokenInline)
+
+    @admin.display(description='members')
+    def member_count(self, obj):
+        return obj.memberships.count()
+
+
+# ── APIToken admin ──────────────────────────────────────────────────────────────
+
+@admin.register(APIToken)
+class APITokenAdmin(admin.ModelAdmin):
+    list_display = ('prefix', 'user', 'label', 'created_at', 'expires_at', 'last_used')
+    search_fields = ('prefix', 'user__email', 'label')
+    readonly_fields = ('created_at', 'last_used', 'token_hash', 'prefix')
+    raw_id_fields = ('user',)
+
+
+# ── Alias admin ─────────────────────────────────────────────────────────────────
+
+@admin.register(Alias)
+class AliasAdmin(admin.ModelAdmin):
+    list_display = ('alias', 'owner', 'ns', 'key', 'created_at')
+    search_fields = ('alias', 'owner__email', 'key')
+    readonly_fields = ('created_at',)
+    raw_id_fields = ('owner',)
+
+
+# ── DropTemplate admin ──────────────────────────────────────────────────────────
+
+@admin.register(DropTemplate)
+class DropTemplateAdmin(admin.ModelAdmin):
+    list_display = ('slug', 'name', 'owner', 'owner_group', 'burn', 'password', 'created_at')
+    search_fields = ('slug', 'name', 'owner__email')
+    readonly_fields = ('created_at',)
+    raw_id_fields = ('owner', 'owner_group')
+
+
+# ── FeatureProposal + FeatureVote admin ─────────────────────────────────────────
+
+class FeatureVoteInline(admin.TabularInline):
+    model = FeatureVote
+    extra = 0
+    fields = ('user', 'weight', 'created_at')
+    readonly_fields = ('created_at',)
+    raw_id_fields = ('user',)
+
+
+@admin.register(FeatureProposal)
+class FeatureProposalAdmin(admin.ModelAdmin):
+    list_display = ('title', 'proposed_by', 'total_weight', 'staff_pick', 'closed', 'created_at')
+    list_filter = ('closed', 'staff_pick')
+    list_editable = ('staff_pick',)
+    search_fields = ('title', 'description')
+    readonly_fields = ('created_at',)
+    raw_id_fields = ('proposed_by',)
+    inlines = (FeatureVoteInline,)
