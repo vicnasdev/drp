@@ -1,4 +1,7 @@
-"""drp CLI — command-line tool for drp."""
+"""drp CLI — command-line tool for drp.
+
+Drop, share, and manage text snippets and files from the terminal.
+"""
 
 # VERSION file holds major.minor (e.g. "0.3") — only bumped manually.
 # CI queries PyPI for latest published version, bumps patch +1,
