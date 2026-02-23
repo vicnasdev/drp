@@ -1,4 +1,4 @@
-# [drp](https://drp.vicnas.me) ![version](https://img.shields.io/github/v/tag/vicnasdev/drp)
+# [drp](https://drp.fyi) ![version](https://img.shields.io/github/v/tag/vicnasdev/drp)
 
 Drop files or paste text, get a link instantly.
 

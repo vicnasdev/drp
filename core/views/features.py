@@ -13,7 +13,7 @@ def _vote_weight(user):
     if not user.is_authenticated:
         return 0
     try:
-        plan = user.userprofile.plan
+        plan = user.profile.plan
     except Exception:
         plan = Plan.FREE
     if plan in (Plan.STARTER, Plan.PRO):

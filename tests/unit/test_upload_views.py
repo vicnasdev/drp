@@ -91,10 +91,17 @@ class TestTextUploadBasic(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertTrue(Drop.objects.get(key='burn-key').burn)
 
-    def test_is_test_flag_set_on_drop(self):
+    def test_is_test_sets_short_expiry(self):
+        """is_test=1 sets expires_at ~1 hour instead of storing is_test flag."""
         res = _post_text(self.client, 'test-key', 'data', is_test='1')
         self.assertEqual(res.status_code, 200)
-        self.assertTrue(Drop.objects.get(key='test-key').is_test)
+        drop = Drop.objects.get(key='test-key')
+        self.assertFalse(drop.is_test)
+        self.assertIsNotNone(drop.expires_at)
+        # Expires within ~1 hour (give 5 min tolerance)
+        from django.utils import timezone
+        from datetime import timedelta
+        self.assertLess(drop.expires_at, timezone.now() + timedelta(hours=1, minutes=5))
 
     def test_anon_drop_has_locked_until(self):
         """Anon drops get a 24h creation lock."""

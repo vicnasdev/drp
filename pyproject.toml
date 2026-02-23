@@ -62,7 +62,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage  = "https://drp.vicnas.me"
+Homepage  = "https://drp.fyi"
 Repository = "https://github.com/vicnasdev/drp"
 Issues    = "https://github.com/vicnasdev/drp/issues"
 

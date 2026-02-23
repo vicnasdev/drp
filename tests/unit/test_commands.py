@@ -594,10 +594,11 @@ class TestCLISmokeUp:
         args.collection = kwargs.get('collection', None)
         return args
 
+    @patch('cli.commands.upload.config.record_drop')
     @patch('cli.commands.upload.load_context')
-    @patch('cli.api.text.upload_text')
+    @patch('cli.commands.upload.api.upload_text')
     @patch('cli.commands.upload._copy_to_clipboard', return_value=False)
-    def test_text_upload_no_crash(self, mock_clip, mock_upload, mock_ctx):
+    def test_text_upload_no_crash(self, mock_clip, mock_upload, mock_ctx, mock_record):
         mock_session = MagicMock()
         mock_ctx.return_value = ({'host': 'https://test.com'}, 'https://test.com', mock_session)
         mock_upload.return_value = 'testkey'
@@ -607,10 +608,11 @@ class TestCLISmokeUp:
         cmd_up(args)
         mock_upload.assert_called_once()
 
+    @patch('cli.commands.upload.config.record_drop')
     @patch('cli.commands.upload.load_context')
-    @patch('cli.api.text.upload_text')
+    @patch('cli.commands.upload.api.upload_text')
     @patch('cli.commands.upload._copy_to_clipboard', return_value=False)
-    def test_burn_flag_passed(self, mock_clip, mock_upload, mock_ctx):
+    def test_burn_flag_passed(self, mock_clip, mock_upload, mock_ctx, mock_record):
         mock_session = MagicMock()
         mock_ctx.return_value = ({'host': 'https://test.com'}, 'https://test.com', mock_session)
         mock_upload.return_value = 'bkey'
@@ -621,10 +623,11 @@ class TestCLISmokeUp:
         call_kwargs = mock_upload.call_args
         assert call_kwargs[1].get('burn') or call_kwargs[0][4] if len(call_kwargs[0]) > 4 else True
 
+    @patch('cli.commands.upload.config.record_drop')
     @patch('cli.commands.upload.load_context')
-    @patch('cli.api.text.upload_text')
+    @patch('cli.commands.upload.api.upload_text')
     @patch('cli.commands.upload._copy_to_clipboard', return_value=False)
-    def test_public_flag_passed(self, mock_clip, mock_upload, mock_ctx):
+    def test_public_flag_passed(self, mock_clip, mock_upload, mock_ctx, mock_record):
         mock_session = MagicMock()
         mock_ctx.return_value = ({'host': 'https://test.com'}, 'https://test.com', mock_session)
         mock_upload.return_value = 'pubkey'
