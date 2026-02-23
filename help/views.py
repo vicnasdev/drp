@@ -144,11 +144,10 @@ def _get_parser_info():
     }
 
 
-# ── Help bot (Gemini Flash) ──────────────────────────────────────────────────
+# ── Help bot (Gemini) ─────────────────────────────────────────────────────────
 
-_GEMINI_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/"
-    "models/gemini-2.0-flash:generateContent"
+_GEMINI_BASE = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
 )
 
 _SYSTEM_PROMPT = """\
@@ -242,9 +241,12 @@ def ask(request):
 
     docs = _get_docs_context()
 
+    model = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash-lite")
+    url = f"{_GEMINI_BASE}{model}:generateContent?key={api_key}"
+
     try:
         resp = requests.post(
-            f"{_GEMINI_URL}?key={api_key}",
+            url,
             json={
                 "contents": [{"role": "user", "parts": [{"text": question}]}],
                 "systemInstruction": {
