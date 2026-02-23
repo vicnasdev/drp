@@ -339,3 +339,29 @@ class FeatureProposalAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at',)
     raw_id_fields = ('proposed_by',)
     inlines = (FeatureVoteInline,)
+    actions = ['promote_to_github', 'close_proposals']
+
+    @admin.action(description="Promote selected to GitHub issue & delete")
+    def promote_to_github(self, request, queryset):
+        from core.management.commands.promote_feature import (
+            _ensure_label, _create_issue,
+        )
+        _ensure_label()
+        ok, fail = 0, 0
+        for proposal in queryset.filter(closed=False):
+            score = proposal.total_weight()
+            url = _create_issue(proposal, score)
+            if url:
+                proposal.delete()
+                ok += 1
+            else:
+                fail += 1
+        if ok:
+            messages.success(request, f"{ok} proposal(s) promoted to GitHub.")
+        if fail:
+            messages.warning(request, f"{fail} proposal(s) failed (check GITHUB_ISSUES_TOKEN).")
+
+    @admin.action(description="Close selected proposals (no issue)")
+    def close_proposals(self, request, queryset):
+        updated = queryset.update(closed=True)
+        messages.success(request, f"{updated} proposal(s) closed.")
