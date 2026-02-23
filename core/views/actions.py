@@ -121,6 +121,15 @@ def renew_drop(request, ns, key):
             status=400,
         )
 
+    from core.models import Plan
+    from core.views.helpers import user_plan
+    allowed = Plan.get(user_plan(request.user), 'renewals')
+    if allowed is not None and allowed <= 0:
+        return JsonResponse(
+            {'error': 'Your plan does not include renewals.'},
+            status=403,
+        )
+
     drop.renew()
     return JsonResponse({
         'expires_at': drop.expires_at.isoformat(),

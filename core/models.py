@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, pre_delete, post_delete
 from django.dispatch import receiver
 from django.utils import timezone
 from datetime import timedelta
@@ -469,20 +469,7 @@ class Drop(models.Model):
                 self.save(update_fields=["expires_at"])
 
     def hard_delete(self):
-        if self.ns == self.NS_FILE and self.file_public_id:
-            try:
-                from core.views.b2 import delete_object
-                ok = delete_object(self.ns, self.key)
-                if not ok:
-                    logger.error(
-                        "hard_delete: B2 delete failed for %s/%s — DB record preserved",
-                        self.ns, self.key,
-                    )
-            except Exception as e:
-                logger.error(
-                    "hard_delete: unexpected error deleting B2 object %s/%s: %s",
-                    self.ns, self.key, e,
-                )
+        """Delete from DB (and B2 via pre_delete signal)."""
         self.delete()
         return True
 
@@ -508,6 +495,30 @@ class Drop(models.Model):
         from core.views.b2 import presigned_get
         return presigned_get(self.ns, self.key, filename=self.filename,
                      expires_in=expires_in)
+
+
+# ── pre_delete signal — B2 object cleanup ─────────────────────────────────────
+
+@receiver(pre_delete, sender=Drop)
+def delete_b2_object_on_delete(sender, instance, **kwargs):
+    """Remove the file from B2 storage before deleting the DB record.
+
+    Runs on every deletion path: admin, hard_delete(), queryset.delete(), etc.
+    """
+    if instance.ns == Drop.NS_FILE and instance.file_public_id:
+        try:
+            from core.views.b2 import delete_object
+            ok = delete_object(instance.ns, instance.key)
+            if not ok:
+                logger.error(
+                    "pre_delete: B2 delete failed for %s/%s",
+                    instance.ns, instance.key,
+                )
+        except Exception as e:
+            logger.error(
+                "pre_delete: unexpected error deleting B2 object %s/%s: %s",
+                instance.ns, instance.key, e,
+            )
 
 
 # ── post_delete signal — storage accounting ───────────────────────────────────

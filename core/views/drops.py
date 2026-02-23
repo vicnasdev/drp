@@ -398,8 +398,9 @@ def _save_text(request, ns, key, existing, paid, anon_token):
         drop = existing
     else:
         expires_at, locked_until = _expiry_and_lock(request, paid)
-        # Test-mode drops get a short expiry so cleanup cron handles them
-        if is_test:
+        # Test-mode drops get a short expiry so cleanup cron handles them,
+        # but only when plan logic didn't already compute an explicit expiry.
+        if is_test and expires_at is None:
             expires_at = timezone.now() + timedelta(hours=1)
         owner = request.user if request.user.is_authenticated else None
 
@@ -580,8 +581,9 @@ def upload_confirm(request):
         elif not request.user.is_authenticated:
             locked_until = timezone.now() + timedelta(hours=24)
 
-        # Test-mode drops get a short expiry so cleanup cron handles them
-        if is_test:
+        # Test-mode drops get a short expiry so cleanup cron handles them,
+        # but only when plan logic didn't already compute an explicit expiry.
+        if is_test and expires_at is None:
             expires_at = timezone.now() + timedelta(hours=1)
 
         visible_from = _parse_schedule(schedule) if paid and schedule else None

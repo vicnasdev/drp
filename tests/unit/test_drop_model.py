@@ -164,6 +164,14 @@ class TestHardDelete(TestCase):
             drop.hard_delete()
         self.assertFalse(Drop.objects.filter(key="anon-del").exists())
 
+    def test_plain_delete_also_removes_b2(self):
+        """Admin / ORM .delete() triggers B2 cleanup via pre_delete signal."""
+        drop = _make_file_drop(key="admin-del", owner=self.user, filesize=512)
+        with patch("core.views.b2.delete_object") as mock_del:
+            drop.delete()
+            mock_del.assert_called_once_with(Drop.NS_FILE, "admin-del")
+        self.assertFalse(Drop.objects.filter(key="admin-del").exists())
+
 
 # ── Drop password helpers ─────────────────────────────────────────────────────
 

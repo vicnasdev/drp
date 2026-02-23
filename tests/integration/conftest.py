@@ -300,10 +300,12 @@ def plan_limits():
     Fetch live plan limits straight from the DB via Django shell.
     Tests use this instead of hardcoding values so they stay correct
     when limits are changed in the admin.
+    Falls back to the hardcoded Plan.LIMITS if no PlanLimit rows exist.
     """
     output = _manage("""
 import json
-from core.models import PlanLimit
-print(json.dumps({row.plan: row.as_dict() for row in PlanLimit.objects.all()}))
+from core.models import PlanLimit, Plan
+rows = {row.plan: row.as_dict() for row in PlanLimit.objects.all()}
+print(json.dumps(rows if rows else Plan.LIMITS))
 """)
     return json.loads(output)

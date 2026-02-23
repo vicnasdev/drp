@@ -77,12 +77,19 @@ class TestExpiry:
     """
 
     def test_free_expiry_ignored(self, free_user):
-        """Free plan: expiry_days sent but expires_at must be null in response."""
+        """Free plan: expiry_days sent but server ignores it.
+        With is_test=True the drop gets a short (1h) test expiry, but the
+        requested 30 days must NOT be honoured."""
         key = unique_key('exp-free')
         upload_text(HOST, free_user.session, 'no expiry', key=key, expiry_days=30, is_test=True)
         data = _fetch_drop_json(free_user.session, key)
         assert data is not None
-        assert data.get('expires_at') is None
+        # Test mode gives a 1-hour expiry; verify it is NOT the 30 days we asked for
+        exp_raw = data.get('expires_at')
+        if exp_raw is not None:
+            exp = datetime.fromisoformat(exp_raw.replace('Z', '+00:00'))
+            delta_hours = (exp - datetime.now(tz.utc)).total_seconds() / 3600
+            assert delta_hours < 2, f'Free plan honoured expiry_days: {delta_hours:.1f}h out (expected <2h)'
 
     def test_starter_expiry_applied(self, starter_user, plan_limits):
         key = unique_key('exp-starter')
@@ -134,7 +141,7 @@ class TestRenew:
     """Renew requires an explicit expires_at (paid only). Verifies expiry moves forward."""
 
     def test_free_drop_cannot_be_renewed(self, free_user):
-        """Free drops have no expires_at — renew must be rejected."""
+        """Free plan has renewals=0 — renew must be rejected."""
         key = unique_key('renew-free')
         upload_text(HOST, free_user.session, 'no renew', key=key, is_test=True)
         expires_at, _ = renew(HOST, free_user.session, key, ns='c')
