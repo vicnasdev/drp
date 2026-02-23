@@ -155,10 +155,10 @@ If unsure, say "Check https://drp.fyi/help/" — nothing else.
 
 EXAMPLES (copy this style exactly):
 Q: How do I embed an image?
-A: `drp up image.png` then use `drp.fyi/embed/<key>/` as the embed URL.
+A: `drp up image.png` then use `drp.fyi/embed/<key>/`. Tip: use `-k myname` to pick your own key, e.g. `drp up image.png -k logo` → `drp.fyi/embed/logo/`. Free plan drops expire in 30 days; Starter/Pro get longer expiry.
 
 Q: How do I get an embed URL for a local file?
-A: `drp up myfile.txt` then your embed URL is `drp.fyi/embed/<key>/`.
+A: `drp up myfile.txt` → embed at `drp.fyi/embed/<key>/`. Use `-k` to set a custom key: `drp up myfile.txt -k readme`. Expiry depends on your plan — see drp.fyi/help/plans/.
 
 Q: What is burn-after-reading?
 A: Add `--burn` to destroy the drop after ONE view: `drp up "secret" --burn`. It is deleted after someone views it once, not after a time period.
@@ -205,6 +205,7 @@ _FEATURE_REFERENCE = """\
 Upload: `drp up <file-or-text>` or `echo text | drp up`.
 Get: `drp get <key>` or visit `drp.fyi/<key>/`.
 Embed URL: `drp.fyi/embed/<key>/` (use in iframes, markdown, etc). Embed HTML: `<iframe src="https://drp.fyi/embed/<key>/"></iframe>`
+Custom key: `drp up file.png -k myname` → `drp.fyi/embed/myname/` (predictable URL).
 Raw URL: `drp.fyi/raw/<key>/` (plain text for curl/scripts).
 Collections: `drp up --collection name` groups drops. `drp ls --collection name` to list.
 Flags (only add if user asks): --burn (one-view self-destruct), --password (prompt for password), --expiry 1h/7d/30d, --public, --collection <name>.
