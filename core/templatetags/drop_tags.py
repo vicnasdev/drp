@@ -11,6 +11,14 @@ register = template.Library()
 
 
 @register.filter
+def split(value, sep=','):
+    """Split a string by separator. Usage: {{ value|split:',' }}"""
+    if not value:
+        return []
+    return [item.strip() for item in value.split(sep) if item.strip()]
+
+
+@register.filter
 def is_saved_by(drop, user):
     """
     Usage: {% if drop|is_saved_by:user %}

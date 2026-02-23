@@ -644,7 +644,6 @@ class BugReport(models.Model):
         ('bug',      'Bug — something is broken'),
         ('ui',       'UI — visual or layout issue'),
         ('perf',     'Performance — it\'s slow'),
-        ('feature',  'Feature request'),
         ('security', 'Security concern'),
         ('other',    'Other'),
     ]
@@ -654,7 +653,6 @@ class BugReport(models.Model):
         'bug':      'bug',
         'ui':       'ui',
         'perf':     'performance',
-        'feature':  'enhancement',
         'security': 'security',
         'other':    'question',
     }

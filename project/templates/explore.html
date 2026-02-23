@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load drop_tags %}
 {% block title %}explore — drp{% endblock %}
 
 {% block content %}
@@ -29,8 +30,8 @@
       </div>
       {% if drop.tags %}
       <div style="margin-top:.25rem">
-        {% for t in drop.tags.split:',' %}
-          <span style="font-size:.75rem;background:var(--surface);padding:.1rem .4rem;border-radius:4px;margin-right:.3rem">{{ t|striptags }}</span>
+        {% for t in drop.tags|split:"," %}
+          <span style="font-size:.75rem;background:var(--surface);padding:.1rem .4rem;border-radius:4px;margin-right:.3rem">{{ t }}</span>
         {% endfor %}
       </div>
       {% endif %}
