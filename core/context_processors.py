@@ -25,5 +25,5 @@ def domain(request):
 
 
 def helpbot(request):
-    """Tell templates whether the Gemini-powered help bot is available."""
-    return {'gemini_enabled': bool(getattr(settings, 'GEMINI_API_KEY', ''))}
+    """Tell templates whether the help bot is available."""
+    return {'gemini_enabled': bool(getattr(settings, 'LLM_BASE_URL', ''))}

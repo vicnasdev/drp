@@ -1,8 +1,8 @@
 """
 tests/integration/test_helpbot.py
 
-Integration tests for the /help/ask/ Gemini-powered help bot.
-These hit the real Gemini API to verify the bot gives useful,
+Integration tests for the /help/ask/ LLM-powered help bot.
+These hit the real LLM API to verify the bot gives useful,
 non-deflecting answers about drp features.
 """
 

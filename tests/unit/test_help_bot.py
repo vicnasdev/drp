@@ -1,4 +1,4 @@
-"""Tests for the /help/ask/ Gemini-powered help bot endpoint."""
+"""Tests for the /help/ask/ LLM-powered help bot endpoint."""
 
 import json
 from unittest.mock import MagicMock, patch
@@ -10,8 +10,8 @@ from django.test import TestCase, override_settings
 
 URL = "/help/ask/"
 
-_GEMINI_OK = {
-    "candidates": [{"content": {"parts": [{"text": "Use `drp up` to upload."}]}}]
+_LLM_OK = {
+    "choices": [{"message": {"content": "Use `drp up` to upload."}}]
 }
 
 _LOCMEM = {
@@ -26,7 +26,7 @@ def _post(client, q="test"):
     return client.post(URL, json.dumps({"question": q}), content_type="application/json")
 
 
-@override_settings(GEMINI_API_KEY="test-key")
+@override_settings(LLM_BASE_URL="http://localhost:11434/v1")
 class HelpBotTests(TestCase):
     """Validation, auth, config, and happy-path tests (DummyCache is fine)."""
 
@@ -55,8 +55,8 @@ class HelpBotTests(TestCase):
         self.client.logout()
         self.assertEqual(_post(self.client).status_code, 403)
 
-    @override_settings(GEMINI_API_KEY="")
-    def test_no_api_key_returns_503(self):
+    @override_settings(LLM_BASE_URL="")
+    def test_no_base_url_returns_503(self):
         self.assertEqual(_post(self.client).status_code, 503)
 
     # ── success ───────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ class HelpBotTests(TestCase):
     def test_successful_answer(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = _GEMINI_OK
+        mock_resp.json.return_value = _LLM_OK
         mock_post.return_value = mock_resp
 
         resp = _post(self.client, "how do I upload?")
@@ -74,33 +74,33 @@ class HelpBotTests(TestCase):
         self.assertIn("answer", data)
         self.assertIn("drp up", data["answer"])
 
-    # ── Gemini error ──────────────────────────────────────────────────────
+    # ── LLM error ─────────────────────────────────────────────────────────
 
-    @patch("help.views._report_gemini_error")
+    @patch("help.views._report_llm_error")
     @patch("help.views.requests.post")
-    def test_gemini_network_error(self, mock_post, _mock_report):
+    def test_llm_network_error(self, mock_post, _mock_report):
         from requests.exceptions import ConnectionError as ReqConnError
         mock_post.side_effect = ReqConnError("fail")
         self.assertEqual(_post(self.client).status_code, 502)
 
-    @patch("help.views._report_gemini_error")
+    @patch("help.views._report_llm_error")
     @patch("help.views.requests.post")
-    def test_gemini_http_error_reports_issue(self, mock_post, mock_report):
+    def test_llm_http_error_reports_issue(self, mock_post, mock_report):
         mock_resp = MagicMock()
-        mock_resp.status_code = 403
-        mock_resp.text = "API key not valid"
+        mock_resp.status_code = 500
+        mock_resp.text = "Internal server error"
         mock_post.return_value = mock_resp
 
         resp = _post(self.client)
         self.assertEqual(resp.status_code, 502)
         mock_report.assert_called_once()
-        self.assertIn("GeminiHTTP403", mock_report.call_args[0][0])
+        self.assertIn("LLMHTTP500", mock_report.call_args[0][0])
 
     @patch("help.views.requests.post")
-    def test_gemini_empty_response(self, mock_post):
+    def test_llm_empty_response(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = {"candidates": []}
+        mock_resp.json.return_value = {"choices": []}
         mock_post.return_value = mock_resp
 
         resp = _post(self.client)
@@ -111,7 +111,7 @@ class HelpBotTests(TestCase):
 # ── Rate-limit tests need a real cache backend ───────────────────────────────
 
 
-@override_settings(GEMINI_API_KEY="test-key", CACHES=_LOCMEM)
+@override_settings(LLM_BASE_URL="http://localhost:11434/v1", CACHES=_LOCMEM)
 class HelpBotRateLimitTests(TestCase):
     """Free plan gets 5 questions/hr; verify the limit is enforced."""
 
@@ -124,7 +124,7 @@ class HelpBotRateLimitTests(TestCase):
     def test_free_plan_limit(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = _GEMINI_OK
+        mock_resp.json.return_value = _LLM_OK
         mock_post.return_value = mock_resp
 
         for i in range(5):
@@ -140,7 +140,7 @@ class HelpBotRateLimitTests(TestCase):
 
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = _GEMINI_OK
+        mock_resp.json.return_value = _LLM_OK
         mock_post.return_value = mock_resp
 
         # Should be able to make 25 requests

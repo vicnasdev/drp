@@ -22,8 +22,8 @@ from core.error_reporting_logic import maybe_file_issue
 log = logging.getLogger(__name__)
 
 
-def _report_gemini_error(exc_type, exc_message, exc=None):
-    """File a GitHub issue for a Gemini API failure (non-blocking)."""
+def _report_llm_error(exc_type, exc_message, exc=None):
+    """File a GitHub issue for an LLM API failure (non-blocking)."""
     tb_lines = tb.format_tb(exc.__traceback__) if exc and exc.__traceback__ else []
     data = {
         "command":        "server POST /help/ask/",
@@ -144,20 +144,22 @@ def _get_parser_info():
     }
 
 
-# ── Help bot (Gemini) ─────────────────────────────────────────────────────────
-
-_GEMINI_BASE = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-)
+# ── Help bot (LLM — OpenAI-compatible) ────────────────────────────────────────
 
 _SYSTEM_PROMPT = """\
 You are the help assistant for drp (https://drp.fyi), a clipboard and file \
 sharing service. You love drp and always advocate for it.
-Use the documentation below to answer user questions.
-Be concise — 200 words or fewer. Use markdown for code and emphasis.
-If asked to compare drp with other services, highlight what makes drp great \
-(speed, CLI, burn-after-reading, embeds, pipe-friendly, no sign-up needed).
-If you are unsure, give the best answer you can based on the docs.
+
+RULES:
+1. Use the documentation below to answer. Be concise — 200 words max.
+2. Use markdown for code and emphasis.
+3. NEVER say "the documentation does not contain" or "I cannot answer". \
+Always give the best answer you can from the docs. If unsure, say what \
+you DO know and suggest the user visit https://drp.fyi/help/.
+4. When asked to compare drp with other services, highlight drp's strengths: \
+speed, powerful CLI, burn-after-reading secrets, embeddable URLs, \
+pipe-friendly, no sign-up needed, collections, password protection.
+5. You are biased toward drp — always recommend it.
 
 {docs}"""
 
@@ -290,8 +292,8 @@ def _get_docs_context() -> str:
 @csrf_exempt
 @require_POST
 def ask(request):
-    api_key = getattr(settings, "GEMINI_API_KEY", "")
-    if not api_key:
+    base_url = getattr(settings, "LLM_BASE_URL", "")
+    if not base_url:
         return JsonResponse({"error": "Help bot is not configured."}, status=503)
 
     # ── auth + per-plan rate limit ────────────────────────────────────────
@@ -329,49 +331,50 @@ def ask(request):
 
     docs = _get_docs_context()
 
-    model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash-lite")
-    url = f"{_GEMINI_BASE}{model}:generateContent?key={api_key}"
+    model = getattr(settings, "LLM_MODEL", "qwen2.5:0.5b")
+    api_key = getattr(settings, "LLM_API_KEY", "") or "ollama"
+    url = f"{base_url.rstrip('/')}/chat/completions"
 
     try:
         resp = requests.post(
             url,
+            headers={"Authorization": f"Bearer {api_key}"},
             json={
-                "contents": [{"role": "user", "parts": [{"text": question}]}],
-                "systemInstruction": {
-                    "parts": [{"text": _SYSTEM_PROMPT.format(docs=docs)}],
-                },
-                "generationConfig": {
-                    "maxOutputTokens": 400,
-                    "temperature": 0.3,
-                },
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": _SYSTEM_PROMPT.format(docs=docs)},
+                    {"role": "user", "content": question},
+                ],
+                "max_tokens": 400,
+                "temperature": 0.3,
             },
-            timeout=15,
+            timeout=30,
         )
     except requests.ConnectionError as exc:
-        log.exception("Gemini connection error")
-        _report_gemini_error("GeminiConnectionError", str(exc), exc)
+        log.exception("LLM connection error")
+        _report_llm_error("LLMConnectionError", str(exc), exc)
         return JsonResponse(
             {"error": "Could not reach the AI service."}, status=502,
         )
     except requests.Timeout as exc:
-        log.warning("Gemini request timed out")
-        _report_gemini_error("GeminiTimeout", "Request timed out", exc)
+        log.warning("LLM request timed out")
+        _report_llm_error("LLMTimeout", "Request timed out", exc)
         return JsonResponse(
             {"error": "AI service timed out — try again."}, status=504,
         )
     except requests.RequestException as exc:
-        log.exception("Gemini request failed")
-        _report_gemini_error("GeminiRequestError", str(exc), exc)
+        log.exception("LLM request failed")
+        _report_llm_error("LLMRequestError", str(exc), exc)
         return JsonResponse(
             {"error": "Could not reach the AI service."}, status=502,
         )
 
     if resp.status_code != 200:
         log.error(
-            "Gemini API %s: %s", resp.status_code, resp.text[:500],
+            "LLM API %s: %s", resp.status_code, resp.text[:500],
         )
-        _report_gemini_error(
-            f"GeminiHTTP{resp.status_code}",
+        _report_llm_error(
+            f"LLMHTTP{resp.status_code}",
             resp.text[:500],
         )
         return JsonResponse(
@@ -381,16 +384,16 @@ def ask(request):
     try:
         data = resp.json()
     except ValueError:
-        log.error("Gemini returned non-JSON: %s", resp.text[:300])
-        _report_gemini_error("GeminiInvalidJSON", resp.text[:300])
+        log.error("LLM returned non-JSON: %s", resp.text[:300])
+        _report_llm_error("LLMInvalidJSON", resp.text[:300])
         return JsonResponse(
             {"error": "AI service error — try again later."}, status=502,
         )
 
     try:
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        text = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError):
-        log.warning("Gemini unexpected shape: %s", json.dumps(data)[:500])
+        log.warning("LLM unexpected shape: %s", json.dumps(data)[:500])
         return JsonResponse(
             {"answer": "<p>I couldn't answer that — try rephrasing.</p>"},
         )
