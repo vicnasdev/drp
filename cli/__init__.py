@@ -1,6 +1,7 @@
 """drp CLI — command-line tool for drp.
 
 Drop, share, and manage text snippets and files from the terminal.
+https://drp.fyi
 """
 
 # VERSION file holds major.minor (e.g. "0.3") — only bumped manually.
