@@ -550,7 +550,7 @@ class TestVersion:
         from cli import __version__
         parts = __version__.split('.')
         # Locally: "0.3" (major.minor from VERSION file)
-        # CI/installed: "0.3.42" (major.minor.run_number)
+        # CI/installed: "0.3.42" (major.minor.patch from PyPI bump)
         assert len(parts) >= 2
         for part in parts:
             assert part.isdigit()

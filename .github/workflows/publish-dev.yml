@@ -137,13 +137,21 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Compute version
+      - name: Compute version from PyPI
         id: version
         run: |
           base=$(cat VERSION | tr -d '[:space:]')
-          version="${base}.${{ github.run_number }}"
+          pkg="drp-cli"
+          latest=$(curl -sf "https://pypi.org/pypi/${pkg}/json" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['version'])" 2>/dev/null || echo "")
+          if [ -n "$latest" ] && echo "$latest" | grep -q "^${base}\."; then
+            patch=$(echo "$latest" | cut -d. -f3)
+            version="${base}.$((patch + 1))"
+          else
+            version="${base}.0"
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Publishing drp-cli $version"
+          echo "Publishing ${pkg} ${version} (latest on PyPI: ${latest:-none})"
 
       - name: Stamp version into CLI
         run: |

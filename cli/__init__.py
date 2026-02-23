@@ -1,9 +1,9 @@
 """drp CLI — command-line tool for drp."""
 
 # VERSION file holds major.minor (e.g. "0.3") — only bumped manually.
-# CI computes full version (major.minor.run_number) and seds this line
-# to a literal before building: __version__ = '0.3.42'
-# Never auto-committed, so merges between dev↔main stay clean.
+# CI queries PyPI for latest published version, bumps patch +1,
+# and seds this line to a literal before building: __version__ = '0.3.42'
+# Nothing committed back — merges between dev↔main stay clean.
 # Fallback: importlib.metadata for installed packages.
 
 def _resolve_version():
