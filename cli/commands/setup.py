@@ -81,12 +81,46 @@ def _setup_ansi(cfg: dict) -> None:
 def cmd_login(args):
     cfg = config.load()
     host = cfg.get('host', DEFAULT_HOST)
-    email = input('  Email: ').strip()
+
+    # --token: store an API token instead of session login
+    token = getattr(args, 'token', None)
+    if token:
+        cfg['api_key'] = token
+        config.save(cfg)
+        # Validate the token by hitting the account endpoint
+        session = requests.Session()
+        session.headers['Authorization'] = f'Bearer {token}'
+        try:
+            res = session.get(
+                f'{host}/auth/account/',
+                headers={'Accept': 'application/json'},
+                timeout=10,
+            )
+            if res.ok:
+                account = res.json()
+                username = account.get('username', '')
+                if username:
+                    cfg['username'] = username
+                    config.save(cfg)
+                print(f'  ✓ Token saved — authenticated as @{username or "?"}')
+            else:
+                print(f'  ✗ Token rejected (HTTP {res.status_code})')
+                cfg.pop('api_key', None)
+                config.save(cfg)
+                sys.exit(1)
+        except Exception as e:
+            print(f'  ✗ Could not validate token: {e}')
+            cfg.pop('api_key', None)
+            config.save(cfg)
+            sys.exit(1)
+        return
+
+    identifier = input('  Username or email: ').strip()
     password = getpass.getpass('  Password: ')
     session = requests.Session()
     try:
-        if api.login(host, session, email, password):
-            cfg['email'] = email
+        if api.login(host, session, identifier, password):
+            cfg['email'] = identifier
             # Fetch username from account endpoint
             try:
                 res = session.get(
@@ -97,16 +131,19 @@ def cmd_login(args):
                 if res.ok:
                     account = res.json()
                     username = account.get('username', '')
+                    email = account.get('email', '')
                     if username:
                         cfg['username'] = username
+                    if email:
+                        cfg['email'] = email
             except Exception:
                 pass
             config.save(cfg)
             save_session(session)
             username_str = f' (@{cfg["username"]})' if cfg.get('username') else ''
-            print(f'  ✓ Logged in as {email}{username_str}')
+            print(f'  ✓ Logged in as {cfg["email"]}{username_str}')
         else:
-            print('  ✗ Login failed — check your email and password.')
+            print('  ✗ Login failed — check your credentials.')
             sys.exit(1)
     except Exception as e:
         print(f'  ✗ Login error: {e}')

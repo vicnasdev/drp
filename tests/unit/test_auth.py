@@ -103,6 +103,40 @@ class TestRegistrationView(TestCase):
         self.assertFalse(User.objects.filter(username='bob').exists())
 
 
+# ── Login view ────────────────────────────────────────────────────────────────
+
+class TestLoginView(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='alice', email='alice@test.com', password='password123',
+        )
+
+    def test_login_with_username(self):
+        res = self.client.post('/auth/login/', {
+            'email': 'alice', 'password': 'password123',
+        })
+        self.assertEqual(res.status_code, 302)
+
+    def test_login_with_email(self):
+        res = self.client.post('/auth/login/', {
+            'email': 'alice@test.com', 'password': 'password123',
+        })
+        self.assertEqual(res.status_code, 302)
+
+    def test_login_with_email_case_insensitive(self):
+        res = self.client.post('/auth/login/', {
+            'email': 'Alice@Test.COM', 'password': 'password123',
+        })
+        self.assertEqual(res.status_code, 302)
+
+    def test_wrong_password_rejected(self):
+        res = self.client.post('/auth/login/', {
+            'email': 'alice', 'password': 'wrong',
+        })
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'Invalid')
+
+
 # ── Key @ restriction ─────────────────────────────────────────────────────────
 
 class TestAtKeyRestriction(TestCase):

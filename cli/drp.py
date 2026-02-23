@@ -148,6 +148,10 @@ def build_parser():
     sub = parser.add_subparsers(dest='command')
     for name, _, help_str in COMMANDS:
         sub.add_parser(name, help=help_str)
+    # login --token
+    p_login = sub._name_parser_map['login']
+    p_login.add_argument('--token', '-t', default=None, metavar='TOKEN',
+                         help='Log in with an API token instead of password')
     _configure_subparsers(sub)
     return parser
 

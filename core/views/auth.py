@@ -83,9 +83,18 @@ def login_view(request):
 
     error = None
     if request.method == 'POST':
-        email = request.POST.get('email', '').strip().lower()
+        identifier = request.POST.get('email', '').strip()
         password = request.POST.get('password', '')
-        user = authenticate(request, username=email, password=password)
+        # Accept username or email
+        if '@' in identifier:
+            try:
+                user_obj = User.objects.get(email__iexact=identifier)
+                username = user_obj.username
+            except User.DoesNotExist:
+                username = identifier  # let authenticate fail naturally
+        else:
+            username = identifier
+        user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
 

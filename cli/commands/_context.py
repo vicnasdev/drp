@@ -32,7 +32,7 @@ def load_context(require_login=False):
 
     session = requests.Session()
 
-    api_key = os.environ.get("DRP_API_KEY", "").strip()
+    api_key = os.environ.get("DRP_API_KEY", "").strip() or cfg.get("api_key", "")
     if api_key:
         session.headers["Authorization"] = f"Bearer {api_key}"
     else:
