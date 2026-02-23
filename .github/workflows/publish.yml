@@ -153,10 +153,13 @@ jobs:
           timeout 5 drp ls || true
 
   # ── Publish drp (with tags + GitHub releases) ─────────────────────────────
+  # This job is dormant until PYPI_DRP_READY secret is set to "true".
+  # When you acquire the "drp" PyPI name, add that secret to enable it.
 
   publish:
     needs: test
     runs-on: ubuntu-latest
+    if: ${{ secrets.PYPI_DRP_READY == 'true' }}
     concurrency:
       group: publish-main
       cancel-in-progress: false
@@ -185,6 +188,21 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Publishing ${pkg} ${version} (latest on PyPI: ${latest:-none})"
 
+      - name: Stamp version into CLI
+        run: |
+          sed -i "s/__version__ = _resolve_version()/__version__ = '${{ steps.version.outputs.version }}'/" cli/__init__.py
+
+      - name: Build "drp" package
+        run: |
+          # Override package name from drp-cli → drp at build time
+          sed -i 's/^name = "drp-cli"/name = "drp"/' pyproject.toml
+          pip install build && python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
       - name: Collect commits since last release
         run: |
           prev_tag=$(git tag --sort=-v:refname | head -1)
@@ -204,23 +222,9 @@ jobs:
             echo '```'
           } > /tmp/release_notes.txt
 
-      - name: Stamp version into CLI
-        run: |
-          sed -i "s/__version__ = _resolve_version()/__version__ = '${{ steps.version.outputs.version }}'/" cli/__init__.py
-
-      - name: Build and publish "drp" to PyPI
-        run: |
-          # Override package name from drp-cli → drp at build time
-          sed -i 's/^name = "drp-cli"/name = "drp"/' pyproject.toml
-          pip install build && python -m build
-
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: v${{ steps.version.outputs.version }}
           body_path: /tmp/release_notes.txt
-
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
