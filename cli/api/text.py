@@ -30,6 +30,8 @@ def upload_text(host, session, text, key=None, timer=None, expiry_days=None,
         data['expiry_days'] = expiry_days
     if burn:
         data['burn'] = '1'
+    if password:
+        data['password'] = password
     if is_test:
         data['is_test'] = '1'
     try:
