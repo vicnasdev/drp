@@ -127,6 +127,8 @@ jobs:
   publish:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     concurrency:
       group: publish-dev
       cancel-in-progress: false
