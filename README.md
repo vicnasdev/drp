@@ -36,6 +36,7 @@ drp setup && drp up "hello world"
 | `LEMONSQUEEZY_STARTER_VARIANT_ID` | — | Starter plan variant |
 | `LEMONSQUEEZY_PRO_VARIANT_ID` | — | Pro plan variant |
 | `CLEANUP_INTERVAL_SECS` | — | Cleanup interval in seconds (default `3600`) |
+| `GEMINI_API_KEY` | — | Help-page bot (Gemini Flash free tier) |
 | `DEBUG` | — | `True` for local dev only |
 
 ## License

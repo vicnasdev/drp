@@ -22,3 +22,8 @@ def ads(request):
 def domain(request):
     """Expose settings.DOMAIN to every template."""
     return {'domain': getattr(settings, 'DOMAIN', '') or 'localhost'}
+
+
+def helpbot(request):
+    """Tell templates whether the Gemini-powered help bot is available."""
+    return {'gemini_enabled': bool(getattr(settings, 'GEMINI_API_KEY', ''))}
