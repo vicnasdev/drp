@@ -36,14 +36,12 @@ OLLAMA_MODEL ?= qwen2.5:0.5b
 ollama-build: ## Build Ollama Docker image
 	docker build -t drp-ollama --build-arg OLLAMA_MODEL=$(OLLAMA_MODEL) ollama
 
-ollama-run: ## Run Ollama locally (PORT=8081, OLLAMA_API_KEY from env)
+ollama-run: ## Run Ollama locally on :11434
 	docker run --rm -d --name drp-ollama \
-	  -p $${OLLAMA_PORT:-8081}:8080 \
-	  -e PORT=8080 \
+	  -p 11434:11434 \
 	  -e OLLAMA_MODEL=$(OLLAMA_MODEL) \
-	  -e OLLAMA_API_KEY=$${OLLAMA_API_KEY:-} \
 	  drp-ollama
-	@echo "  ✓ Ollama running on http://localhost:$${OLLAMA_PORT:-8081}"
+	@echo "  ✓ Ollama running on http://localhost:11434"
 
 ollama-stop: ## Stop local Ollama container
 	docker stop drp-ollama 2>/dev/null || true

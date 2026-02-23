@@ -36,9 +36,8 @@ drp setup && drp up "hello world"
 | `LEMONSQUEEZY_STARTER_VARIANT_ID` | — | Starter plan variant |
 | `LEMONSQUEEZY_PRO_VARIANT_ID` | — | Pro plan variant |
 | `CLEANUP_INTERVAL_SECS` | — | Cleanup interval in seconds (default `3600`) |
-| `LLM_BASE_URL` | — | Help bot LLM endpoint (e.g. `http://localhost:11434/v1`) |
-| `LLM_MODEL` | `qwen2.5:0.5b` | Model name (any OpenAI-compatible) |
-| `LLM_API_KEY` | — | API key (optional for Ollama) |
+| `LLM_BASE_URL` | — | Ollama endpoint (e.g. `http://ollama.railway.internal:11434/v1`) |
+| `LLM_MODEL` | `qwen2.5:0.5b` | Model name |
 | `DEBUG` | — | `True` for local dev only |
 
 ## License

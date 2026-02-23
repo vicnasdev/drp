@@ -332,13 +332,11 @@ def ask(request):
     docs = _get_docs_context()
 
     model = getattr(settings, "LLM_MODEL", "qwen2.5:0.5b")
-    api_key = getattr(settings, "LLM_API_KEY", "") or "ollama"
     url = f"{base_url.rstrip('/')}/chat/completions"
 
     try:
         resp = requests.post(
             url,
-            headers={"Authorization": f"Bearer {api_key}"},
             json={
                 "model": model,
                 "messages": [
