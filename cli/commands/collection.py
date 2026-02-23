@@ -1,12 +1,15 @@
 """
 drp collection — manage drop collections.
 
-  drp collection ls                    list your collections
-  drp collection new <n>            create a new collection
-  drp collection add <slug> <key>      add a drop to a collection
-  drp collection add <slug> -f <key>   add a file drop to a collection
-  drp collection rm <slug> <key>       remove a drop from a collection
-  drp collection open <slug>           print the collection URL
+  drp collection ls                         list your collections
+  drp collection new <name>                 create a new collection
+  drp collection new <name> --parent <slug> create a sub-collection
+  drp collection add <path> <key>           add a drop to a collection
+  drp collection add <path> -f <key>        add a file drop to a collection
+  drp collection rm <path> <key>            remove a drop from a collection
+  drp collection open <path>                print the collection URL
+
+  <path> can be a slug ("notes") or a nested path ("notes/work").
 """
 
 import sys
@@ -47,18 +50,35 @@ def cmd_collection(args):
             print(dim('  (no collections)'))
             return
 
-        for col in cols:
-            slug       = col.get('slug', '')
-            name       = col.get('name', slug)
+        # Build tree: group by parent_id
+        children_map = {}
+        roots = []
+        for c in cols:
+            pid = c.get('parent_id')
+            if pid:
+                children_map.setdefault(pid, []).append(c)
+            else:
+                roots.append(c)
+
+        def _print_tree(col, indent=0):
+            path       = col.get('path', col.get('slug', ''))
+            name       = col.get('name', path)
             drop_count = len(col.get('drops', []))
-            url        = f'{host}/@{username}/{slug}/' if username else ''
+            prefix     = '  ' + '  ' * indent
+            slug_disp  = magenta('@' + username + '/' + path) if indent == 0 else magenta(col.get('slug', ''))
+            child_list = children_map.get(col.get('id'), [])
+            child_hint = f'  {grey("+" + str(len(child_list)) + " sub")}' if child_list else ''
             print(
-                f'  {magenta("@" + username + "/" + slug):<32}  '
+                f'{prefix}{slug_disp}  '
                 f'{dim(name):<24}  '
                 f'{grey(str(drop_count) + " drop" + ("s" if drop_count != 1 else ""))}'
+                f'{child_hint}'
             )
-            if url:
-                print(f'  {dim("  " + url)}')
+            for child in child_list:
+                _print_tree(child, indent + 1)
+
+        for root in roots:
+            _print_tree(root)
         return
 
     # ── new ───────────────────────────────────────────────────────────────────
@@ -68,14 +88,37 @@ def cmd_collection(args):
             err('Provide a collection name: drp collection new "my notes"')
             sys.exit(1)
 
+        parent_slug = getattr(args, 'parent', None)
+
         from cli.api.auth import get_csrf
         csrf = get_csrf(host, session)
         from cli.spinner import Spinner
+
+        # Resolve parent collection if --parent is specified
+        payload = {'name': name}
+        if parent_slug and username:
+            try:
+                with Spinner('resolving parent'):
+                    detail = session.get(
+                        f'{host}/@{username}/{parent_slug}/',
+                        headers={'Accept': 'application/json'},
+                        timeout=10,
+                    )
+                    if not detail.ok:
+                        err(f'Parent collection "{parent_slug}" not found.')
+                        sys.exit(1)
+                    payload['parent_id'] = detail.json().get('id')
+            except SystemExit:
+                raise
+            except Exception as e:
+                err(f'Could not resolve parent: {e}')
+                sys.exit(1)
+
         try:
             with Spinner('creating'):
                 res = session.post(
                     f'{host}/collections/create/',
-                    json={'name': name},
+                    json=payload,
                     headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
                     timeout=10,
                 )
@@ -85,9 +128,9 @@ def cmd_collection(args):
 
         if res.status_code == 201:
             data = res.json()
-            slug = data.get('slug', '')
-            url  = f'{host}/@{username}/{slug}/' if username else data.get('url', '')
-            ok(f'{magenta(slug)}  created')
+            path = data.get('path', data.get('slug', ''))
+            url  = f'{host}/@{username}/{path}/' if username else data.get('url', '')
+            ok(f'{magenta(path)}  created')
             print(f'  {dim(url)}')
         elif res.status_code == 403:
             err(res.json().get('error', 'Permission denied. Collections require a paid plan.'))
@@ -164,7 +207,7 @@ def cmd_collection(args):
     if sub == 'open':
         slug = getattr(args, 'slug', '')
         if not slug:
-            err('Usage: drp collection open <slug>')
+            err('Usage: drp collection open <path>')
             sys.exit(1)
         if not username:
             err('Username not set. Run: drp login')

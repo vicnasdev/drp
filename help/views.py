@@ -178,6 +178,9 @@ A: `drp up "hello world"` or `echo hello | drp up`.
 Q: How long do drops last?
 A: Depends on your plan. Free = 30 days, Starter/Pro = longer. See drp.fyi/help/plans/.
 
+Q: Are there sub-collections?
+A: Yes! `drp collection new "work" --parent notes` creates "work" inside "notes". Navigate in the shell: `cd notes/work`. URL: `drp.fyi/@user/notes/work/`.
+
 RULES:
 - ONLY use commands and URLs from the DOCS below. Do NOT invent commands like `drp f` or `drp embed`.
 - Do NOT add flags (--burn, --collection, --password) unless the user specifically asks.
@@ -216,10 +219,12 @@ Get: `drp get <key>` or visit `drp.fyi/<key>/`.
 Embed URL: `drp.fyi/embed/<key>/` (use in iframes, markdown, etc). Embed HTML: `<iframe src="https://drp.fyi/embed/<key>/"></iframe>`
 Custom key: `drp up file.png -k myname` → `drp.fyi/embed/myname/` (predictable URL).
 Raw URL: `drp.fyi/raw/<key>/` (plain text for curl/scripts).
-Collections: `drp up --collection name` groups drops. `drp ls --collection name` to list.
-Flags (only add if user asks): --burn (one-view self-destruct), --password (prompt for password), --expiry 1h/7d/30d, --public, --collection <name>.
+Collections (paid plans): `drp collection ls` lists collections. `drp collection new "my notes"` creates one. `drp collection add <slug> <key>` adds a drop. `drp collection rm <slug> <key>` removes. `drp collection open <slug>` prints URL.
+Sub-collections: `drp collection new "work" --parent notes` creates a sub-collection under "notes". Nested paths work everywhere: `drp collection add notes/work <key>`, `drp collection open notes/work`. URL: `drp.fyi/@user/notes/work/`.
+Shell navigation: `drp shell` → `cd notes` → `cd work` (or `cd notes/work`). `cd ..` goes up. `pwd` shows path. `ls` lists drops + sub-collections.
+Flags (only add if user asks): --burn (one-view self-destruct), --password (prompt for password), --expiry 1h/7d/30d, --public.
 Burn-after-reading: `drp up "secret" --burn` — drop is DELETED after ONE view. Not time-based.
-CLI install: `pip install drp-cli && drp setup`. Commands: up get ls cp edit diff save load status ask shell.
+CLI install: `pip install drp-cli && drp setup`. Commands: up get ls cp edit diff save load status ask shell collection token cache rmcache.
 Plans: anon, free, starter, pro → drp.fyi/help/plans/
 """
 

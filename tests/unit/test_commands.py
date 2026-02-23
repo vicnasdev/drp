@@ -1080,3 +1080,189 @@ class TestShellHelpText:
         _print_shell_help()
         out = capsys.readouterr().out
         assert 'clear' in out
+
+
+# ── CLI collection --parent and tree ls tests ─────────────────────────────────
+
+class TestCollectionNewParentParser:
+    """Verify the `drp collection new` parser accepts --parent."""
+
+    def test_parser_accepts_parent_flag(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['collection', 'new', 'child', '--parent', 'notes'])
+        assert args.parent == 'notes'
+
+    def test_parser_accepts_parent_short_flag(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['collection', 'new', 'child', '-p', 'notes'])
+        assert args.parent == 'notes'
+
+    def test_parser_parent_default_none(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['collection', 'new', 'my', 'notes'])
+        assert args.parent is None
+
+
+class TestCollectionLsTree:
+    """Test the tree display logic in collection ls."""
+
+    def test_tree_groups_children_under_parents(self, capsys):
+        """ls should indent sub-collections under their parents."""
+        from unittest.mock import patch, MagicMock
+
+        cols = [
+            {'id': 1, 'slug': 'notes', 'name': 'Notes', 'path': 'notes',
+             'parent_id': None, 'drops': ['a', 'b']},
+            {'id': 2, 'slug': 'work', 'name': 'Work', 'path': 'notes/work',
+             'parent_id': 1, 'drops': ['c']},
+        ]
+
+        with patch('cli.commands.collection.load_context') as mock_ctx:
+            mock_ctx.return_value = ({'username': 'u'}, 'http://x', MagicMock())
+            with patch('cli.commands.collection._fetch_collections', return_value=cols):
+                args = MagicMock()
+                args.col_cmd = 'ls'
+                from cli.commands.collection import cmd_collection
+                cmd_collection(args)
+        out = capsys.readouterr().out
+        assert 'notes' in out
+        assert 'work' in out
+        # Sub-collection hint
+        assert '+1 sub' in out
+
+    def test_tree_no_children_no_hint(self, capsys):
+        """Collections with no children should not show sub hint."""
+        from unittest.mock import patch, MagicMock
+
+        cols = [
+            {'id': 1, 'slug': 'solo', 'name': 'Solo', 'path': 'solo',
+             'parent_id': None, 'drops': []},
+        ]
+
+        with patch('cli.commands.collection.load_context') as mock_ctx:
+            mock_ctx.return_value = ({'username': 'u'}, 'http://x', MagicMock())
+            with patch('cli.commands.collection._fetch_collections', return_value=cols):
+                args = MagicMock()
+                args.col_cmd = 'ls'
+                from cli.commands.collection import cmd_collection
+                cmd_collection(args)
+        out = capsys.readouterr().out
+        assert 'solo' in out
+        assert 'sub' not in out
+
+
+class TestCollectionNewWithParent:
+    """Test drp collection new --parent resolves parent and sends parent_id."""
+
+    def test_new_with_parent_sends_parent_id(self, capsys):
+        from unittest.mock import patch, MagicMock
+
+        parent_resp = MagicMock()
+        parent_resp.ok = True
+        parent_resp.json.return_value = {'id': 42}
+
+        create_resp = MagicMock()
+        create_resp.status_code = 201
+        create_resp.json.return_value = {'slug': 'work', 'path': 'notes/work'}
+
+        session = MagicMock()
+        session.get.return_value = parent_resp
+        session.post.return_value = create_resp
+
+        with patch('cli.commands.collection.load_context') as mock_ctx:
+            mock_ctx.return_value = ({'username': 'u'}, 'http://x', session)
+            with patch('cli.api.auth.get_csrf', return_value='tok'):
+                args = MagicMock()
+                args.col_cmd = 'new'
+                args.name_parts = ['work']
+                args.parent = 'notes'
+                from cli.commands.collection import cmd_collection
+                cmd_collection(args)
+
+        # Verify parent_id was sent in the POST
+        call_kwargs = session.post.call_args
+        payload = call_kwargs[1].get('json') or call_kwargs[0][1] if len(call_kwargs[0]) > 1 else call_kwargs[1].get('json')
+        assert payload['parent_id'] == 42
+        assert payload['name'] == 'work'
+
+        out = capsys.readouterr().out
+        assert 'notes/work' in out
+
+    def test_new_without_parent_no_parent_id(self, capsys):
+        from unittest.mock import patch, MagicMock
+
+        create_resp = MagicMock()
+        create_resp.status_code = 201
+        create_resp.json.return_value = {'slug': 'solo', 'path': 'solo'}
+
+        session = MagicMock()
+        session.post.return_value = create_resp
+
+        with patch('cli.commands.collection.load_context') as mock_ctx:
+            mock_ctx.return_value = ({'username': 'u'}, 'http://x', session)
+            with patch('cli.api.auth.get_csrf', return_value='tok'):
+                args = MagicMock()
+                args.col_cmd = 'new'
+                args.name_parts = ['solo']
+                args.parent = None
+                from cli.commands.collection import cmd_collection
+                cmd_collection(args)
+
+        call_kwargs = session.post.call_args
+        payload = call_kwargs[1].get('json') or call_kwargs[0][1] if len(call_kwargs[0]) > 1 else call_kwargs[1].get('json')
+        assert 'parent_id' not in payload
+
+    def test_new_parent_not_found_exits(self):
+        from unittest.mock import patch, MagicMock
+        import pytest
+
+        parent_resp = MagicMock()
+        parent_resp.ok = False
+        parent_resp.status_code = 404
+
+        session = MagicMock()
+        session.get.return_value = parent_resp
+
+        with patch('cli.commands.collection.load_context') as mock_ctx:
+            mock_ctx.return_value = ({'username': 'u'}, 'http://x', session)
+            with patch('cli.api.auth.get_csrf', return_value='tok'):
+                args = MagicMock()
+                args.col_cmd = 'new'
+                args.name_parts = ['child']
+                args.parent = 'nonexistent'
+                from cli.commands.collection import cmd_collection
+                with pytest.raises(SystemExit):
+                    cmd_collection(args)
+
+
+class TestBotPromptAccuracy:
+    """Validate the help bot prompt has correct collection documentation."""
+
+    def test_feature_reference_has_collection_commands(self):
+        from help.views import _FEATURE_REFERENCE
+        assert 'drp collection ls' in _FEATURE_REFERENCE
+        assert 'drp collection new' in _FEATURE_REFERENCE
+        assert 'drp collection add' in _FEATURE_REFERENCE
+
+    def test_feature_reference_has_subcollection_docs(self):
+        from help.views import _FEATURE_REFERENCE
+        assert '--parent' in _FEATURE_REFERENCE
+        assert 'sub-collection' in _FEATURE_REFERENCE.lower()
+        assert 'notes/work' in _FEATURE_REFERENCE
+
+    def test_feature_reference_no_fabricated_commands(self):
+        from help.views import _FEATURE_REFERENCE
+        assert 'drp up --collection' not in _FEATURE_REFERENCE
+        assert 'drp ls --collection' not in _FEATURE_REFERENCE
+
+    def test_system_prompt_has_subcollection_example(self):
+        from help.views import _SYSTEM_PROMPT
+        assert 'sub-collection' in _SYSTEM_PROMPT.lower()
+
+    def test_feature_reference_lists_shell_navigation(self):
+        from help.views import _FEATURE_REFERENCE
+        assert 'cd notes' in _FEATURE_REFERENCE or 'cd notes/work' in _FEATURE_REFERENCE
+        assert 'cd ..' in _FEATURE_REFERENCE

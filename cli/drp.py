@@ -282,6 +282,8 @@ def _configure_subparsers(sub):
     col_sub.add_parser('ls',   help='List collections')
     p_col_new = col_sub.add_parser('new',  help='Create a collection')
     p_col_new.add_argument('name_parts', nargs='+', metavar='NAME')
+    p_col_new.add_argument('--parent', '-p', default=None, metavar='SLUG',
+                           help='Parent collection slug/path for nesting')
     p_col_add = col_sub.add_parser('add',  help='Add drop to collection')
     _attach(p_col_add.add_argument('slug'), 'collection_slug')
     _attach(p_col_add.add_argument('key'),  'key')
