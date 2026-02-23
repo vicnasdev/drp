@@ -64,8 +64,8 @@ class HelpBotTests(TestCase):
     @patch("help.views.requests.post")
     def test_successful_answer(self, mock_post):
         mock_resp = MagicMock()
+        mock_resp.status_code = 200
         mock_resp.json.return_value = _GEMINI_OK
-        mock_resp.raise_for_status = MagicMock()
         mock_post.return_value = mock_resp
 
         resp = _post(self.client, "how do I upload?")
@@ -76,17 +76,31 @@ class HelpBotTests(TestCase):
 
     # ── Gemini error ──────────────────────────────────────────────────────
 
+    @patch("help.views._report_gemini_error")
     @patch("help.views.requests.post")
-    def test_gemini_network_error(self, mock_post):
+    def test_gemini_network_error(self, mock_post, _mock_report):
         from requests.exceptions import ConnectionError as ReqConnError
         mock_post.side_effect = ReqConnError("fail")
         self.assertEqual(_post(self.client).status_code, 502)
 
+    @patch("help.views._report_gemini_error")
+    @patch("help.views.requests.post")
+    def test_gemini_http_error_reports_issue(self, mock_post, mock_report):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 403
+        mock_resp.text = "API key not valid"
+        mock_post.return_value = mock_resp
+
+        resp = _post(self.client)
+        self.assertEqual(resp.status_code, 502)
+        mock_report.assert_called_once()
+        self.assertIn("GeminiHTTP403", mock_report.call_args[0][0])
+
     @patch("help.views.requests.post")
     def test_gemini_empty_response(self, mock_post):
         mock_resp = MagicMock()
+        mock_resp.status_code = 200
         mock_resp.json.return_value = {"candidates": []}
-        mock_resp.raise_for_status = MagicMock()
         mock_post.return_value = mock_resp
 
         resp = _post(self.client)
@@ -109,8 +123,8 @@ class HelpBotRateLimitTests(TestCase):
     @patch("help.views.requests.post")
     def test_free_plan_limit(self, mock_post):
         mock_resp = MagicMock()
+        mock_resp.status_code = 200
         mock_resp.json.return_value = _GEMINI_OK
-        mock_resp.raise_for_status = MagicMock()
         mock_post.return_value = mock_resp
 
         for i in range(5):
@@ -125,8 +139,8 @@ class HelpBotRateLimitTests(TestCase):
         self.user.profile.save()
 
         mock_resp = MagicMock()
+        mock_resp.status_code = 200
         mock_resp.json.return_value = _GEMINI_OK
-        mock_resp.raise_for_status = MagicMock()
         mock_post.return_value = mock_resp
 
         # Should be able to make 25 requests

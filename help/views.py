@@ -1,6 +1,8 @@
 import json
 import logging
 import re
+import threading
+import traceback as tb
 from functools import cache
 from html.parser import HTMLParser
 from pathlib import Path
@@ -15,7 +17,24 @@ from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from core.error_reporting_logic import maybe_file_issue
+
 log = logging.getLogger(__name__)
+
+
+def _report_gemini_error(exc_type, exc_message, exc=None):
+    """File a GitHub issue for a Gemini API failure (non-blocking)."""
+    tb_lines = tb.format_tb(exc.__traceback__) if exc and exc.__traceback__ else []
+    data = {
+        "command":        "server POST /help/ask/",
+        "exc_type":       exc_type,
+        "exc_message":    str(exc_message)[:500],
+        "traceback":      tb_lines,
+        "cli_version":    "server",
+        "python_version": "",
+        "platform":       "",
+    }
+    threading.Thread(target=maybe_file_issue, args=(data,), daemon=True).start()
 
 
 def index(request):
@@ -238,18 +257,21 @@ def ask(request):
             },
             timeout=15,
         )
-    except requests.ConnectionError:
+    except requests.ConnectionError as exc:
         log.exception("Gemini connection error")
+        _report_gemini_error("GeminiConnectionError", str(exc), exc)
         return JsonResponse(
             {"error": "Could not reach the AI service."}, status=502,
         )
-    except requests.Timeout:
+    except requests.Timeout as exc:
         log.warning("Gemini request timed out")
+        _report_gemini_error("GeminiTimeout", "Request timed out", exc)
         return JsonResponse(
             {"error": "AI service timed out — try again."}, status=504,
         )
-    except requests.RequestException:
+    except requests.RequestException as exc:
         log.exception("Gemini request failed")
+        _report_gemini_error("GeminiRequestError", str(exc), exc)
         return JsonResponse(
             {"error": "Could not reach the AI service."}, status=502,
         )
@@ -257,6 +279,10 @@ def ask(request):
     if resp.status_code != 200:
         log.error(
             "Gemini API %s: %s", resp.status_code, resp.text[:500],
+        )
+        _report_gemini_error(
+            f"GeminiHTTP{resp.status_code}",
+            resp.text[:500],
         )
         return JsonResponse(
             {"error": "AI service error — try again later."}, status=502,
@@ -266,6 +292,7 @@ def ask(request):
         data = resp.json()
     except ValueError:
         log.error("Gemini returned non-JSON: %s", resp.text[:300])
+        _report_gemini_error("GeminiInvalidJSON", resp.text[:300])
         return JsonResponse(
             {"error": "AI service error — try again later."}, status=502,
         )
