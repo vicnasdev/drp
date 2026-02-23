@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+{% block title %}drp — use cases{% endblock %}
+
+{% block content %}
+<div style="max-width:760px;margin:0 auto;padding:2rem 1rem">
+  <h1 style="font-size:1.4rem;margin-bottom:.3rem">use cases</h1>
+  <p class="muted" style="font-size:.9rem;margin-bottom:2rem">See what drp can do. Each demo auto-plays — click any terminal to restart it.</p>
+
+  <!-- ── 1. Secret sharing ────────────────────────────────────────────────── -->
+  <section class="uc-section">
+    <div class="uc-text">
+      <h2>🔐 burn-after-reading secrets</h2>
+      <p>Share passwords, API keys, and tokens that self-destruct after one view. Add a password for extra security.</p>
+    </div>
+    <div class="term" data-delay="1200" data-scene="secrets">
+      <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
+      <pre class="term-body"></pre>
+    </div>
+  </section>
+
+  <!-- ── 2. Clipboard sync ────────────────────────────────────────────────── -->
+  <section class="uc-section">
+    <div class="uc-text">
+      <h2>📋 clipboard sync across devices</h2>
+      <p>Pipe anything through drp on one machine, retrieve it on another. No apps, no sign-in required.</p>
+    </div>
+    <div class="term" data-delay="1500" data-scene="clipboard">
+      <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
+      <pre class="term-body"></pre>
+    </div>
+  </section>
+
+  <!-- ── 3. File sharing ──────────────────────────────────────────────────── -->
+  <section class="uc-section">
+    <div class="uc-text">
+      <h2>📎 instant file sharing</h2>
+      <p>Upload any file and get a shareable link. Set expiry, make it public, or password-protect it.</p>
+    </div>
+    <div class="term" data-delay="2800" data-scene="files">
+      <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
+      <pre class="term-body"></pre>
+    </div>
+  </section>
+
+  <!-- ── 4. Pipe & script ─────────────────────────────────────────────────── -->
+  <section class="uc-section">
+    <div class="uc-text">
+      <h2>⚡ pipe-friendly & scriptable</h2>
+      <p>drp reads stdin naturally. Pipe command output, logs, diffs — anything. Build it into your workflow.</p>
+    </div>
+    <div class="term" data-delay="4100" data-scene="pipes">
+      <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
+      <pre class="term-body"></pre>
+    </div>
+  </section>
+
+  <!-- ── 5. Collections ───────────────────────────────────────────────────── -->
+  <section class="uc-section">
+    <div class="uc-text">
+      <h2>📁 collections</h2>
+      <p>Group related drops into named collections. Share an entire set of files or snippets with one link.</p>
+    </div>
+    <div class="term" data-delay="5400" data-scene="collections">
+      <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
+      <pre class="term-body"></pre>
+    </div>
+  </section>
+
+  <!-- ── 6. Embeds ────────────────────────────────────────────────────────── -->
+  <section class="uc-section">
+    <div class="uc-text">
+      <h2>🔗 embeddable & stable URLs</h2>
+      <p>Embed drops in docs, wikis, or READMEs. Update the content without changing the URL.</p>
+    </div>
+    <div class="term" data-delay="6700" data-scene="embeds">
+      <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
+      <pre class="term-body"></pre>
+    </div>
+  </section>
+
+</div>
+
+<style>
+.uc-section {
+  margin-bottom: 2.5rem;
+}
+.uc-text h2 {
+  font-size: 1.05rem;
+  margin-bottom: .3rem;
+}
+.uc-text p {
+  font-size: .88rem;
+  color: var(--muted);
+  margin-bottom: .8rem;
+}
+
+/* ── Terminal chrome ─────────────────────────────────────────────────────── */
+.term {
+  background: #0d1117;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #21262d;
+  cursor: pointer;
+}
+.term-bar {
+  background: #161b22;
+  padding: .45rem .7rem;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  border-bottom: 1px solid #21262d;
+}
+.term-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+}
+.term-dot.red    { background: #ff5f57; }
+.term-dot.yellow { background: #febc2e; }
+.term-dot.green  { background: #28c840; }
+.term-title {
+  margin-left: .5rem;
+  font-size: .72rem;
+  color: #484f58;
+  font-family: system-ui, sans-serif;
+}
+.term-body {
+  padding: .8rem 1rem;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Menlo', monospace;
+  font-size: .82rem;
+  line-height: 1.5;
+  color: #c9d1d9;
+  min-height: 80px;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 0;
+}
+
+/* Syntax colors */
+.t-prompt  { color: #7ee787; }
+.t-cmd     { color: #c9d1d9; }
+.t-flag    { color: #d2a8ff; }
+.t-string  { color: #a5d6ff; }
+.t-output  { color: #8b949e; }
+.t-success { color: #3fb950; }
+.t-url     { color: #58a6ff; }
+.t-comment { color: #484f58; font-style: italic; }
+.t-cursor  { background: #c9d1d9; color: #0d1117; animation: blink 1s step-end infinite; }
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+</style>
+
+<script>
+// ── Scene definitions ─────────────────────────────────────────────────────
+// Each scene is an array of steps:
+//   { type: 'type',  text: '...', speed: 40 }   — typed character by character
+//   { type: 'print', text: '...', speed: 10 }   — printed instantly (output)
+//   { type: 'wait',  ms: 800 }                  — pause
+
+const SCENES = {
+  secrets: [
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">"s3cr3t-api-key-XXXX"</span> <span class="t-flag">--burn</span> <span class="t-flag">--password</span>', speed: 35 },
+    { type: 'wait',  ms: 400 },
+    { type: 'print', text: '<span class="t-output">🔑 password: ••••••••</span>' },
+    { type: 'wait',  ms: 600 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/a1b2c3/</span>  <span class="t-output">(burn after reading)</span>' },
+    { type: 'wait',  ms: 1000 },
+    { type: 'print', text: '' },
+    { type: 'print', text: '<span class="t-comment"># recipient opens link → enters password → sees secret</span>' },
+    { type: 'print', text: '<span class="t-comment"># drop is destroyed. gone forever.</span>' },
+  ],
+  clipboard: [
+    { type: 'print', text: '<span class="t-comment"># on your laptop</span>' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">echo</span> <span class="t-string">"meeting notes from standup"</span> <span class="t-cmd">| drp up</span>', speed: 30 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/x9y8z7/</span>' },
+    { type: 'wait',  ms: 1200 },
+    { type: 'print', text: '' },
+    { type: 'print', text: '<span class="t-comment"># on your phone or another machine</span>' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp get</span> <span class="t-string">x9y8z7</span>', speed: 35 },
+    { type: 'wait',  ms: 400 },
+    { type: 'print', text: '<span class="t-output">meeting notes from standup</span>' },
+  ],
+  files: [
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">report.pdf</span> <span class="t-flag">--expiry 7d</span>', speed: 35 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/f/rpt42/</span>  <span class="t-output">(7 days)</span>' },
+    { type: 'wait',  ms: 800 },
+    { type: 'print', text: '' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">screenshot.png</span> <span class="t-flag">--public</span>', speed: 35 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/f/scr01/</span>  <span class="t-output">(public)</span>' },
+    { type: 'wait',  ms: 800 },
+    { type: 'print', text: '' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp ls</span> <span class="t-flag">-f</span>', speed: 40 },
+    { type: 'wait',  ms: 400 },
+    { type: 'print', text: '<span class="t-output">  f/rpt42   report.pdf       2.4 MB   7d</span>' },
+    { type: 'print', text: '<span class="t-output">  f/scr01   screenshot.png   340 KB   public</span>' },
+  ],
+  pipes: [
+    { type: 'print', text: '<span class="t-comment"># share command output</span>' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">git diff</span> <span class="t-cmd">| drp up</span> <span class="t-flag">--key</span> <span class="t-string">today-diff</span>', speed: 30 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/today-diff/</span>' },
+    { type: 'wait',  ms: 900 },
+    { type: 'print', text: '' },
+    { type: 'print', text: '<span class="t-comment"># grab it in a script</span>' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">curl -s</span> <span class="t-url">https://drp.fyi/today-diff/raw/</span> <span class="t-cmd">| git apply</span>', speed: 25 },
+    { type: 'wait',  ms: 600 },
+    { type: 'print', text: '<span class="t-output">Applied patch cleanly.</span>' },
+    { type: 'wait',  ms: 900 },
+    { type: 'print', text: '' },
+    { type: 'print', text: '<span class="t-comment"># pipe logs for debugging</span>' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">tail -100 /var/log/app.log</span> <span class="t-cmd">| drp up</span> <span class="t-flag">--burn</span>', speed: 25 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/k8m2p1/</span>  <span class="t-output">(burn after reading)</span>' },
+  ],
+  collections: [
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp collection create</span> <span class="t-string">"project-docs"</span>', speed: 30 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-output">collection #4 created</span>' },
+    { type: 'wait',  ms: 600 },
+    { type: 'print', text: '' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">api-spec.yaml</span> <span class="t-flag">--collection 4</span>', speed: 30 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-output">added to project-docs</span>' },
+    { type: 'wait',  ms: 400 },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">readme.md</span> <span class="t-flag">--collection 4</span>', speed: 30 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-output">added to project-docs</span>' },
+    { type: 'wait',  ms: 600 },
+    { type: 'print', text: '' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp collection list</span> <span class="t-string">4</span>', speed: 35 },
+    { type: 'wait',  ms: 400 },
+    { type: 'print', text: '<span class="t-output">  project-docs (2 drops)</span>' },
+    { type: 'print', text: '<span class="t-output">    api-spec.yaml   f/abc12</span>' },
+    { type: 'print', text: '<span class="t-output">    readme.md       def34</span>' },
+  ],
+  embeds: [
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">"v2.1.0 — breaking changes listed below"</span> <span class="t-flag">--key</span> <span class="t-string">changelog</span>', speed: 25 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/changelog/</span>' },
+    { type: 'wait',  ms: 800 },
+    { type: 'print', text: '' },
+    { type: 'print', text: '<span class="t-comment"># embed in your README.md</span>' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">echo</span> <span class="t-string">"![changelog](https://drp.fyi/embed/changelog/)"</span>', speed: 25 },
+    { type: 'wait',  ms: 800 },
+    { type: 'print', text: '' },
+    { type: 'print', text: '<span class="t-comment"># update content, same URL</span>' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">"v2.2.0 — new features!"</span> <span class="t-flag">--key</span> <span class="t-string">changelog</span> <span class="t-flag">--overwrite</span>', speed: 25 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-output">updated</span> <span class="t-url">https://drp.fyi/changelog/</span>' },
+  ],
+};
+
+// ── Typing engine ─────────────────────────────────────────────────────────
+
+function stripHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return tmp.textContent.length;
+}
+
+async function runScene(termEl) {
+  const body = termEl.querySelector('.term-body');
+  const sceneName = termEl.dataset.scene;
+  const steps = SCENES[sceneName];
+  if (!steps) return;
+  body.innerHTML = '';
+
+  for (const step of steps) {
+    if (termEl._cancelled) return;
+
+    if (step.type === 'wait') {
+      await sleep(step.ms);
+    } else if (step.type === 'print') {
+      body.innerHTML += step.text + '\n';
+      body.scrollTop = body.scrollHeight;
+      await sleep(80);
+    } else if (step.type === 'type') {
+      // We need to type out the visible characters while keeping HTML spans
+      // Strategy: add chars one by one from the plain text, rebuilding HTML each frame
+      const fullHtml = step.text;
+      const plainLen = stripHtml(fullHtml);
+      const speed = step.speed || 40;
+
+      // Build a character map: for each visible char index, the HTML up to that point
+      const frames = buildFrames(fullHtml);
+
+      for (let i = 0; i <= frames.length; i++) {
+        if (termEl._cancelled) return;
+        const partial = i < frames.length ? frames[i] : fullHtml;
+        // Show partial line with cursor
+        const cursor = i < frames.length ? '<span class="t-cursor"> </span>' : '';
+        body.innerHTML = body._prev + partial + cursor;
+        body.scrollTop = body.scrollHeight;
+        await sleep(speed + Math.random() * 20 - 10);
+      }
+      // Finalize line
+      body._prev = (body._prev || '') + fullHtml + '\n';
+      body.innerHTML = body._prev;
+      body.scrollTop = body.scrollHeight;
+    }
+  }
+}
+
+// Build array of HTML substrings, one per visible character
+function buildFrames(html) {
+  const frames = [];
+  let inTag = false;
+  let currentFrame = '';
+  for (let i = 0; i < html.length; i++) {
+    const ch = html[i];
+    if (ch === '<') { inTag = true; currentFrame += ch; continue; }
+    if (ch === '>') { inTag = false; currentFrame += ch; continue; }
+    if (inTag) { currentFrame += ch; continue; }
+    // Visible character
+    currentFrame += ch;
+    // Close any open spans for valid HTML
+    frames.push(closeOpenTags(currentFrame));
+  }
+  return frames;
+}
+
+function closeOpenTags(html) {
+  const openTags = [];
+  const tagRe = /<\/?([a-z][a-z0-9]*)[^>]*>/gi;
+  let m;
+  while ((m = tagRe.exec(html)) !== null) {
+    if (m[0][1] === '/') {
+      openTags.pop();
+    } else if (!m[0].endsWith('/>')) {
+      openTags.push(m[1]);
+    }
+  }
+  return html + openTags.reverse().map(t => `</${t}>`).join('');
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+// ── Init: stagger starts with IntersectionObserver ────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  const terms = document.querySelectorAll('.term');
+
+  // Initialize _prev for each terminal body
+  terms.forEach(t => { t.querySelector('.term-body')._prev = ''; });
+
+  // Watch for visibility
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting && !entry.target._started) {
+        entry.target._started = true;
+        const delay = parseInt(entry.target.dataset.delay) || 0;
+        setTimeout(() => runScene(entry.target), delay);
+      }
+    });
+  }, { threshold: 0.3 });
+
+  terms.forEach(t => observer.observe(t));
+
+  // Click to restart
+  terms.forEach(t => {
+    t.addEventListener('click', () => {
+      t._cancelled = true;
+      setTimeout(() => {
+        t._cancelled = false;
+        t._started = true;
+        t.querySelector('.term-body')._prev = '';
+        runScene(t);
+      }, 100);
+    });
+  });
+});
+</script>
+{% endblock %}

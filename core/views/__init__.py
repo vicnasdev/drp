@@ -7,6 +7,7 @@ from .auth import register_view, login_view, logout_view, account_view, export_d
 from .bookmarks import save_bookmark, unsave_bookmark
 from .bug_report import report_bug_view
 from .legal import privacy_view, terms_view
+from .use_cases import use_cases_view
 from .verify import resend_verification_view, verify_email_view
 # from .mobile_blueprint import mobile_blueprint
 from .collections import (
@@ -24,6 +25,7 @@ __all__ = [
     "save_bookmark", "unsave_bookmark",
     "privacy_view", "terms_view",
     "report_bug_view",
+    "use_cases_view",
     "resend_verification_view",
     "verify_email_view",
     # "mobile_blueprint",

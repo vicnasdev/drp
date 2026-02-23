@@ -54,6 +54,7 @@ urlpatterns = [
     path("auth/verify/resend/", views.resend_verification_view, name="verify_resend"),
     re_path(r"^auth/verify/(?P<token>[^/]+)/$", views.verify_email_view, name="verify_email"),
     path("report-bug/",         views.report_bug_view,  name="report_bug"),
+    path("use-cases/",          views.use_cases_view,   name="use_cases"),
     # Feature voting board
     path("features/",                          feature_list,    name="feature_list"),
     path("features/submit/",                   feature_submit,  name="feature_submit"),
