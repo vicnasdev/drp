@@ -23,6 +23,7 @@ from django.http import JsonResponse, HttpResponse, Http404
 from django.shortcuts import render, redirect
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.clickjacking import xframe_options_exempt
 
 from core.views.b2 import object_exists, object_size, object_head
 from core.views.b2 import object_key as b2_object_key
@@ -922,6 +923,7 @@ def set_drop_password(request, ns, key):
 
 # ── Embed view ────────────────────────────────────────────────────────────────
 
+@xframe_options_exempt
 def embed_view(request, key):
     """
     GET /embed/<key>/ — minimal iframe-friendly view for text/code/image drops.

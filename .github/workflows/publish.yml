@@ -161,7 +161,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
     concurrency:
       group: publish-main
       cancel-in-progress: false
