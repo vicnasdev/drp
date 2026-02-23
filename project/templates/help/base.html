@@ -24,7 +24,7 @@
 
 </div>
 
-{% if gemini_enabled %}
+{% if gemini_enabled and user.is_authenticated %}
 {# ── Help bot widget ── #}
 <div class="hb" id="helpbot">
   <div class="hb-panel" id="hb-panel" role="dialog" aria-label="Help chat">

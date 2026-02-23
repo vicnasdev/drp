@@ -78,6 +78,18 @@
     </div>
   </section>
 
+  <!-- ── 7. Help bot ──────────────────────────────────────────────────────── -->
+  <section class="uc-section">
+    <div class="uc-text">
+      <h2>🤖 built-in help bot</h2>
+      <p>Ask questions about drp right from the CLI or the docs page. The AI bot answers using the official documentation — no hallucinations.</p>
+    </div>
+    <div class="term" data-delay="8000" data-scene="helpbot">
+      <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
+      <pre class="term-body"></pre>
+    </div>
+  </section>
+
 </div>
 
 <style>
@@ -250,6 +262,20 @@ const SCENES = {
     { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">"v2.2.0 — new features!"</span> <span class="t-flag">--key</span> <span class="t-string">changelog</span> <span class="t-flag">--overwrite</span>', speed: 25 },
     { type: 'wait',  ms: 500 },
     { type: 'print', text: '<span class="t-success">✓</span> <span class="t-output">updated</span> <span class="t-url">https://drp.fyi/changelog/</span>' },
+  ],
+  helpbot: [
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp ask</span> <span class="t-string">"how do I upload a file?"</span>', speed: 30 },
+    { type: 'wait',  ms: 1200 },
+    { type: 'print', text: '<span class="t-output">  Use `drp up &lt;file&gt;` to upload a file drop.</span>' },
+    { type: 'print', text: '<span class="t-output">  Add `--expires 30d` for a custom expiry (paid).</span>' },
+    { type: 'print', text: '<span class="t-output">  The URL will be https://drp.fyi/f/&lt;key&gt;/</span>' },
+    { type: 'wait',  ms: 1500 },
+    { type: 'print', text: '' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp ask</span> <span class="t-string">"what plans are available?"</span>', speed: 30 },
+    { type: 'wait',  ms: 1200 },
+    { type: 'print', text: '<span class="t-output">  Free — 200 MB files, 7-day clipboard expiry.</span>' },
+    { type: 'print', text: '<span class="t-output">  Starter ($3/mo) — 1 GB files, 5 GB storage, custom expiry.</span>' },
+    { type: 'print', text: '<span class="t-output">  Pro ($8/mo) — 5 GB files, 20 GB storage, unlimited collections.</span>' },
   ],
 };
 

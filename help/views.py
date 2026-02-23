@@ -178,11 +178,6 @@ def _get_docs_context() -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def _client_ip(request) -> str:
-    xff = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    return xff.split(",")[0].strip() if xff else request.META.get("REMOTE_ADDR", "")
-
-
 @csrf_exempt
 @require_POST
 def ask(request):
@@ -190,12 +185,26 @@ def ask(request):
     if not api_key:
         return JsonResponse({"error": "Help bot is not configured."}, status=503)
 
-    ip = _client_ip(request)
-    rl_key = f"hb:{ip}"
-    hits = _cache.get(rl_key, 0)
-    if hits >= 10:
+    # ── auth + per-plan rate limit ────────────────────────────────────────
+    from core.models import Plan
+
+    if not request.user.is_authenticated:
         return JsonResponse(
-            {"error": "Too many questions — try again in an hour."}, status=429,
+            {"error": "Log in to use the help bot."}, status=403,
+        )
+
+    plan = getattr(getattr(request.user, "profile", None), "plan", Plan.FREE)
+    limit = Plan.get(plan, "helpbot_hourly") or 0
+    if limit <= 0:
+        return JsonResponse(
+            {"error": "Your plan does not include the help bot."}, status=403,
+        )
+
+    rl_key = f"hb:{request.user.pk}"
+    hits = _cache.get(rl_key, 0)
+    if hits >= limit:
+        return JsonResponse(
+            {"error": "Hourly limit reached — try again later."}, status=429,
         )
 
     try:

@@ -19,6 +19,7 @@ from cli.commands.serve import cmd_serve
 from cli.commands.shell import cmd_shell
 from cli.commands.collection import cmd_collection
 from cli.commands.token import cmd_token
+from cli.commands.ask import cmd_ask
 
 COMMANDS = [
     ('setup',      cmd_setup,       'Configure host and log in'),
@@ -39,6 +40,7 @@ COMMANDS = [
     ('serve',      cmd_serve,       'Upload a directory or file list, print URL table'),
     ('collection', cmd_collection,  'Manage drop collections (paid accounts)'),
     ('token',      cmd_token,       'Manage API tokens (paid accounts)'),
+    ('ask',        cmd_ask,         'Ask the help bot a question about drp'),
     ('shell',      cmd_shell,       'Interactive shell with ls, rm, cp, cd and more'),
 ]
 
@@ -51,6 +53,7 @@ COMMAND_GROUPS = [
     ('manage',             ['rm', 'mv', 'cp', 'renew']),
     ('account',            ['save', 'ls', 'load', 'collection', 'token']),
     ('info',               ['status', 'ping']),
+    ('help',               ['ask']),
     ('setup',              ['setup', 'login', 'logout']),
     ('shell',              ['shell']),
 ]
@@ -87,7 +90,9 @@ EXAMPLES = [
     ('drp collection', 'ls',                          'list collections'),
     ('drp collection', 'new "my notes"',              'create a collection'),
     ('drp collection', 'add my-notes key',            'add drop to collection'),
-    ('drp shell',   '',                               'interactive shell (ls, rm, cd, …)'),    ('drp token',   'create --expires 90d',            'create an API key'),
+    ('drp shell',   '',                               'interactive shell (ls, rm, cd, …)'),
+    ('drp ask',     '"how do I upload a file?"',        'ask the help bot'),
+    ('drp token',   'create --expires 90d',            'create an API key'),
     ('',            'DRP_API_KEY=xxx drp up file.py',  'upload with API key (no login)'),]
 
 
@@ -295,6 +300,11 @@ def _configure_subparsers(sub):
     tok_sub.add_parser('list', help='List API tokens')
     p_tok_revoke = tok_sub.add_parser('revoke', help='Revoke an API token')
     p_tok_revoke.add_argument('token_id', type=int, help='Token ID (from drp token list)')
+
+    # ask subcommand
+    p_ask = sub._name_parser_map['ask']
+    p_ask.add_argument('question', nargs='?', default=None,
+                       help='Question to ask (prompted if omitted)')
 
 
 _HANDLERS = {name: handler for name, handler, _ in COMMANDS}

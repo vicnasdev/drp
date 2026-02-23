@@ -35,6 +35,7 @@ class Plan:
             "webhooks":                   False,
             "api_keys":                   0,
             "scheduled_drops":            0,
+            "helpbot_hourly":             0,
         },
         FREE: {
             "label":                      "Free",
@@ -53,6 +54,7 @@ class Plan:
             "webhooks":                   False,
             "api_keys":                   0,
             "scheduled_drops":            0,
+            "helpbot_hourly":             5,
         },
         STARTER: {
             "label":                      "Starter",
@@ -71,6 +73,7 @@ class Plan:
             "webhooks":                   True,
             "api_keys":                   5,
             "scheduled_drops":            10,
+            "helpbot_hourly":             25,
         },
         PRO: {
             "label":                      "Pro",
@@ -89,6 +92,7 @@ class Plan:
             "webhooks":                   True,
             "api_keys":                   None,
             "scheduled_drops":            None,
+            "helpbot_hourly":             50,
         },
     }
 
@@ -133,6 +137,8 @@ class PlanLimit(models.Model):
                                      help_text="null = unlimited, 0 = none")
     scheduled_drops            = models.PositiveIntegerField(null=True, blank=True, default=0,
                                      help_text="null = unlimited, 0 = none")
+    helpbot_hourly             = models.PositiveIntegerField(default=0,
+                                     help_text="Help bot questions per hour. 0 = disabled.")
 
     class Meta:
         ordering = ["price_monthly"]
@@ -158,6 +164,7 @@ class PlanLimit(models.Model):
             "webhooks":                    self.webhooks,
             "api_keys":                    self.api_keys,
             "scheduled_drops":             self.scheduled_drops,
+            "helpbot_hourly":              self.helpbot_hourly,
         }
 
     @classmethod
