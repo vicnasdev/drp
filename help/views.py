@@ -223,16 +223,35 @@ docs, wikis, or READMEs (HTML iframe). Update content without changing the URL.
 """
 
 
+def _cli_docs_as_text() -> str:
+    """Render CLI parser info as plain-text docs for the bot context."""
+    info = _get_parser_info()
+    lines = [f"# CLI reference\n\n{info['description']}\n"]
+    for cmd in info["commands"]:
+        lines.append(f"## drp {cmd['name']}")
+        lines.append(cmd["help"])
+        for arg in cmd["args"]:
+            label = arg["flags"] if not arg["positional"] else arg["metavar"].lower()
+            req = "" if arg.get("required") else " (optional)"
+            lines.append(f"  - `{label}`{req}: {arg['help']}")
+        if cmd["epilog"]:
+            lines.append(f"  Example: {cmd['epilog']}")
+        lines.append("")
+    if info.get("epilog"):
+        lines.append(f"## examples\n{info['epilog']}")
+    return "\n".join(lines)
+
+
 @cache
 def _get_docs_context() -> str:
     base = Path(__file__).resolve().parent.parent
-    parts = [_FEATURE_REFERENCE, (base / "README.md").read_text()]
+    parts = [_FEATURE_REFERENCE, _cli_docs_as_text(),
+             (base / "README.md").read_text()]
     tmpl_dir = base / "project" / "templates"
     help_dir = tmpl_dir / "help"
     templates = [
         help_dir / "expiry.html",
         help_dir / "plans.html",
-        help_dir / "cli.html",
         tmpl_dir / "use_cases.html",
     ]
     for p in templates:
