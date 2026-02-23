@@ -35,6 +35,8 @@ drp setup && drp up "hello world"
 | `LEMONSQUEEZY_STORE_ID` | — | Store ID |
 | `LEMONSQUEEZY_STARTER_VARIANT_ID` | — | Starter plan variant |
 | `LEMONSQUEEZY_PRO_VARIANT_ID` | — | Pro plan variant |
+| `RUN_SCHEDULER` | — | `1` to auto-cleanup expired drops (hourly) |
+| `CLEANUP_INTERVAL_SECS` | — | Cleanup interval in seconds (default `3600`) |
 | `DEBUG` | — | `True` for local dev only |
 
 ## License
