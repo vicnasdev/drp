@@ -119,8 +119,7 @@ STORAGES = {
 # ── Backblaze B2 ──────────────────────────────────────────────────────────────
 B2_KEY_ID       = os.environ.get("B2_KEY_ID", "")
 B2_APP_KEY      = os.environ.get("B2_APP_KEY", "")
-B2_BUCKET_NAME  = os.environ.get("B2_BUCKET_NAME",
-                    "drp-files-test" if ENVIRONMENT == "dev" else "drp-files")
+B2_BUCKET_NAME  = os.environ.get("B2_BUCKET_NAME", "drp-files")
 B2_ENDPOINT_URL = os.environ.get("B2_ENDPOINT_URL", "https://s3.us-east-005.backblazeb2.com")
 
 # Admin
