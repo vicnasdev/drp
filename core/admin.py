@@ -230,11 +230,11 @@ class CollectionMembershipInline(admin.TabularInline):
 
 @admin.register(Collection)
 class CollectionAdmin(admin.ModelAdmin):
-    list_display  = ('__str__', 'owner', 'owner_group', 'slug', 'public_inbox', 'member_count', 'created_at')
+    list_display  = ('__str__', 'owner', 'parent', 'owner_group', 'slug', 'public_inbox', 'member_count', 'created_at')
     list_filter   = ('owner__profile__plan', 'public_inbox')
     search_fields = ('slug', 'name', 'owner__username', 'owner__email')
     readonly_fields = ('created_at',)
-    raw_id_fields = ('owner', 'owner_group')
+    raw_id_fields = ('owner', 'owner_group', 'parent')
     inlines = (CollectionMembershipInline,)
 
     @admin.display(description='drops')

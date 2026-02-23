@@ -147,6 +147,9 @@ def account_view(request):
                     'id':   col.pk,
                     'name': col.name,
                     'slug': col.slug,
+                    'path': col.full_path,
+                    'parent_id': col.parent_id,
+                    'children': list(col.children.values_list('slug', flat=True)),
                     'drops': [{'ns': m.ns, 'key': m.key} for m in col.memberships.all()],
                 }
                 for col in collections
@@ -197,7 +200,9 @@ def export_drops(request):
         {
             'name': col.name,
             'slug': col.slug,
-            'url':  f'{settings.SITE_URL}/@{request.user.username}/{col.slug}/',
+            'path': col.full_path,
+            'parent_id': col.parent_id,
+            'url':  f'{settings.SITE_URL}/@{request.user.username}/{col.full_path}/',
             'drops': [
                 {'ns': m.ns, 'key': m.key}
                 for m in col.memberships.all()

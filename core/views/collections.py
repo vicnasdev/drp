@@ -62,11 +62,12 @@ def user_collections(request, username):
     })
 
 
-def collection_view(request, username, slug):
-    """GET /@username/<slug>/ — view a single collection.
-       POST /@username/<slug>/ — drop into public inbox (if enabled)."""
-    owner      = get_object_or_404(User, username__iexact=username)
-    collection = get_object_or_404(Collection, owner=owner, slug=slug)
+def collection_view(request, username, slug, collection=None):
+    """GET /@username/<path>/ — view a single collection (supports sub-collections).
+       POST /@username/<path>/ — drop into public inbox (if enabled)."""
+    owner = get_object_or_404(User, username__iexact=username)
+    if collection is None:
+        collection = get_object_or_404(Collection, owner=owner, slug=slug, parent=None)
 
     # ── Inbox POST (anyone can drop into public_inbox collections) ──
     if request.method == "POST":
@@ -113,13 +114,16 @@ def collection_view(request, username, slug):
     if 'application/json' in request.headers.get('Accept', ''):
         from django.conf import settings as _settings
         site = getattr(_settings, 'SITE_URL', '')
-        share_url = f"{site}/@{owner.username}/{collection.slug}/"
+        share_url = f"{site}/@{owner.username}/{collection.full_path}/"
         qr_url = f"{site}/qr/?url={share_url}"
+        children = list(collection.children.all().values_list('slug', flat=True))
         return JsonResponse({
             'id':   collection.pk,
             'slug': collection.slug,
+            'path': collection.full_path,
             'name': collection.name,
             'drops': [{'ns': m.ns, 'key': m.key} for m in memberships],
+            'children': children,
             'share_url': share_url,
             'qr_url': qr_url,
         })
@@ -147,7 +151,7 @@ def collection_view(request, username, slug):
 @login_required
 @require_POST
 def create_collection(request):
-    """POST /collections/create/  body: {name, slug?}"""
+    """POST /collections/create/  body: {name, slug?, parent_id?}"""
     import json
     try:
         data = json.loads(request.body)
@@ -183,13 +187,24 @@ def create_collection(request):
             status=400,
         )
 
-    if Collection.objects.filter(owner=request.user, slug=slug).exists():
-        return JsonResponse({"error": f'You already have a collection named "{slug}".'}, status=409)
+    # Optional parent for sub-collections
+    parent = None
+    parent_id = data.get("parent_id")
+    if parent_id:
+        parent = Collection.objects.filter(pk=parent_id, owner=request.user).first()
+        if not parent:
+            return JsonResponse({"error": "Parent collection not found."}, status=404)
 
-    collection = Collection.objects.create(owner=request.user, slug=slug, name=name)
+    if Collection.objects.filter(owner=request.user, parent=parent, slug=slug).exists():
+        return JsonResponse({"error": f'You already have a collection named "{slug}" at this level.'}, status=409)
+
+    collection = Collection.objects.create(
+        owner=request.user, slug=slug, name=name, parent=parent,
+    )
     return JsonResponse({
         "id":   collection.pk,
         "slug": collection.slug,
+        "path": collection.full_path,
         "name": collection.name,
         "url":  collection.url_path,
     }, status=201)
@@ -316,20 +331,26 @@ def toggle_inbox(request, collection_id):
     })
 
 
-def collection_or_alias_view(request, username, slug):
+def collection_or_alias_view(request, username, path):
     """
-    GET /@username/<slug>/
-    Try collection first. If no collection found, try alias resolution.
+    GET /@username/<path>/
+    Resolve a collection path (supports nested sub-collections like parent/child).
+    Falls back to alias resolution for single-segment paths.
     """
+    from django.http import Http404
     try:
         owner = User.objects.get(username__iexact=username)
     except User.DoesNotExist:
         raise Http404
 
-    collection = Collection.objects.filter(owner=owner, slug=slug).first()
+    collection = Collection.resolve_path(owner, path)
     if collection:
-        return collection_view(request, username, slug)
+        return collection_view(request, username, collection.slug, collection=collection)
 
-    # Try alias
-    from core.views.aliases import resolve_alias
-    return resolve_alias(request, username, slug)
+    # Single-segment path → try alias resolution
+    segments = [s for s in path.strip('/').split('/') if s]
+    if len(segments) == 1:
+        from core.views.aliases import resolve_alias
+        return resolve_alias(request, username, segments[0])
+
+    raise Http404

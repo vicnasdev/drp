@@ -40,7 +40,7 @@ _NOT_HANDLED = object()
 # Built-in shell commands
 _BUILTIN_CMDS = [
     'ls', 'cat', 'rm', 'cp', 'mv', 'add', 'open', 'status',
-    'cd', 'pwd', 'help', 'exit', 'quit',
+    'cd', 'pwd', 'clear', 'help', 'exit', 'quit',
 ]
 
 # Delegated drp commands (handled by the top-level CLI parser/handlers)
@@ -74,7 +74,7 @@ def cmd_shell(args):
     cfg, host, session = load_context(require_login=True)
 
     username = cfg.get('username', '')
-    cwd = None
+    cwd = None  # Current collection path (e.g. 'notes' or 'notes/work')
 
     version_line = dim(f'drp shell  —  type {bold("help")} for commands, ^D to exit')
     print(version_line)
@@ -84,6 +84,15 @@ def cmd_shell(args):
         if cwd:
             return f'{magenta("@" + username + "/" + cwd)}> '
         return f'{cyan("drp")}> '
+
+    def _resolve_collection_path(target):
+        """Resolve a target path relative to cwd. Returns full path or None."""
+        if target.startswith('/') or target.startswith('@'):
+            # Absolute path
+            return target.lstrip('@').lstrip('/').rstrip('/')
+        if cwd:
+            return f'{cwd}/{target}'.rstrip('/')
+        return target.rstrip('/')
 
     def _run_line(line, cwd):
         """Parse and execute one shell line. Returns updated cwd."""
@@ -176,22 +185,25 @@ def cmd_shell(args):
                 if not target or target == '~':
                     cwd = None
                 elif target == '..':
-                    cwd = None
+                    if cwd and '/' in cwd:
+                        cwd = cwd.rsplit('/', 1)[0]
+                    else:
+                        cwd = None
                 else:
-                    # Validate slug exists
-                    slug = target.lstrip('@').split('/')[-1]
+                    # Resolve relative or absolute path
+                    full_path = _resolve_collection_path(target)
                     if username:
                         try:
                             res = session.get(
-                                f'{host}/@{username}/{slug}/',
+                                f'{host}/@{username}/{full_path}/',
                                 headers={'Accept': 'application/json'},
                                 timeout=8,
                             )
                             if res.ok:
-                                cwd = slug
-                                print(f'  {dim("now in")} {magenta("@" + username + "/" + slug)}')
+                                cwd = full_path
+                                print(f'  {dim("now in")} {magenta("@" + username + "/" + full_path)}')
                             else:
-                                print(f'  {red("✗")} collection "{slug}" not found.')
+                                print(f'  {red("✗")} collection "{full_path}" not found.')
                         except Exception as e:
                             print(f'  {red("✗")} {e}')
                     else:
@@ -204,6 +216,12 @@ def cmd_shell(args):
                     print(f'  {magenta("@" + username + "/" + cwd)}')
                 else:
                     print(f'  {dim("(root — no collection selected)")}')
+                continue
+
+            # ── clear ─────────────────────────────────────────────────────
+            if cmd == 'clear':
+                import os as _os
+                _os.system('clear' if sys.platform != 'win32' else 'cls')
                 continue
 
             # ── exit ──────────────────────────────────────────────────────────
@@ -258,17 +276,15 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
 
     # ── ls ────────────────────────────────────────────────────────────────────
     if cmd == 'ls':
-        long_fmt  = '-l' in rest
         col_mode  = '--col' in rest
-        keys_only = [r for r in rest if not r.startswith('-')]
 
-        if col_mode:
-            return _ls_collections(host, session, cfg, username)
-
-        if cwd:
+        # Inside a collection → show that collection's drops
+        if cwd and not col_mode:
             return _ls_collection_drops(host, session, cfg, username, cwd)
 
-        return _ls_drops(host, session, long_fmt)
+        # Otherwise delegate to the real CLI handler (supports -l, --col, etc.)
+        _delegate_to_cli(cmd, rest)
+        return None
 
     # ── cat ───────────────────────────────────────────────────────────────────
     if cmd == 'cat':
@@ -300,63 +316,20 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
         except Exception as e:
             return [f'  {red("✗")} {e}']
 
-    # ── rm ────────────────────────────────────────────────────────────────────
+    # ── rm — delegate to CLI handler ────────────────────────────────────────
     if cmd == 'rm':
-        is_file = '-f' in rest
-        keys    = [r for r in rest if not r.startswith('-')]
-        if not keys:
-            return [f'  {red("✗")} Usage: rm [-f] <key>']
-        key = keys[0]
-        ns  = 'f' if is_file else 'c'
-        from cli.api.actions import delete
-        from cli.api.auth import get_csrf
-        csrf = get_csrf(host, session)
-        ok_result = delete(host, session, key, ns)
-        if ok_result:
-            return [f'  {green("✓")} {key}  deleted']
-        return []  # delete() already printed the error
+        _delegate_to_cli(cmd, rest)
+        return None
 
-    # ── cp ────────────────────────────────────────────────────────────────────
+    # ── cp — delegate to CLI handler ────────────────────────────────────────
     if cmd == 'cp':
-        is_file = '-f' in rest
-        keys    = [r for r in rest if not r.startswith('-')]
-        if len(keys) < 2:
-            return [f'  {red("✗")} Usage: cp [-f] <key> <new_key>']
-        key, new_key = keys[0], keys[1]
-        ns = 'f' if is_file else 'c'
-        try:
-            from cli.api.auth import get_csrf
-            import json as _json
-            csrf = get_csrf(host, session)
-            res  = session.post(
-                f'{host}/{"f/" if ns == "f" else ""}{key}/copy/',
-                data=_json.dumps({'new_key': new_key}),
-                headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
-                timeout=10,
-            )
-            if res.ok:
-                return [f'  {green("✓")} {key}  →  {cyan(new_key)}']
-            try:
-                msg = res.json().get('error', str(res.status_code))
-            except Exception:
-                msg = str(res.status_code)
-            return [f'  {red("✗")} {msg}']
-        except Exception as e:
-            return [f'  {red("✗")} {e}']
+        _delegate_to_cli(cmd, rest)
+        return None
 
-    # ── mv ────────────────────────────────────────────────────────────────────
+    # ── mv — delegate to CLI handler ────────────────────────────────────────
     if cmd == 'mv':
-        is_file = '-f' in rest
-        keys    = [r for r in rest if not r.startswith('-')]
-        if len(keys) < 2:
-            return [f'  {red("✗")} Usage: mv [-f] <key> <new_key>']
-        key, new_key = keys[0], keys[1]
-        ns = 'f' if is_file else 'c'
-        from cli.api.actions import rename
-        result = rename(host, session, key, new_key, ns)
-        if result:
-            return [f'  {green("✓")} {key}  →  {cyan(result)}']
-        return []
+        _delegate_to_cli(cmd, rest)
+        return None
 
     # ── add (to current collection) ───────────────────────────────────────────
     if cmd == 'add':
@@ -379,31 +352,10 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
         prefix  = 'f/' if is_file else ''
         return [f'  {host}/{prefix}{key}/']
 
-    # ── status ────────────────────────────────────────────────────────────────
+    # ── status — delegate to CLI handler ─────────────────────────────────────
     if cmd == 'status':
-        if not rest:
-            from cli.commands.status import cmd_status
-            import argparse
-            cmd_status(argparse.Namespace(key=None, file=False, clip=False))
-            return None
-        key = rest[0]
-        try:
-            res = session.get(f'{host}/{key}/', headers={'Accept': 'application/json'}, timeout=10)
-            if res.ok:
-                data    = res.json()
-                views   = data.get('view_count', 0)
-                last    = data.get('last_viewed_at', '')
-                created = data.get('created_at', '')
-                from cli.format import human_time
-                return [
-                    f'  {dim("key")}       {cyan(key)}',
-                    f'  {dim("views")}     {green(str(views)) if views else dim("0")}',
-                    f'  {dim("last seen")} {human_time(last) if last else dim("never")}',
-                    f'  {dim("created")}   {human_time(created)}',
-                ]
-            return [f'  {red("✗")} {res.status_code}']
-        except Exception as e:
-            return [f'  {red("✗")} {e}']
+        _delegate_to_cli(cmd, rest)
+        return None
 
     # ── Delegate to top-level CLI handler if recognized ─────────────────────
     return _NOT_HANDLED
@@ -433,96 +385,39 @@ def _delegate_to_cli(cmd, rest):
     return True
 
 
-def _ls_drops(host, session, long_fmt):
-    from cli.format import cyan, blue, grey, dim, yellow
+def _ls_collection_drops(host, session, cfg, username, path):
+    """List drops in a collection (supports nested sub-collection paths)."""
+    from cli.format import cyan, blue, dim, grey, red, magenta
     try:
         res = session.get(
-            f'{host}/auth/account/',
-            headers={'Accept': 'application/json'},
-            timeout=15,
-        )
-        res.raise_for_status()
-        data  = res.json()
-        drops = data.get('drops', [])
-        saved = data.get('saved', [])
-    except Exception as e:
-        return [f'  ✗ {e}']
-
-    lines = []
-    for d in drops:
-        key_str = blue(f'f/{d["key"]}') if d['ns'] == 'f' else cyan(d['key'])
-        lock    = yellow(' 🔒') if d.get('locked') else ''
-        if long_fmt:
-            from cli.commands.ls import _since, _until
-            size    = d.get('filesize', 0)
-            size_s  = f'{size}B' if size else '—'
-            created = _since(d.get('created_at'))
-            expires = _until(d.get('expires_at')) if d.get('expires_at') else grey('idle')
-            lines.append(f'  {key_str}{lock}  {grey(size_s):>8}  {grey(created):>10}  {dim(expires)}')
-        else:
-            lines.append(f'  {key_str}{lock}')
-
-    if drops and saved:
-        lines.append('')
-
-    for s in saved:
-        key_str = blue(f'f/{s["key"]}') if s['ns'] == 'f' else cyan(s['key'])
-        lines.append(f'  {key_str}  {dim("[saved]")}')
-
-    return lines or [dim('  (no drops)')]
-
-
-def _ls_collections(host, session, cfg, username):
-    from cli.format import magenta, dim, grey
-    try:
-        res = session.get(
-            f'{host}/auth/account/',
-            headers={'Accept': 'application/json'},
-            timeout=15,
-        )
-        res.raise_for_status()
-        cols = res.json().get('collections', [])
-    except Exception as e:
-        return [f'  ✗ {e}']
-
-    if not cols:
-        return [dim('  (no collections)')]
-
-    lines = []
-    for col in cols:
-        slug       = col.get('slug', '')
-        name       = col.get('name', slug)
-        drop_count = len(col.get('drops', []))
-        prefix     = f'@{username}/' if username else ''
-        lines.append(
-            f'  {magenta(prefix + slug):<32}  {dim(name):<20}  '
-            f'{grey(str(drop_count) + " drop" + ("s" if drop_count != 1 else ""))}'
-        )
-    return lines
-
-
-def _ls_collection_drops(host, session, cfg, username, slug):
-    from cli.format import cyan, blue, dim, grey, red
-    try:
-        res = session.get(
-            f'{host}/@{username}/{slug}/',
+            f'{host}/@{username}/{path}/',
             headers={'Accept': 'application/json'},
             timeout=10,
         )
         if not res.ok:
             return [f'  {red("✗")} collection not found.']
-        drops = res.json().get('drops', [])
+        data = res.json()
+        drops = data.get('drops', [])
+        children = data.get('children', [])
     except Exception as e:
         return [f'  {red("✗")} {e}']
 
-    if not drops:
+    lines = []
+
+    # Show sub-collections first
+    for child_slug in children:
+        lines.append(f'  {magenta(child_slug + "/")}')
+
+    if children and drops:
+        lines.append('')
+
+    if not drops and not children:
         return [dim('  (empty collection)')]
 
-    lines = []
     for d in drops:
         key_str = blue(f'f/{d["key"]}') if d['ns'] == 'f' else cyan(d['key'])
         lines.append(f'  {key_str}')
-    return lines
+    return lines or [dim('  (empty collection)')]
 
 
 def _collection_add(host, session, username, slug, ns, key):
@@ -606,11 +501,13 @@ def _print_shell_help():
         ('cp [-f] <src> <dst>', 'duplicate a drop'),
         ('mv [-f] <src> <dst>', 'rename a drop'),
         ('cd <slug>',         'enter a collection'),
-        ('cd ..',             'leave collection'),
-        ('pwd',               'show current collection'),
+        ('cd parent/child',   'navigate into sub-collection'),
+        ('cd ..',             'go up one level'),
+        ('pwd',               'show current collection path'),
         ('add [-f] <key>',    'add drop to current collection'),
         ('open <key>',        'print drop URL'),
         ('status <key>',      'view count and last seen'),
+        ('clear',             'clear the screen'),
         ('exit',              'leave the shell'),
     ]
     w = max(len(c) for c, _ in cmds) + 2

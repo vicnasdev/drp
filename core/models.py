@@ -426,7 +426,9 @@ class Drop(models.Model):
 
         if self.ns == self.NS_CLIPBOARD:
             plan = self.owner_plan if self.owner_id else Plan.ANON
-            idle_hours = Plan.get(plan, "clipboard_idle_hours") or 24
+            idle_hours = Plan.get(plan, "clipboard_idle_hours")
+            if idle_hours is None:
+                return False  # Paid plans: no idle expiry
             ref = self.last_accessed_at or self.created_at
             return (now - ref) > timedelta(hours=idle_hours)
 
@@ -587,6 +589,12 @@ class Collection(models.Model):
         related_name="collections",
         help_text="Group that owns this collection (alongside or instead of user owner).",
     )
+    parent     = models.ForeignKey(
+        "self", null=True, blank=True,
+        on_delete=models.CASCADE,
+        related_name="children",
+        help_text="Parent collection for nesting (sub-collections).",
+    )
     slug       = models.SlugField(max_length=60)
     name       = models.CharField(max_length=120)
     public_inbox = models.BooleanField(
@@ -596,18 +604,52 @@ class Collection(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = [("owner", "slug")]
+        unique_together = [("owner", "parent", "slug")]
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"@{self.owner.username}/{self.slug}"
+        return f"@{self.owner.username}/{self.full_path}"
+
+    @property
+    def full_path(self):
+        """Return the full slash-separated path from root, e.g. 'notes/work'."""
+        parts = []
+        node = self
+        while node is not None:
+            parts.append(node.slug)
+            node = node.parent
+        return '/'.join(reversed(parts))
 
     @property
     def url_path(self):
-        return f"/@{self.owner.username}/{self.slug}/"
+        return f"/@{self.owner.username}/{self.full_path}/"
 
     def can_edit(self, user):
         return getattr(user, "is_authenticated", False) and self.owner_id == user.pk
+
+    def get_ancestors(self):
+        """Return list of ancestors from root to self (excluding self)."""
+        ancestors = []
+        node = self.parent
+        while node is not None:
+            ancestors.append(node)
+            node = node.parent
+        return list(reversed(ancestors))
+
+    @classmethod
+    def resolve_path(cls, owner, path):
+        """Resolve a slash-separated path to a Collection. Returns None if not found."""
+        parts = [p for p in path.strip('/').split('/') if p]
+        if not parts:
+            return None
+        parent = None
+        collection = None
+        for slug in parts:
+            collection = cls.objects.filter(owner=owner, parent=parent, slug=slug).first()
+            if collection is None:
+                return None
+            parent = collection
+        return collection
 
 
 class CollectionMembership(models.Model):

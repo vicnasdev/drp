@@ -365,3 +365,314 @@ class TestEmailPreferences(TestCase):
         self.assertFalse(u.profile.notify_bug_fix)
         self.assertFalse(u.profile.notify_product_updates)
         self.assertTrue(u.profile.notify_billing)
+
+
+# ── Plan downgrade / subscription cancellation behaviour ──────────────────────
+
+class TestPlanDowngradeDropBehaviour(TestCase):
+    """
+    When a user downgrades from paid → free, drops should behave correctly:
+    - Existing drops remain accessible but acquire free-plan expiry rules.
+    - Password-protected drops remain accessible but user can't set new passwords.
+    - Renewal limits reset to the new plan's rules.
+    - Storage quota changes (no quota on free).
+    """
+
+    def setUp(self):
+        from core.models import PlanLimit
+        for plan_key, data in Plan.LIMITS.items():
+            PlanLimit.objects.update_or_create(plan=plan_key, defaults=data)
+        PlanLimit.invalidate_cache()
+
+    def _make_user(self, plan):
+        u = User.objects.create_user(f"dg_{plan}_{id(self)}", password="pw")
+        UserProfile.objects.filter(user=u).update(plan=plan)
+        u.refresh_from_db()
+        return u
+
+    def test_is_paid_switches_on_downgrade(self):
+        u = self._make_user(Plan.STARTER)
+        self.assertTrue(u.profile.is_paid)
+        UserProfile.objects.filter(user=u).update(plan=Plan.FREE)
+        u.profile.refresh_from_db()
+        self.assertFalse(u.profile.is_paid)
+
+    def test_storage_quota_gone_on_downgrade(self):
+        """Free plan has no storage quota — should be None after downgrade."""
+        u = self._make_user(Plan.PRO)
+        self.assertEqual(u.profile.storage_quota_bytes, 20 * 1024 ** 3)
+        UserProfile.objects.filter(user=u).update(plan=Plan.FREE)
+        u.profile.refresh_from_db()
+        self.assertIsNone(u.profile.storage_quota_bytes)
+
+    def test_storage_used_preserved_on_downgrade(self):
+        """storage_used_bytes is not zeroed on downgrade — data still exists."""
+        u = self._make_user(Plan.STARTER)
+        UserProfile.objects.filter(user=u).update(
+            storage_used_bytes=1024 ** 3,  # 1 GB used
+        )
+        u.profile.refresh_from_db()
+        avail = u.profile.storage_available_bytes()
+        self.assertEqual(avail, 4 * 1024 ** 3)  # 4 GB remaining on Starter
+
+        # Downgrade to Free
+        UserProfile.objects.filter(user=u).update(plan=Plan.FREE)
+        u.profile.refresh_from_db()
+        # Free has no quota, so available is None (not negative)
+        self.assertIsNone(u.profile.storage_available_bytes())
+        # But used bytes are still tracked
+        self.assertEqual(u.profile.storage_used_bytes, 1024 ** 3)
+
+    def test_max_file_mb_shrinks_on_downgrade(self):
+        u = self._make_user(Plan.PRO)
+        self.assertEqual(u.profile.max_file_mb(), 5120)
+        UserProfile.objects.filter(user=u).update(plan=Plan.FREE)
+        u.profile.refresh_from_db()
+        self.assertEqual(u.profile.max_file_mb(), 200)
+
+    def test_max_text_kb_shrinks_on_downgrade(self):
+        u = self._make_user(Plan.PRO)
+        self.assertEqual(u.profile.max_text_kb(), 10240)
+        UserProfile.objects.filter(user=u).update(plan=Plan.FREE)
+        u.profile.refresh_from_db()
+        self.assertEqual(u.profile.max_text_kb(), 500)
+
+    def test_renewals_lost_on_downgrade(self):
+        """Free plan has 0 renewals."""
+        self.assertEqual(Plan.get(Plan.FREE, "renewals"), 0)
+        self.assertIsNone(Plan.get(Plan.STARTER, "renewals"))  # unlimited
+
+    def test_password_protection_lost_on_downgrade(self):
+        """Free plan does not have password protection."""
+        self.assertFalse(Plan.get(Plan.FREE, "password_protection"))
+        self.assertTrue(Plan.get(Plan.STARTER, "password_protection"))
+
+    def test_collection_limit_zero_on_free(self):
+        self.assertEqual(Plan.get(Plan.FREE, "max_collections"), 0)
+
+    def test_custom_expiry_none_on_free(self):
+        self.assertIsNone(Plan.get(Plan.FREE, "max_expiry_days"))
+
+    def test_clipboard_idle_hours_increase_on_downgrade(self):
+        """Free plan has shorter idle expiry (48h vs unlimited for paid)."""
+        self.assertEqual(Plan.get(Plan.FREE, "clipboard_idle_hours"), 48)
+        self.assertIsNone(Plan.get(Plan.STARTER, "clipboard_idle_hours"))
+
+    def test_clipboard_max_lifetime_enforced_on_downgrade(self):
+        """Free clipboard drops have a 30-day ceiling; paid = None."""
+        self.assertEqual(Plan.get(Plan.FREE, "clipboard_max_lifetime_days"), 30)
+        self.assertIsNone(Plan.get(Plan.STARTER, "clipboard_max_lifetime_days"))
+
+
+class TestPlanTransitionDropExpiry(TestCase):
+    """
+    Validate that drop expiry behaves correctly when the owning user's plan changes.
+    """
+
+    def setUp(self):
+        from core.models import PlanLimit, Drop
+        for plan_key, data in Plan.LIMITS.items():
+            PlanLimit.objects.update_or_create(plan=plan_key, defaults=data)
+        PlanLimit.invalidate_cache()
+
+    def _make_user(self, plan):
+        u = User.objects.create_user(f"trans_{plan}_{id(self)}", password="pw")
+        UserProfile.objects.filter(user=u).update(plan=plan)
+        u.refresh_from_db()
+        return u
+
+    def test_paid_clipboard_idle_never_expires(self):
+        """Paid plan's clipboard drops never idle-expire (clipboard_idle_hours=None)."""
+        from core.models import Drop
+        from datetime import timedelta
+        from django.utils import timezone
+        u = self._make_user(Plan.STARTER)
+        drop = Drop.objects.create(
+            ns='c', key='paid-idle', kind='text', content='x', owner=u,
+            last_accessed_at=timezone.now() - timedelta(hours=100),
+        )
+        drop.created_at = timezone.now() - timedelta(hours=100)
+        drop.save(update_fields=['created_at'])
+        self.assertFalse(drop.is_expired())
+
+    def test_downgraded_clipboard_idle_expires(self):
+        """After downgrade to Free, clipboard drops idle after 48h."""
+        from core.models import Drop
+        from datetime import timedelta
+        from django.utils import timezone
+        u = self._make_user(Plan.STARTER)
+        drop = Drop.objects.create(
+            ns='c', key='dg-idle', kind='text', content='x', owner=u,
+            last_accessed_at=timezone.now() - timedelta(hours=100),
+        )
+        drop.created_at = timezone.now() - timedelta(hours=100)
+        drop.save(update_fields=['created_at'])
+        self.assertFalse(drop.is_expired())  # Still on Starter
+
+        # Downgrade to Free
+        UserProfile.objects.filter(user=u).update(plan=Plan.FREE)
+        u.profile.refresh_from_db()
+        # Clear internal cache — the drop references owner.profile.plan
+        drop.owner.profile.refresh_from_db()
+        self.assertTrue(drop.is_expired())  # Now Free → 48h idle → expired
+
+    def test_file_drop_gains_lifetime_on_downgrade(self):
+        """Paid file drops have no time limit; free ones expire after 90 days."""
+        from core.models import Drop
+        from datetime import timedelta
+        from django.utils import timezone
+        u = self._make_user(Plan.PRO)
+        drop = Drop.objects.create(
+            ns='f', key='dg-file', kind='file', owner=u,
+            file_public_id='drops/f/dg-file', filename='test.bin', filesize=100,
+        )
+        drop.created_at = timezone.now() - timedelta(days=100)
+        drop.save(update_fields=['created_at'])
+        self.assertFalse(drop.is_expired())  # Pro → no time limit
+
+        # Downgrade to Free
+        UserProfile.objects.filter(user=u).update(plan=Plan.FREE)
+        u.profile.refresh_from_db()
+        drop.owner.profile.refresh_from_db()
+        self.assertTrue(drop.is_expired())  # Free → 90 days → expired at 100 days
+
+    def test_file_drop_within_window_survives_downgrade(self):
+        """File drop < 90 days old should survive downgrade to Free."""
+        from core.models import Drop
+        from datetime import timedelta
+        from django.utils import timezone
+        u = self._make_user(Plan.PRO)
+        drop = Drop.objects.create(
+            ns='f', key='dg-file-ok', kind='file', owner=u,
+            file_public_id='drops/f/dg-file-ok', filename='test.bin', filesize=100,
+        )
+        drop.created_at = timezone.now() - timedelta(days=30)
+        drop.save(update_fields=['created_at'])
+        # Downgrade
+        UserProfile.objects.filter(user=u).update(plan=Plan.FREE)
+        u.profile.refresh_from_db()
+        drop.owner.profile.refresh_from_db()
+        self.assertFalse(drop.is_expired())  # 30 days < 90 days window
+
+
+class TestPlanReUpgradeRestoresLimits(TestCase):
+    """Verify that re-upgrading from Free → paid restores all plan features."""
+
+    def setUp(self):
+        from core.models import PlanLimit
+        for plan_key, data in Plan.LIMITS.items():
+            PlanLimit.objects.update_or_create(plan=plan_key, defaults=data)
+        PlanLimit.invalidate_cache()
+
+    def _make_user(self, plan):
+        u = User.objects.create_user(f"reup_{plan}_{id(self)}", password="pw")
+        UserProfile.objects.filter(user=u).update(plan=plan)
+        u.refresh_from_db()
+        return u
+
+    def test_storage_quota_restored(self):
+        u = self._make_user(Plan.STARTER)
+        self.assertEqual(u.profile.storage_quota_bytes, 5 * 1024 ** 3)
+        UserProfile.objects.filter(user=u).update(plan=Plan.FREE)
+        u.profile.refresh_from_db()
+        self.assertIsNone(u.profile.storage_quota_bytes)
+        # Re-upgrade
+        UserProfile.objects.filter(user=u).update(plan=Plan.PRO)
+        u.profile.refresh_from_db()
+        self.assertEqual(u.profile.storage_quota_bytes, 20 * 1024 ** 3)
+
+    def test_file_limit_restored(self):
+        u = self._make_user(Plan.PRO)
+        UserProfile.objects.filter(user=u).update(plan=Plan.FREE)
+        u.profile.refresh_from_db()
+        self.assertEqual(u.profile.max_file_mb(), 200)
+        # Re-upgrade
+        UserProfile.objects.filter(user=u).update(plan=Plan.PRO)
+        u.profile.refresh_from_db()
+        self.assertEqual(u.profile.max_file_mb(), 5120)
+
+    def test_password_protection_restored(self):
+        self.assertTrue(Plan.get(Plan.STARTER, "password_protection"))
+        self.assertFalse(Plan.get(Plan.FREE, "password_protection"))
+        self.assertTrue(Plan.get(Plan.PRO, "password_protection"))
+
+    def test_idle_drop_survives_reupgrade(self):
+        """A drop that became idle-expired on free should un-expire on re-upgrade."""
+        from core.models import Drop
+        from datetime import timedelta
+        from django.utils import timezone
+        u = self._make_user(Plan.STARTER)
+        drop = Drop.objects.create(
+            ns='c', key='reup-idle', kind='text', content='x', owner=u,
+            last_accessed_at=timezone.now() - timedelta(hours=72),
+        )
+        drop.created_at = timezone.now() - timedelta(hours=72)
+        drop.save(update_fields=['created_at'])
+        self.assertFalse(drop.is_expired())  # Starter → no idle limit
+
+        UserProfile.objects.filter(user=u).update(plan=Plan.FREE)
+        u.profile.refresh_from_db()
+        drop.owner.profile.refresh_from_db()
+        self.assertTrue(drop.is_expired())  # Free → 48h idle → expired
+
+        # Re-upgrade to Pro
+        UserProfile.objects.filter(user=u).update(plan=Plan.PRO)
+        u.profile.refresh_from_db()
+        drop.owner.profile.refresh_from_db()
+        self.assertFalse(drop.is_expired())  # Pro → no idle limit → alive again
+
+
+class TestSubscriptionStatusTransitions(TestCase):
+    """
+    Test ls_subscription_status field transitions that map to plan downgrades.
+    """
+
+    def _make_user(self, plan, status='active'):
+        u = User.objects.create_user(f"sub_{plan}_{status}_{id(self)}", password="pw")
+        UserProfile.objects.filter(user=u).update(
+            plan=plan,
+            ls_subscription_status=status,
+        )
+        u.refresh_from_db()
+        return u
+
+    def test_active_subscription_is_paid(self):
+        u = self._make_user(Plan.STARTER, 'active')
+        self.assertTrue(u.profile.is_paid)
+        self.assertEqual(u.profile.ls_subscription_status, 'active')
+
+    def test_cancelled_still_paid_until_period_ends(self):
+        """Cancelled status means the user keeps their plan until period ends."""
+        u = self._make_user(Plan.STARTER, 'cancelled')
+        self.assertTrue(u.profile.is_paid)  # Still paid
+
+    def test_expired_reverts_to_free(self):
+        """When subscription expires, plan should be set to Free by webhook."""
+        u = self._make_user(Plan.STARTER, 'active')
+        # Simulate webhook setting expired
+        UserProfile.objects.filter(user=u).update(
+            plan=Plan.FREE,
+            ls_subscription_status='expired',
+        )
+        u.profile.refresh_from_db()
+        self.assertFalse(u.profile.is_paid)
+        self.assertEqual(u.profile.plan, Plan.FREE)
+
+    def test_past_due_still_on_plan(self):
+        """Past-due users keep their plan (grace period)."""
+        u = self._make_user(Plan.PRO, 'past_due')
+        self.assertTrue(u.profile.is_paid)
+
+    def test_plan_since_preserved_through_transitions(self):
+        """plan_since field should be set when plan changes."""
+        from django.utils import timezone
+        u = self._make_user(Plan.STARTER)
+        now = timezone.now()
+        UserProfile.objects.filter(user=u).update(plan_since=now)
+        u.profile.refresh_from_db()
+        self.assertEqual(u.profile.plan_since, now)
+        # Downgrade
+        UserProfile.objects.filter(user=u).update(plan=Plan.FREE)
+        u.profile.refresh_from_db()
+        # plan_since was not cleared (the webhook should update it but we're testing field behaviour)
+        self.assertEqual(u.profile.plan_since, now)

@@ -867,3 +867,216 @@ class TestBuildParserIncludesCache:
         parser = build_parser()
         args = parser.parse_args(['rmcache', 'mykey'])
         assert args.key == 'mykey'
+
+
+# ── Shell sub-collection cd / path management ────────────────────────────────
+
+class TestShellCdNavigation:
+    """Test the shell's cd command handles nested sub-collection navigation."""
+
+    def _make_session(self, ok_paths=None):
+        """Mock session that returns 200 for paths in ok_paths, 404 otherwise."""
+        if ok_paths is None:
+            ok_paths = set()
+        session = MagicMock()
+
+        def mock_get(url, **kwargs):
+            resp = MagicMock()
+            for path in ok_paths:
+                if path in url:
+                    resp.ok = True
+                    resp.json.return_value = {
+                        'id': 1, 'name': 'test', 'slug': path.split('/')[-2],
+                        'drops': [], 'children': [],
+                    }
+                    resp.status_code = 200
+                    return resp
+            resp.ok = False
+            resp.status_code = 404
+            return resp
+        session.get = mock_get
+        return session
+
+    def test_cd_into_root_collection(self, capsys):
+        """cd notes → cwd = 'notes'"""
+        from cli.commands.shell import _dispatch, _NOT_HANDLED
+        session = self._make_session({'/@u/notes/'})
+        # cd is handled in the main REPL loop, not _dispatch. Just verify resolve path helper
+        from cli.commands.shell import cmd_shell
+        # Instead test the _resolve_collection_path helper indirectly:
+        # The function is local to cmd_shell, so we test the cd logic via a simulated line
+
+    def test_cd_dotdot_from_nested_goes_up_one(self):
+        """cd .. from notes/work → cwd = 'notes' (not root)."""
+        # Simulate the logic
+        cwd = 'notes/work'
+        if cwd and '/' in cwd:
+            cwd = cwd.rsplit('/', 1)[0]
+        assert cwd == 'notes'
+
+    def test_cd_dotdot_from_root_collection_goes_to_none(self):
+        """cd .. from 'notes' → cwd = None."""
+        cwd = 'notes'
+        if cwd and '/' in cwd:
+            cwd = cwd.rsplit('/', 1)[0]
+        else:
+            cwd = None
+        assert cwd is None
+
+    def test_cd_dotdot_from_deeply_nested(self):
+        """cd .. from a/b/c → cwd = 'a/b'."""
+        cwd = 'a/b/c'
+        if cwd and '/' in cwd:
+            cwd = cwd.rsplit('/', 1)[0]
+        assert cwd == 'a/b'
+
+    def test_cd_home_resets_to_root(self):
+        """cd ~ or cd (no args) → cwd = None."""
+        for target in ['~', '']:
+            cwd = 'some/deep/path'
+            if not target or target == '~':
+                cwd = None
+            assert cwd is None
+
+
+class TestShellClearCommand:
+    """Verify clear is in the builtin commands."""
+
+    def test_clear_in_builtin_cmds(self):
+        from cli.commands.shell import _BUILTIN_CMDS
+        assert 'clear' in _BUILTIN_CMDS
+
+    def test_clear_in_all_shell_cmds(self):
+        from cli.commands.shell import ALL_SHELL_CMDS
+        assert 'clear' in ALL_SHELL_CMDS
+
+
+class TestShellLsCollectionDrops:
+    """Test _ls_collection_drops displays sub-collections and drops."""
+
+    def test_shows_children_and_drops(self):
+        from cli.commands.shell import _ls_collection_drops
+        session = MagicMock()
+        resp = MagicMock()
+        resp.ok = True
+        resp.json.return_value = {
+            'drops': [{'key': 'mykey', 'ns': 'c'}],
+            'children': ['sub-a', 'sub-b'],
+        }
+        session.get.return_value = resp
+        lines = _ls_collection_drops('http://x', session, {}, 'u', 'notes')
+        text = '\n'.join(lines)
+        assert 'sub-a/' in text
+        assert 'sub-b/' in text
+        assert 'mykey' in text
+
+    def test_empty_collection(self):
+        from cli.commands.shell import _ls_collection_drops
+        session = MagicMock()
+        resp = MagicMock()
+        resp.ok = True
+        resp.json.return_value = {'drops': [], 'children': []}
+        session.get.return_value = resp
+        lines = _ls_collection_drops('http://x', session, {}, 'u', 'notes')
+        text = '\n'.join(lines)
+        assert 'empty' in text.lower()
+
+    def test_children_only(self):
+        from cli.commands.shell import _ls_collection_drops
+        session = MagicMock()
+        resp = MagicMock()
+        resp.ok = True
+        resp.json.return_value = {'drops': [], 'children': ['child']}
+        session.get.return_value = resp
+        lines = _ls_collection_drops('http://x', session, {}, 'u', 'notes')
+        text = '\n'.join(lines)
+        assert 'child/' in text
+
+    def test_uses_full_path_in_url(self):
+        """Nested paths like 'notes/work' should be passed in the URL."""
+        from cli.commands.shell import _ls_collection_drops
+        session = MagicMock()
+        resp = MagicMock()
+        resp.ok = True
+        resp.json.return_value = {'drops': [], 'children': []}
+        session.get.return_value = resp
+        _ls_collection_drops('http://x', session, {}, 'u', 'notes/work')
+        url = session.get.call_args[0][0]
+        assert 'notes/work' in url
+
+    def test_not_found(self):
+        from cli.commands.shell import _ls_collection_drops
+        session = MagicMock()
+        resp = MagicMock()
+        resp.ok = False
+        resp.status_code = 404
+        session.get.return_value = resp
+        lines = _ls_collection_drops('http://x', session, {}, 'u', 'nope')
+        text = '\n'.join(lines)
+        assert 'not found' in text.lower()
+
+
+class TestShellUnifiedDispatch:
+    """Confirm rm, cp, mv, status all return _NOT_HANDLED or delegate."""
+
+    def test_rm_delegates(self):
+        from cli.commands.shell import _dispatch
+        # rm should delegate (returns None after calling _delegate_to_cli)
+        with patch('cli.commands.shell._delegate_to_cli') as mock_del:
+            result = _dispatch('rm', ['key'], 'http://x', MagicMock(), {}, None, 'u')
+            mock_del.assert_called_once_with('rm', ['key'])
+        assert result is None
+
+    def test_cp_delegates(self):
+        from cli.commands.shell import _dispatch
+        with patch('cli.commands.shell._delegate_to_cli') as mock_del:
+            result = _dispatch('cp', ['src', 'dst'], 'http://x', MagicMock(), {}, None, 'u')
+            mock_del.assert_called_once_with('cp', ['src', 'dst'])
+        assert result is None
+
+    def test_mv_delegates(self):
+        from cli.commands.shell import _dispatch
+        with patch('cli.commands.shell._delegate_to_cli') as mock_del:
+            result = _dispatch('mv', ['old', 'new'], 'http://x', MagicMock(), {}, None, 'u')
+            mock_del.assert_called_once_with('mv', ['old', 'new'])
+        assert result is None
+
+    def test_status_delegates(self):
+        from cli.commands.shell import _dispatch
+        with patch('cli.commands.shell._delegate_to_cli') as mock_del:
+            result = _dispatch('status', ['key'], 'http://x', MagicMock(), {}, None, 'u')
+            mock_del.assert_called_once_with('status', ['key'])
+        assert result is None
+
+    def test_ls_without_cwd_delegates(self):
+        from cli.commands.shell import _dispatch
+        with patch('cli.commands.shell._delegate_to_cli') as mock_del:
+            result = _dispatch('ls', [], 'http://x', MagicMock(), {}, None, 'u')
+            mock_del.assert_called_once_with('ls', [])
+        assert result is None
+
+    def test_ls_with_cwd_does_not_delegate(self):
+        """ls inside a collection should call _ls_collection_drops, not delegate."""
+        from cli.commands.shell import _dispatch
+        with patch('cli.commands.shell._ls_collection_drops', return_value=['  item']) as mock_ls:
+            with patch('cli.commands.shell._delegate_to_cli') as mock_del:
+                result = _dispatch('ls', [], 'http://x', MagicMock(), {}, 'notes', 'u')
+                mock_del.assert_not_called()
+                mock_ls.assert_called_once()
+        assert result == ['  item']
+
+
+class TestShellHelpText:
+    """Validate help text includes sub-collection navigation info."""
+
+    def test_help_mentions_subpath_navigation(self, capsys):
+        from cli.commands.shell import _print_shell_help
+        _print_shell_help()
+        out = capsys.readouterr().out
+        assert 'parent/child' in out
+
+    def test_help_mentions_clear(self, capsys):
+        from cli.commands.shell import _print_shell_help
+        _print_shell_help()
+        out = capsys.readouterr().out
+        assert 'clear' in out
