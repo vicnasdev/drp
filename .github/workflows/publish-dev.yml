@@ -12,6 +12,9 @@ on:
       - 'VERSION'
       - '.github/workflows/publish-dev.yml'
 
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:
@@ -128,6 +131,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       id-token: write
     concurrency:
       group: publish-dev
