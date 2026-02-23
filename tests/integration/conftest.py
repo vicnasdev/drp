@@ -6,6 +6,9 @@ Zero-setup integration test fixtures. Everything is derived from .env.
 Users are created once per session via manage.py shell -c, marked is_test=True,
 and left in the DB (purged at next deploy with python manage.py purge_test_data).
 
+Test drops use DRP_TEST_MODE=1 which sets a short expiry (1 hour) so the
+regular cleanup cron deletes them automatically.
+
 Plan tiers available as fixtures:
     anon          — unauthenticated requests.Session
     free_user     — test-free@{DOMAIN}    Plan.FREE
@@ -108,7 +111,7 @@ class TestUser:
         self.session  = session
 
     def track(self, key, ns='c'):
-        """No-op — is_test=True purges data at deploy."""
+        """No-op — test drops auto-expire in 1 hour, cleaned by cron."""
         return key
 
 

@@ -208,11 +208,18 @@ def create_invite(request, group_id):
         expires_at=timezone.now() + timezone.timedelta(hours=expires_hours) if expires_hours else None,
     )
 
+    from django.conf import settings
+    site = getattr(settings, 'SITE_URL', '')
+    join_url = f"{site}/groups/join/?token={token}"
+    qr_url = f"{site}/qr/?url={join_url}"
+
     return JsonResponse({
         "token": token,
         "role": invite.role,
         "max_uses": invite.max_uses,
         "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
+        "join_url": join_url,
+        "qr_url": qr_url,
         "message": f"Invite token created for @{group.handle}.",
     }, status=201)
 

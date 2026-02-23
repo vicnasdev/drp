@@ -4,6 +4,7 @@ from core import views
 from core.views.error_reporting import report_error
 from core.views.github_webhook import github_webhook
 from core.views.drops import raw_view, raw_file, set_drop_password, embed_view, public_feed
+from core.views.helpers import qr_view
 from core.views.legal import privacy_view, terms_view
 from core.views.groups import (
     resolve_handle, create_group, create_invite, join_group,
@@ -27,6 +28,7 @@ urlpatterns = [
     re_path(rf"^raw/{KEY}/$",   raw_view,               name="raw_view"),
     re_path(rf"^embed/{KEY}/$", embed_view,             name="embed_view"),
     path("explore/",            public_feed,            name="public_feed"),
+    path("qr/",                 qr_view,                name="qr_view"),
     path("privacy/",            privacy_view,           name="privacy"),
     path("terms/",              terms_view,             name="terms"),
     path("auth/register/",      views.register_view,    name="register"),

@@ -1,10 +1,9 @@
 """
 management/commands/purge_test_data.py
 
-Deletes every User, Drop, and related row that was created by the
-integration test suite (is_test=True).
-
-Run in the deploy entrypoint BEFORE gunicorn starts. Safe to run manually:
+DEPRECATED: Test drops now use short expires_at (1 hour) and are cleaned
+up by the regular ``cleanup`` management command.  This command is kept
+only to purge legacy rows that still carry is_test=True.
 
     python manage.py purge_test_data
 """
@@ -18,12 +17,10 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = "Delete all data created by the integration test suite (is_test=True)."
+    help = "Delete legacy data marked is_test=True (deprecated — cleanup handles new test drops)."
 
     def handle(self, *args, **kwargs):
-        # All test drops are explicitly marked is_test=True at creation time
-        # (set by the views when the request includes is_test=1/True).
-        # Delete them first so SET_NULL on owner FK never produces orphans.
+        # Legacy: delete drops explicitly marked is_test=True.
         drop_count, _ = Drop.objects.filter(is_test=True).delete()
 
         # Purge collections owned by test users (memberships cascade automatically).

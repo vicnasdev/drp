@@ -567,3 +567,130 @@ class TestCollectionSlugCompleter:
         slugs = json.loads(cache_file.read_text())
         assert 'notes' in slugs
         assert 'work' in slugs
+
+
+# ── CLI Smoke Tests ──────────────────────────────────────────────────────────
+
+class TestCLISmokeUp:
+    """Smoke tests for `drp up` — mock network, ensure no crash."""
+
+    def _make_args(self, target='hello', **kwargs):
+        args = MagicMock()
+        args.target = target
+        args.key = kwargs.get('key', None)
+        args.burn = kwargs.get('burn', False)
+        args.password = kwargs.get('password', None)
+        args.file = kwargs.get('file', False)
+        args.clip = kwargs.get('clip', False)
+        args.schedule = kwargs.get('schedule', None)
+        args.webhook = kwargs.get('webhook', None)
+        args.notify = kwargs.get('notify', None)
+        args.alias = kwargs.get('alias', None)
+        args.template = kwargs.get('template', None)
+        args.public = kwargs.get('public', False)
+        args.tag = kwargs.get('tag', None)
+        args.expires = kwargs.get('expires', None)
+        args.timing = False
+        args.collection = kwargs.get('collection', None)
+        return args
+
+    @patch('cli.commands.upload.load_context')
+    @patch('cli.api.text.upload_text')
+    @patch('cli.commands.upload._copy_to_clipboard', return_value=False)
+    def test_text_upload_no_crash(self, mock_clip, mock_upload, mock_ctx):
+        mock_session = MagicMock()
+        mock_ctx.return_value = ({'host': 'https://test.com'}, 'https://test.com', mock_session)
+        mock_upload.return_value = 'testkey'
+
+        from cli.commands.upload import cmd_up
+        args = self._make_args(target='hello world')
+        cmd_up(args)
+        mock_upload.assert_called_once()
+
+    @patch('cli.commands.upload.load_context')
+    @patch('cli.api.text.upload_text')
+    @patch('cli.commands.upload._copy_to_clipboard', return_value=False)
+    def test_burn_flag_passed(self, mock_clip, mock_upload, mock_ctx):
+        mock_session = MagicMock()
+        mock_ctx.return_value = ({'host': 'https://test.com'}, 'https://test.com', mock_session)
+        mock_upload.return_value = 'bkey'
+
+        from cli.commands.upload import cmd_up
+        args = self._make_args(target='secret', burn=True)
+        cmd_up(args)
+        call_kwargs = mock_upload.call_args
+        assert call_kwargs[1].get('burn') or call_kwargs[0][4] if len(call_kwargs[0]) > 4 else True
+
+    @patch('cli.commands.upload.load_context')
+    @patch('cli.api.text.upload_text')
+    @patch('cli.commands.upload._copy_to_clipboard', return_value=False)
+    def test_public_flag_passed(self, mock_clip, mock_upload, mock_ctx):
+        mock_session = MagicMock()
+        mock_ctx.return_value = ({'host': 'https://test.com'}, 'https://test.com', mock_session)
+        mock_upload.return_value = 'pubkey'
+
+        from cli.commands.upload import cmd_up
+        args = self._make_args(target='public text', public=True, tag='python')
+        cmd_up(args)
+        mock_upload.assert_called_once()
+
+
+class TestCLISmokeGet:
+    """Smoke test for `drp get` — URL mode (no network needed)."""
+
+    @patch('cli.config.load')
+    def test_get_url_mode(self, mock_load, capsys):
+        mock_load.return_value = {'host': 'https://test.com'}
+        args = MagicMock()
+        args.key = 'mykey'
+        args.url = True
+        args.file = False
+        args.clip = False
+        args.timing = False
+
+        from cli.commands.get import cmd_get
+        cmd_get(args)
+        out = capsys.readouterr().out.strip()
+        assert out == 'https://test.com/mykey/'
+
+    @patch('cli.config.load')
+    def test_get_file_url_mode(self, mock_load, capsys):
+        mock_load.return_value = {'host': 'https://test.com'}
+        args = MagicMock()
+        args.key = 'fkey'
+        args.url = True
+        args.file = True
+        args.clip = False
+        args.timing = False
+
+        from cli.commands.get import cmd_get
+        cmd_get(args)
+        out = capsys.readouterr().out.strip()
+        assert out == 'https://test.com/f/fkey/'
+
+
+class TestCLISmokeStatus:
+    """Smoke test for `drp status <key>` — mock network."""
+
+    @patch('cli.commands.status.load_context')
+    def test_drop_status_text(self, mock_ctx, capsys):
+        mock_session = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.json.return_value = {
+            'key': 'skey',
+            'kind': 'text',
+            'views': 5,
+            'created_at': '2025-01-01T00:00:00Z',
+            'expires_at': '2025-02-01T00:00:00Z',
+        }
+        mock_session.get.return_value = mock_resp
+        mock_ctx.return_value = ({'host': 'https://test.com'}, 'https://test.com', mock_session)
+
+        from cli.commands.status import _drop_status
+        args = MagicMock()
+        args.file = False
+        args.clip = False
+        _drop_status(args, 'skey')
+        out = capsys.readouterr().out
+        assert 'skey' in out

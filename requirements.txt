@@ -9,3 +9,4 @@ resend
 boto3
 markdown
 pytest-timeout
+qrcode[pil]

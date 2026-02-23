@@ -111,11 +111,17 @@ def collection_view(request, username, slug):
     is_own = request.user.is_authenticated and request.user.pk == owner.pk
 
     if 'application/json' in request.headers.get('Accept', ''):
+        from django.conf import settings as _settings
+        site = getattr(_settings, 'SITE_URL', '')
+        share_url = f"{site}/@{owner.username}/{collection.slug}/"
+        qr_url = f"{site}/qr/?url={share_url}"
         return JsonResponse({
             'id':   collection.pk,
             'slug': collection.slug,
             'name': collection.name,
             'drops': [{'ns': m.ns, 'key': m.key} for m in memberships],
+            'share_url': share_url,
+            'qr_url': qr_url,
         })
 
     # Owned drops available to add (for the add-drop UI)

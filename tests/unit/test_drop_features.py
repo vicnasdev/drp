@@ -214,3 +214,181 @@ class TestAliasModel(TestCase):
         Alias.objects.create(owner=u1, alias='shared', ns='c', key='k1')
         Alias.objects.create(owner=u2, alias='shared', ns='c', key='k2')
         self.assertEqual(Alias.objects.filter(alias='shared').count(), 2)
+
+
+# ── Collection Inbox ─────────────────────────────────────────────────────────
+
+class TestCollectionInbox(TestCase):
+    """Public inbox: anyone can POST text to a public_inbox collection."""
+
+    def setUp(self):
+        from core.models import Collection
+        self.owner = _make_user('inbox_owner', plan=Plan.STARTER)
+        self.col = Collection.objects.create(
+            owner=self.owner, name='inbox-col', slug='inbox-col', public_inbox=True
+        )
+
+    def test_post_to_public_inbox_creates_drop(self):
+        import json as _json
+        res = self.client.post(
+            f'/@{self.owner.username}/inbox-col/',
+            data=_json.dumps({"content": "hello from anon"}),
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        self.assertIn('key', data)
+        self.assertTrue(Drop.objects.filter(key=data['key']).exists())
+
+    def test_post_to_non_inbox_rejected(self):
+        import json as _json
+        self.col.public_inbox = False
+        self.col.save(update_fields=['public_inbox'])
+        res = self.client.post(
+            f'/@{self.owner.username}/inbox-col/',
+            data=_json.dumps({"content": "should fail"}),
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_empty_content_rejected(self):
+        import json as _json
+        res = self.client.post(
+            f'/@{self.owner.username}/inbox-col/',
+            data=_json.dumps({"content": ""}),
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_toggle_inbox(self):
+        self.client.force_login(self.owner)
+        res = self.client.post(f'/collections/{self.col.pk}/toggle-inbox/')
+        self.assertEqual(res.status_code, 200)
+        self.col.refresh_from_db()
+        self.assertFalse(self.col.public_inbox)  # was True, now False
+
+    def test_toggle_inbox_non_owner_rejected(self):
+        other = _make_user('inbox_other')
+        self.client.force_login(other)
+        res = self.client.post(f'/collections/{self.col.pk}/toggle-inbox/')
+        self.assertEqual(res.status_code, 403)
+
+
+# ── Public Feed ──────────────────────────────────────────────────────────────
+
+class TestPublicFeed(TestCase):
+    """Public drops appear on /explore/ and are searchable."""
+
+    def setUp(self):
+        self.user = _make_user('pub_user', plan=Plan.STARTER)
+        Drop.objects.create(
+            ns='c', key='pub1', content='python snippet', kind='text',
+            owner=self.user, is_public=True, tags='python,code',
+        )
+        Drop.objects.create(
+            ns='c', key='priv1', content='private stuff', kind='text',
+            owner=self.user, is_public=False,
+        )
+
+    def test_public_drop_in_feed(self):
+        res = self.client.get('/explore/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 200)
+        keys = [d['key'] for d in res.json()['drops']]
+        self.assertIn('pub1', keys)
+
+    def test_private_drop_not_in_feed(self):
+        res = self.client.get('/explore/', HTTP_ACCEPT='application/json')
+        keys = [d['key'] for d in res.json()['drops']]
+        self.assertNotIn('priv1', keys)
+
+    def test_search_by_tag(self):
+        res = self.client.get('/explore/?tag=python', HTTP_ACCEPT='application/json')
+        keys = [d['key'] for d in res.json()['drops']]
+        self.assertIn('pub1', keys)
+
+    def test_search_by_query(self):
+        res = self.client.get('/explore/?q=snippet', HTTP_ACCEPT='application/json')
+        keys = [d['key'] for d in res.json()['drops']]
+        self.assertIn('pub1', keys)
+
+    def test_no_results_for_unmatched_query(self):
+        res = self.client.get('/explore/?q=zzz_no_match', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.json()['drops'], [])
+
+
+# ── Feature Voting ───────────────────────────────────────────────────────────
+
+class TestFeatureVoting(TestCase):
+    """Feature voting: weight enforced, anon blocked from voting/submitting."""
+
+    def test_anon_can_view_features(self):
+        res = self.client.get('/features/')
+        self.assertEqual(res.status_code, 200)
+
+    def test_anon_cannot_submit(self):
+        import json as _json
+        res = self.client.post(
+            '/features/submit/',
+            data=_json.dumps({"title": "more storage"}),
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 401)
+
+    def test_anon_cannot_vote(self):
+        from core.models import FeatureProposal
+        u = _make_user('fp_owner')
+        p = FeatureProposal.objects.create(title='test feat', proposed_by=u)
+        res = self.client.post(f'/features/{p.pk}/vote/')
+        self.assertEqual(res.status_code, 401)
+
+    def test_free_user_can_submit(self):
+        import json as _json
+        u = _make_user('fp_free')
+        self.client.force_login(u)
+        res = self.client.post(
+            '/features/submit/',
+            data=_json.dumps({"title": "dark mode", "description": "please"}),
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()['title'], 'dark mode')
+
+    def test_free_vote_weight_1(self):
+        from core.models import FeatureProposal, FeatureVote
+        u = _make_user('fp_voter_free')
+        p = FeatureProposal.objects.create(title='feat1', proposed_by=u)
+        self.client.force_login(u)
+        res = self.client.post(f'/features/{p.pk}/vote/')
+        self.assertEqual(res.status_code, 200)
+        vote = FeatureVote.objects.get(proposal=p, user=u)
+        self.assertEqual(vote.weight, 1)
+
+    def test_paid_vote_weight_3(self):
+        from core.models import FeatureProposal, FeatureVote
+        u = _make_user('fp_voter_paid', plan=Plan.STARTER)
+        p = FeatureProposal.objects.create(title='feat2', proposed_by=u)
+        self.client.force_login(u)
+        self.client.post(f'/features/{p.pk}/vote/')
+        vote = FeatureVote.objects.get(proposal=p, user=u)
+        self.assertEqual(vote.weight, 3)
+
+    def test_vote_toggle_removes(self):
+        from core.models import FeatureProposal, FeatureVote
+        u = _make_user('fp_toggler')
+        p = FeatureProposal.objects.create(title='feat3', proposed_by=u)
+        self.client.force_login(u)
+        self.client.post(f'/features/{p.pk}/vote/')
+        self.assertTrue(FeatureVote.objects.filter(proposal=p, user=u).exists())
+        self.client.post(f'/features/{p.pk}/vote/')
+        self.assertFalse(FeatureVote.objects.filter(proposal=p, user=u).exists())
+
+    def test_score_reflects_votes(self):
+        from core.models import FeatureProposal
+        u1 = _make_user('fp_s1')
+        u2 = _make_user('fp_s2', plan=Plan.PRO)
+        p = FeatureProposal.objects.create(title='scored', proposed_by=u1)
+        self.client.force_login(u1)
+        self.client.post(f'/features/{p.pk}/vote/')
+        self.client.force_login(u2)
+        res = self.client.post(f'/features/{p.pk}/vote/')
+        self.assertEqual(res.json()['score'], 4)  # 1 + 3

@@ -398,6 +398,9 @@ def _save_text(request, ns, key, existing, paid, anon_token):
         drop = existing
     else:
         expires_at, locked_until = _expiry_and_lock(request, paid)
+        # Test-mode drops get a short expiry so cleanup cron handles them
+        if is_test:
+            expires_at = timezone.now() + timedelta(hours=1)
         owner = request.user if request.user.is_authenticated else None
 
         visible_from = _parse_schedule(schedule) if paid and schedule else None
@@ -413,7 +416,6 @@ def _save_text(request, ns, key, existing, paid, anon_token):
             max_lifetime_secs=max_lifetime_secs(request.user, ns),
             anon_token=anon_token,
             burn=burn,
-            is_test=is_test,
             visible_from=visible_from,
             webhook_url=wh,
             notify_before_secs=notify_secs,
@@ -520,6 +522,8 @@ def upload_confirm(request):
     is_public    = bool(data.get("is_public", False))
     tags         = (data.get("tags") or "").strip()
 
+    # ── Short expiry for test-mode drops ──────────────────────────────────
+
     if not key or ns not in (Drop.NS_CLIPBOARD, Drop.NS_FILE):
         return JsonResponse({"error": "key and valid ns required."}, status=400)
 
@@ -576,6 +580,10 @@ def upload_confirm(request):
         elif not request.user.is_authenticated:
             locked_until = timezone.now() + timedelta(hours=24)
 
+        # Test-mode drops get a short expiry so cleanup cron handles them
+        if is_test:
+            expires_at = timezone.now() + timedelta(hours=1)
+
         visible_from = _parse_schedule(schedule) if paid and schedule else None
         wh = webhook_url if paid and webhook_url else ""
         notify_secs = _parse_notify(notify) if paid and notify else None
@@ -595,7 +603,6 @@ def upload_confirm(request):
             max_lifetime_secs=max_lifetime_secs(request.user, ns),
             anon_token=anon_token,
             burn=burn,
-            is_test=is_test,
             visible_from=visible_from,
             webhook_url=wh,
             notify_before_secs=notify_secs,

@@ -170,3 +170,31 @@ def claim_anon_drops(user, token):
         ),
     )
     return count
+
+
+# ── QR code generation ───────────────────────────────────────────────────────
+
+def qr_view(request):
+    """GET /qr/?url=https://... — return a QR code as SVG."""
+    from django.http import HttpResponse, HttpResponseBadRequest
+    import io
+
+    url = request.GET.get("url", "").strip()
+    if not url:
+        return HttpResponseBadRequest("Missing ?url= parameter")
+
+    try:
+        import qrcode
+        import qrcode.image.svg
+
+        factory = qrcode.image.svg.SvgPathImage
+        qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10)
+        qr.add_data(url)
+        qr.make(fit=True)
+        img = qr.make_image(image_factory=factory)
+
+        buf = io.BytesIO()
+        img.save(buf)
+        return HttpResponse(buf.getvalue(), content_type="image/svg+xml")
+    except ImportError:
+        return HttpResponseBadRequest("qrcode library not installed")
