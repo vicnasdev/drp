@@ -152,9 +152,9 @@ _GEMINI_BASE = (
 
 _SYSTEM_PROMPT = """\
 You are the help assistant for drp (https://drp.fyi), a clipboard and file \
-sharing service. Answer questions using ONLY the documentation below.
-Be concise — 150 words or fewer. Use markdown for code and emphasis.
-If the answer is not in the docs, say so.
+sharing service. Use the documentation below to answer user questions.
+Be concise — 200 words or fewer. Use markdown for code and emphasis.
+If you are unsure, give the best answer you can based on the docs.
 
 {docs}"""
 
@@ -180,13 +180,62 @@ def _strip_html(text: str) -> str:
     return s.get_text()
 
 
+_FEATURE_REFERENCE = """\
+# drp feature reference
+
+## Upload & share
+- `drp up <text-or-file>` uploads content and returns a shareable URL.
+- `echo "text" | drp up` reads from stdin (pipe-friendly & scriptable).
+- Flags: `--burn` (destroy after one view), `--password` (password-protect), \
+`--expiry <duration>` (e.g. 1h, 7d, 30d), `--public` (list publicly).
+
+## Retrieve
+- `drp get <key>` prints drop content to stdout.
+- Visit `https://drp.fyi/<key>/` in a browser to view.
+
+## Raw & embed URLs
+- Raw URL: `https://drp.fyi/raw/<key>/` returns plain content (useful for curl/scripts).
+- Embed URL: `https://drp.fyi/embed/<key>/` renders the drop for embedding in \
+docs, wikis, or READMEs (HTML iframe). Update content without changing the URL.
+
+## Collections
+- `drp up --collection <name>` adds a drop to a named collection.
+- `drp ls --collection <name>` lists drops in a collection.
+- Share an entire collection with one link.
+
+## Burn-after-reading secrets
+- `drp up "secret" --burn` creates a drop that self-destructs after one view.
+- Combine with `--password` for extra security.
+
+## Help bot
+- `drp ask "<question>"` in the CLI, or click the ? button on any page.
+- Answers come from the official drp documentation.
+
+## Plans & limits
+- Anonymous: limited uploads, no account needed.
+- Free: create an account for higher limits.
+- Starter & Pro: increased storage, longer expiry, more API calls.
+- See https://drp.fyi/help/plans/ for details.
+
+## CLI install
+- `pip install drp-cli` or `pipx install drp-cli`.
+- Run `drp setup` to authenticate.
+"""
+
+
 @cache
 def _get_docs_context() -> str:
     base = Path(__file__).resolve().parent.parent
-    parts = [(base / "README.md").read_text()]
-    tmpl_dir = base / "project" / "templates" / "help"
-    for name in ("expiry.html", "plans.html", "cli.html"):
-        p = tmpl_dir / name
+    parts = [_FEATURE_REFERENCE, (base / "README.md").read_text()]
+    tmpl_dir = base / "project" / "templates"
+    help_dir = tmpl_dir / "help"
+    templates = [
+        help_dir / "expiry.html",
+        help_dir / "plans.html",
+        help_dir / "cli.html",
+        tmpl_dir / "use_cases.html",
+    ]
+    for p in templates:
         if not p.exists():
             continue
         raw = p.read_text()
