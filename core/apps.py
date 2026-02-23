@@ -19,10 +19,12 @@ def _is_server():
 
 
 def _run_scheduler():
-    """Background loop that runs cleanup + expiry notifications."""
+    """Background loop that runs cleanup + expiry notifications + weekly feature promotion."""
     from django.core.management import call_command
 
     interval = int(os.environ.get("CLEANUP_INTERVAL_SECS", 3600))
+    promote_every = int(os.environ.get("PROMOTE_INTERVAL_HOURS", 168))  # 168h = 1 week
+    hours_since_promote = 0
     time.sleep(30)  # let the app fully start
 
     while True:
@@ -31,6 +33,16 @@ def _run_scheduler():
                 call_command(cmd)
             except Exception:
                 logger.exception("Scheduled %s failed", cmd)
+
+        # Promote top-voted feature proposal → GitHub issue (weekly)
+        hours_since_promote += interval / 3600
+        if hours_since_promote >= promote_every:
+            hours_since_promote = 0
+            try:
+                call_command("promote_feature")
+            except Exception:
+                logger.exception("Scheduled promote_feature failed")
+
         time.sleep(interval)
 
 
