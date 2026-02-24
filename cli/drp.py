@@ -220,6 +220,10 @@ def _configure_subparsers(sub):
     p_get.add_argument('--output', '-o', default=None)
     p_get.add_argument('--url', '-u', action='store_true')
     p_get.add_argument('--timing', action='store_true')
+    p_get.add_argument('--parse', action='store_true',
+                       help='Auto-detect content format and print parsed output')
+    p_get.add_argument('--field', default=None, metavar='PATH',
+                       help='Extract a nested field via dot-path (e.g. data.items.0.name)')
     p_get.add_argument('--password', '-p', default=None, metavar='PASSWORD',
                        help='Password for a protected drop (prompted if omitted)')
 

@@ -36,6 +36,8 @@ class Plan:
             "api_keys":                   0,
             "scheduled_drops":            0,
             "helpbot_hourly":             0,
+            "smart_parse":                True,
+            "api_fetch":                  False,
         },
         FREE: {
             "label":                      "Free",
@@ -55,6 +57,8 @@ class Plan:
             "api_keys":                   0,
             "scheduled_drops":            0,
             "helpbot_hourly":             5,
+            "smart_parse":                True,
+            "api_fetch":                  False,
         },
         STARTER: {
             "label":                      "Starter",
@@ -74,6 +78,8 @@ class Plan:
             "api_keys":                   5,
             "scheduled_drops":            10,
             "helpbot_hourly":             25,
+            "smart_parse":                True,
+            "api_fetch":                  True,
         },
         PRO: {
             "label":                      "Pro",
@@ -93,6 +99,8 @@ class Plan:
             "api_keys":                   None,
             "scheduled_drops":            None,
             "helpbot_hourly":             50,
+            "smart_parse":                True,
+            "api_fetch":                  True,
         },
     }
 
@@ -139,6 +147,10 @@ class PlanLimit(models.Model):
                                      help_text="null = unlimited, 0 = none")
     helpbot_hourly             = models.PositiveIntegerField(default=0,
                                      help_text="Help bot questions per hour. 0 = disabled.")
+    smart_parse                = models.BooleanField(default=True,
+                                     help_text="Allow smart content parsing (--parse, --field).")
+    api_fetch                  = models.BooleanField(default=False,
+                                     help_text="Allow fetching external URLs via drp get.")
 
     class Meta:
         ordering = ["price_monthly"]
@@ -165,6 +177,8 @@ class PlanLimit(models.Model):
             "api_keys":                    self.api_keys,
             "scheduled_drops":             self.scheduled_drops,
             "helpbot_hourly":              self.helpbot_hourly,
+            "smart_parse":                 self.smart_parse,
+            "api_fetch":                   self.api_fetch,
         }
 
     @classmethod

@@ -1266,3 +1266,272 @@ class TestBotPromptAccuracy:
         from help.views import _FEATURE_REFERENCE
         assert 'cd notes' in _FEATURE_REFERENCE or 'cd notes/work' in _FEATURE_REFERENCE
         assert 'cd ..' in _FEATURE_REFERENCE
+
+
+# ── Smart parse ───────────────────────────────────────────────────────────────
+
+class TestSmartParseDetect:
+    """Test format auto-detection."""
+
+    def test_detect_json_object(self):
+        from cli.smart_parse import detect_format
+        assert detect_format('{"a": 1}') == 'json'
+
+    def test_detect_json_array(self):
+        from cli.smart_parse import detect_format
+        assert detect_format('[1, 2, 3]') == 'json'
+
+    def test_detect_json_with_whitespace(self):
+        from cli.smart_parse import detect_format
+        assert detect_format('  \n  {"key": "value"}  \n') == 'json'
+
+    def test_detect_csv(self):
+        from cli.smart_parse import detect_format
+        assert detect_format('name,age\nAlice,30\nBob,25') == 'csv'
+
+    def test_detect_xml(self):
+        from cli.smart_parse import detect_format
+        assert detect_format('<root><item>hello</item></root>') == 'xml'
+
+    def test_detect_xml_declaration(self):
+        from cli.smart_parse import detect_format
+        assert detect_format('<?xml version="1.0"?><r><a>1</a></r>') == 'xml'
+
+    def test_detect_plain_text(self):
+        from cli.smart_parse import detect_format
+        assert detect_format('just plain text') == 'text'
+
+    def test_detect_url_as_text(self):
+        from cli.smart_parse import detect_format
+        assert detect_format('https://example.com') == 'text'
+
+    def test_detect_invalid_json(self):
+        from cli.smart_parse import detect_format
+        assert detect_format('{not valid json}') != 'json'
+
+    def test_detect_single_line_not_csv(self):
+        from cli.smart_parse import detect_format
+        assert detect_format('hello world') == 'text'
+
+
+class TestSmartParseParsers:
+    """Test individual parsers."""
+
+    def test_parse_json_object(self):
+        from cli.smart_parse import parse_json
+        assert parse_json('{"a": 1, "b": [2]}') == {"a": 1, "b": [2]}
+
+    def test_parse_json_array(self):
+        from cli.smart_parse import parse_json
+        assert parse_json('[1, "two", 3]') == [1, "two", 3]
+
+    def test_parse_csv(self):
+        from cli.smart_parse import parse_csv
+        rows = parse_csv('a,b,c\n1,2,3')
+        assert rows == [['a', 'b', 'c'], ['1', '2', '3']]
+
+    def test_parse_xml_simple(self):
+        from cli.smart_parse import parse_xml
+        result = parse_xml('<root><name>test</name></root>')
+        assert result == {'name': 'test'}
+
+    def test_parse_xml_nested(self):
+        from cli.smart_parse import parse_xml
+        result = parse_xml('<r><a><b>1</b></a></r>')
+        assert result == {'a': {'b': '1'}}
+
+    def test_parse_xml_repeated_tags(self):
+        from cli.smart_parse import parse_xml
+        result = parse_xml('<r><item>a</item><item>b</item></r>')
+        assert result == {'item': ['a', 'b']}
+
+
+class TestSmartParseIntegration:
+    """Test smart_parse auto-detect + parse."""
+
+    def test_smart_parse_json(self):
+        from cli.smart_parse import smart_parse
+        fmt, val = smart_parse('{"x": 42}')
+        assert fmt == 'json'
+        assert val == {"x": 42}
+
+    def test_smart_parse_csv(self):
+        from cli.smart_parse import smart_parse
+        fmt, val = smart_parse('a,b\n1,2\n3,4')
+        assert fmt == 'csv'
+        assert len(val) == 3
+
+    def test_smart_parse_text(self):
+        from cli.smart_parse import smart_parse
+        fmt, val = smart_parse('hello world')
+        assert fmt == 'text'
+        assert val == 'hello world'
+
+
+class TestDotAccess:
+    """Test nested field extraction."""
+
+    def test_simple_key(self):
+        from cli.smart_parse import dot_access
+        assert dot_access({'a': 1}, 'a') == 1
+
+    def test_nested_key(self):
+        from cli.smart_parse import dot_access
+        assert dot_access({'a': {'b': {'c': 3}}}, 'a.b.c') == 3
+
+    def test_list_index(self):
+        from cli.smart_parse import dot_access
+        assert dot_access({'items': [10, 20, 30]}, 'items.1') == 20
+
+    def test_mixed_dict_list(self):
+        from cli.smart_parse import dot_access
+        data = {'users': [{'name': 'Alice'}, {'name': 'Bob'}]}
+        assert dot_access(data, 'users.0.name') == 'Alice'
+
+    def test_missing_key_raises(self):
+        from cli.smart_parse import dot_access
+        with pytest.raises(KeyError):
+            dot_access({'a': 1}, 'b')
+
+    def test_invalid_index_raises(self):
+        from cli.smart_parse import dot_access
+        with pytest.raises(KeyError):
+            dot_access([1, 2], 'five')
+
+    def test_navigate_scalar_raises(self):
+        from cli.smart_parse import dot_access
+        with pytest.raises(KeyError):
+            dot_access({'a': 42}, 'a.b')
+
+
+class TestFormatParsed:
+    """Test display formatting."""
+
+    def test_format_json(self):
+        from cli.smart_parse import format_parsed
+        import json
+        out = format_parsed('json', {'a': 1})
+        assert json.loads(out) == {'a': 1}
+
+    def test_format_csv(self):
+        from cli.smart_parse import format_parsed
+        out = format_parsed('csv', [['a', 'b'], ['1', '2']])
+        assert 'a | b' in out
+
+    def test_format_text(self):
+        from cli.smart_parse import format_parsed
+        assert format_parsed('text', 'hello') == 'hello'
+
+
+class TestGetDotAccessShorthand:
+    """Test drp get key.field shorthand."""
+
+    @patch('cli.config.load')
+    def test_dot_key_splits_correctly(self, mock_load, capsys):
+        mock_load.return_value = {'host': 'https://test.com'}
+        args = MagicMock()
+        args.key = 'mykey.users.0'
+        args.url = True
+        args.file = False
+        args.clip = False
+        args.timing = False
+        args.field = None
+        args.parse = False
+
+        from cli.commands.get import cmd_get
+        cmd_get(args)
+        out = capsys.readouterr().out.strip()
+        # With --url, the dot-access key should be just 'mykey'
+        assert out == 'https://test.com/mykey/'
+
+    @patch('cli.config.load')
+    def test_explicit_field_not_overridden(self, mock_load, capsys):
+        mock_load.return_value = {'host': 'https://test.com'}
+        args = MagicMock()
+        args.key = 'mykey.ignored'
+        args.url = True
+        args.file = False
+        args.clip = False
+        args.timing = False
+        args.field = 'explicit'
+        args.parse = False
+
+        from cli.commands.get import cmd_get
+        cmd_get(args)
+        out = capsys.readouterr().out.strip()
+        # When --field is explicit, key stays as-is (no dot-split)
+        assert 'mykey.ignored' in out
+
+
+class TestGetSmartPrint:
+    """Test _print_smart helper."""
+
+    def test_print_smart_json(self, capsys):
+        from cli.commands.get import _print_smart
+        _print_smart('{"x": 1}')
+        out = capsys.readouterr().out
+        assert '[json]' in out
+        assert '"x"' in out
+
+    def test_print_smart_with_field(self, capsys):
+        from cli.commands.get import _print_smart
+        _print_smart('{"a": {"b": 42}}', 'a.b')
+        out = capsys.readouterr().out.strip()
+        assert out == '42'
+
+    def test_print_smart_field_nested_object(self, capsys):
+        from cli.commands.get import _print_smart
+        _print_smart('{"a": {"b": [1,2]}}', 'a.b')
+        out = capsys.readouterr().out.strip()
+        import json
+        assert json.loads(out) == [1, 2]
+
+    def test_print_smart_text_with_field(self, capsys):
+        from cli.commands.get import _print_smart
+        _print_smart('plain text', 'some.field')
+        err = capsys.readouterr().err
+        assert 'Cannot extract field' in err
+
+
+class TestPlanLimitsSmartParse:
+    """Verify plan limits include smart_parse and api_fetch."""
+
+    def test_all_plans_have_smart_parse(self):
+        from core.models import Plan
+        for plan_key in (Plan.ANON, Plan.FREE, Plan.STARTER, Plan.PRO):
+            assert 'smart_parse' in Plan.LIMITS[plan_key]
+
+    def test_api_fetch_only_paid(self):
+        from core.models import Plan
+        assert Plan.LIMITS[Plan.ANON]['api_fetch'] is False
+        assert Plan.LIMITS[Plan.FREE]['api_fetch'] is False
+        assert Plan.LIMITS[Plan.STARTER]['api_fetch'] is True
+        assert Plan.LIMITS[Plan.PRO]['api_fetch'] is True
+
+    def test_smart_parse_all_plans(self):
+        from core.models import Plan
+        for plan_key in (Plan.ANON, Plan.FREE, Plan.STARTER, Plan.PRO):
+            assert Plan.LIMITS[plan_key]['smart_parse'] is True
+
+
+class TestParserHasParseField:
+    """Verify drp get parser accepts --parse and --field."""
+
+    def test_parser_parse_flag(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['get', 'key', '--parse'])
+        assert args.parse is True
+
+    def test_parser_field_flag(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['get', 'key', '--field', 'a.b.c'])
+        assert args.field == 'a.b.c'
+
+    def test_parser_defaults(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['get', 'key'])
+        assert args.parse is False
+        assert args.field is None

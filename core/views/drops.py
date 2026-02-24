@@ -727,6 +727,18 @@ def _drop_response(request, drop):
         }
         if drop.kind == Drop.TEXT:
             data["content"] = drop.content
+            # Auto-detect content format for smart clients
+            if request.GET.get("parse") == "1":
+                from cli.smart_parse import smart_parse, dot_access
+                fmt, parsed = smart_parse(drop.content)
+                data["content_format"] = fmt
+                data["parsed"] = parsed
+                field = request.GET.get("field", "").strip()
+                if field:
+                    try:
+                        data["field_value"] = dot_access(parsed, field)
+                    except (KeyError, TypeError):
+                        data["field_error"] = f"Field '{field}' not found."
         else:
             data["filename"] = drop.filename
             data["filesize"]  = drop.filesize

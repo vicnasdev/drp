@@ -89,7 +89,18 @@
       <pre class="term-body"></pre>
     </div>
   </section>
-
+  <!-- ── 8. Smart get & API fetch ───────────────────────────────────────────────────── -->
+  <section class="uc-section">
+    <div class="uc-text">
+      <h2>🧠 smart get & API fetch</h2>
+      <p>Auto-detect JSON, CSV, XML, or YAML and parse it instantly. Extract nested fields with dot-notation. Fetch external APIs directly.</p>
+      <p class="muted" style="font-size:.8rem">🔒 URL fetch requires Starter or Pro plan.</p>
+    </div>
+    <div class="term" data-delay="9300" data-scene="smartget">
+      <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
+      <pre class="term-body"></pre>
+    </div>
+  </section>
 </div>
 
 <style>
@@ -276,6 +287,31 @@ const SCENES = {
     { type: 'print', text: '<span class="t-output">  Free — 200 MB files, 7-day clipboard expiry.</span>' },
     { type: 'print', text: '<span class="t-output">  Starter ($3/mo) — 1 GB files, 5 GB storage, custom expiry.</span>' },
     { type: 'print', text: '<span class="t-output">  Pro ($8/mo) — 5 GB files, 20 GB storage, unlimited collections.</span>' },
+  ],
+  smartget: [
+    { type: 'print', text: '<span class="t-comment"># upload some JSON</span>' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">&apos;{"users":[{"name":"Alice"},{"name":"Bob"}]}&apos;</span> <span class="t-flag">-k</span> <span class="t-string">team</span>', speed: 25 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/team/</span>' },
+    { type: 'wait',  ms: 800 },
+    { type: 'print', text: '' },
+    { type: 'print', text: '<span class="t-comment"># smart parse — auto-detects JSON</span>' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp get</span> <span class="t-string">team</span> <span class="t-flag">--parse</span>', speed: 35 },
+    { type: 'wait',  ms: 400 },
+    { type: 'print', text: '<span class="t-output">  [json]</span>' },
+    { type: 'print', text: '<span class="t-output">  {"users": [{"name": "Alice"}, {"name": "Bob"}]}</span>' },
+    { type: 'wait',  ms: 800 },
+    { type: 'print', text: '' },
+    { type: 'print', text: '<span class="t-comment"># dot-access — extract a nested field</span>' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp get</span> <span class="t-string">team.users.0.name</span>', speed: 35 },
+    { type: 'wait',  ms: 400 },
+    { type: 'print', text: '<span class="t-output">Alice</span>' },
+    { type: 'wait',  ms: 800 },
+    { type: 'print', text: '' },
+    { type: 'print', text: '<span class="t-comment"># fetch an external API (paid plans)</span>' },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp get</span> <span class="t-url">https://api.github.com/repos/torvalds/linux</span> <span class="t-flag">--field</span> <span class="t-string">stargazers_count</span>', speed: 20 },
+    { type: 'wait',  ms: 600 },
+    { type: 'print', text: '<span class="t-output">198234</span>' },
   ],
 };
 
