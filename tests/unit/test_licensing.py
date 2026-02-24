@@ -13,12 +13,19 @@ Tests for the commercial licensing system:
 import hashlib
 import hmac
 import json
+import unittest
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from billing.models import CommercialLicense
+
+_has_reportlab = True
+try:
+    import reportlab  # noqa: F401
+except ModuleNotFoundError:
+    _has_reportlab = False
 
 
 # ── Model tests ───────────────────────────────────────────────────────────────
@@ -81,6 +88,7 @@ class TestLicensingPage(TestCase):
 
 class TestLicensePDFGeneration(TestCase):
 
+    @unittest.skipUnless(_has_reportlab, "reportlab not installed")
     def test_valid_key_returns_pdf(self):
         CommercialLicense.objects.create(
             license_key="VALID-KEY-123",
@@ -96,6 +104,7 @@ class TestLicensePDFGeneration(TestCase):
         # Verify it starts with PDF magic bytes
         assert res.content[:5] == b"%PDF-"
 
+    @unittest.skipUnless(_has_reportlab, "reportlab not installed")
     def test_valid_key_updates_licensee_name(self):
         lic = CommercialLicense.objects.create(
             license_key="NAME-KEY-123",
@@ -243,6 +252,7 @@ class TestLicenseKeyWebhook(TestCase):
 
 # ── PDF builder internal test ─────────────────────────────────────────────────
 
+@unittest.skipUnless(_has_reportlab, "reportlab not installed")
 class TestPDFBuilder(TestCase):
 
     def test_build_license_pdf_returns_valid_pdf(self):
