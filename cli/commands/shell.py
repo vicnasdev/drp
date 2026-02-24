@@ -28,6 +28,7 @@ Pipe subset (inline, no bash delegation):
 """
 
 import re
+import shlex
 import sys
 
 from cli.commands._context import load_context
@@ -107,7 +108,10 @@ def cmd_shell(args):
             line        = parts[0].strip()
             pipe_filter = parts[1].strip()
 
-        tokens = line.split()
+        try:
+            tokens = shlex.split(line)
+        except ValueError:
+            tokens = line.split()
         cmd    = tokens[0].lower()
         rest   = tokens[1:]
 
@@ -173,7 +177,10 @@ def cmd_shell(args):
                 print()
                 break
 
-            tokens = line.strip().split()
+            try:
+                tokens = shlex.split(line.strip())
+            except ValueError:
+                tokens = line.strip().split()
             if not tokens:
                 continue
 
@@ -239,7 +246,10 @@ def cmd_shell(args):
                 parts, line_part = line.split(' | ', 1), line
                 cmd_part        = parts[0].strip()
                 pipe_filter     = ' | '.join(line.split(' | ')[1:]).strip()
-                tokens          = cmd_part.split()
+                try:
+                    tokens      = shlex.split(cmd_part)
+                except ValueError:
+                    tokens      = cmd_part.split()
                 cmd             = tokens[0].lower()
                 rest            = tokens[1:]
             else:
