@@ -18,6 +18,7 @@ import requests
 from cli import config, api
 from cli.commands._context import load_context
 from cli.crash_reporter import report_outcome
+from cli.prompt import prompt_for_value
 
 
 def _parse_expires(value: str) -> int | None:
@@ -72,7 +73,7 @@ def cmd_up(args):
     target     = getattr(args, 'target', None)
     key        = args.key
     burn       = getattr(args, 'burn', False)
-    password   = getattr(args, 'password', None) or ''
+    password   = getattr(args, 'password', None)  # Can be None, '', '__prompt__', or a value
     force_file = getattr(args, 'file', False)
     force_clip = getattr(args, 'clip', False)
     schedule   = getattr(args, 'schedule', None)
@@ -97,7 +98,7 @@ def cmd_up(args):
                     burn = True
                 if tpl.get("expiry_days") and not getattr(args, 'expires', None):
                     args.expires = f'{tpl["expiry_days"]}d'
-                if tpl.get("password") and not password:
+                if tpl.get("password") and password is None:
                     password = '__prompt__'
                 template = None  # already applied
                 if target is None:
@@ -117,11 +118,17 @@ def cmd_up(args):
                 burn = True
             if tpl.get("expiry_days") and not getattr(args, 'expires', None):
                 args.expires = f'{tpl["expiry_days"]}d'
-            if tpl.get("password") and not password:
+            if tpl.get("password") and password is None:
                 password = '__prompt__'
         else:
             print(f'  ✗ Template "{template}" not found.')
             sys.exit(1)
+
+    # Prompt for password if requested but not provided
+    if password == '__prompt__':
+        password = prompt_for_value('password', '', secret=True, allow_empty=False)
+    elif password is None:
+        password = ''
 
     if not force_clip and (target.startswith('http://') or target.startswith('https://')):
         _upload_url(host, session, target, key, cfg, args, password,

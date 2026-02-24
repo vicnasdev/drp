@@ -4,27 +4,27 @@
 {% block content %}
 <div style="max-width:760px;margin:0 auto;padding:2rem 1rem">
   <h1 style="font-size:1.4rem;margin-bottom:.3rem">use cases</h1>
-  <p class="muted" style="font-size:.9rem;margin-bottom:2rem">See what drp can do. Each demo auto-plays — click any terminal to restart it.</p>
+  <p class="muted" style="font-size:.9rem;margin-bottom:2rem">Dead simple. No sign-up needed for basic use. Each demo auto-plays — click any terminal to restart it. Click the copy button to grab the command.</p>
 
-  <!-- ── 1. Secret sharing ────────────────────────────────────────────────── -->
+  <!-- ── 1. Clipboard sync ────────────────────────────────────────────────── -->
   <section class="uc-section">
     <div class="uc-text">
-      <h2>🔐 burn-after-reading secrets</h2>
-      <p>Share passwords, API keys, and tokens that self-destruct after one view. Add a password for extra security.</p>
+      <h2>📋 clipboard sync across devices</h2>
+      <p>Pipe anything through drp on one machine, retrieve it on another. No apps, no sign-in required. Simplest way to sync text cross-device.</p>
     </div>
-    <div class="term" data-delay="1200" data-scene="secrets">
+    <div class="term" data-delay="1200" data-scene="clipboard">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>
   </section>
 
-  <!-- ── 2. Clipboard sync ────────────────────────────────────────────────── -->
+  <!-- ── 2. Secret sharing ────────────────────────────────────────────────── -->
   <section class="uc-section">
     <div class="uc-text">
-      <h2>📋 clipboard sync across devices</h2>
-      <p>Pipe anything through drp on one machine, retrieve it on another. No apps, no sign-in required.</p>
+      <h2>🔐 burn-after-reading secrets</h2>
+      <p>Share passwords, API keys, and tokens that self-destruct after one view. Add a password for extra security — sensitive data never lingers.</p>
     </div>
-    <div class="term" data-delay="1500" data-scene="clipboard">
+    <div class="term" data-delay="1500" data-scene="secrets">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>
@@ -34,9 +34,9 @@
   <section class="uc-section">
     <div class="uc-text">
       <h2>📎 instant file sharing</h2>
-      <p>Upload any file and get a shareable link. Set expiry, make it public, or password-protect it.</p>
+      <p>Upload any file and get a shareable link. Set expiry, make it public, or password-protect it. No signup needed for basic use.</p>
     </div>
-    <div class="term" data-delay="2800" data-scene="files">
+    <div class="term" data-delay="1800" data-scene="files">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>
@@ -46,9 +46,9 @@
   <section class="uc-section">
     <div class="uc-text">
       <h2>⚡ pipe-friendly & scriptable</h2>
-      <p>drp reads stdin naturally. Pipe command output, logs, diffs — anything. Build it into your workflow.</p>
+      <p>drp reads stdin naturally. Pipe command output, logs, diffs — anything. Build it into your shell workflows and scripts.</p>
     </div>
-    <div class="term" data-delay="4100" data-scene="pipes">
+    <div class="term" data-delay="2400" data-scene="pipes">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>
@@ -58,9 +58,9 @@
   <section class="uc-section">
     <div class="uc-text">
       <h2>📁 collections</h2>
-      <p>Group related drops into named collections. Share an entire set of files or snippets with one link.</p>
+      <p>Group related drops into named collections. Share an entire set of files or snippets with one link. Perfect for organizing projects.</p>
     </div>
-    <div class="term" data-delay="5400" data-scene="collections">
+    <div class="term" data-delay="3000" data-scene="collections">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>
@@ -70,9 +70,9 @@
   <section class="uc-section">
     <div class="uc-text">
       <h2>🔗 embeddable & stable URLs</h2>
-      <p>Embed drops in docs, wikis, or READMEs. Update the content without changing the URL.</p>
+      <p>Embed drops in docs, wikis, or READMEs. Update the content without changing the URL. Perfect for documentation that evolves.</p>
     </div>
-    <div class="term" data-delay="6700" data-scene="embeds">
+    <div class="term" data-delay="3600" data-scene="embeds">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>
@@ -82,9 +82,9 @@
   <section class="uc-section">
     <div class="uc-text">
       <h2>🤖 built-in help bot</h2>
-      <p>Ask questions about drp right from the CLI or the docs page. The AI bot answers using the official documentation — no hallucinations.</p>
+      <p>Ask questions about drp right from the CLI or the docs page. The AI bot answers using the official documentation — no hallucinations, always accurate.</p>
     </div>
-    <div class="term" data-delay="8000" data-scene="helpbot">
+    <div class="term" data-delay="4200" data-scene="helpbot">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>
@@ -93,10 +93,10 @@
   <section class="uc-section">
     <div class="uc-text">
       <h2>🧠 smart get & API fetch</h2>
-      <p>Auto-detect JSON, CSV, XML, or YAML and parse it instantly. Extract nested fields with dot-notation. Fetch external APIs directly.</p>
+      <p>Auto-detect JSON, CSV, XML, or YAML and parse it instantly. Extract nested fields with dot-notation. Fetch external APIs directly and extract data.</p>
       <p class="muted" style="font-size:.8rem">🔒 URL fetch requires Starter or Pro plan.</p>
     </div>
-    <div class="term" data-delay="9300" data-scene="smartget">
+    <div class="term" data-delay="4800" data-scene="smartget">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>

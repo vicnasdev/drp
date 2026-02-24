@@ -205,8 +205,9 @@ def _configure_subparsers(sub):
                       help='7d, 30d, 1y (paid accounts only)')
     p_up.add_argument('--burn', '-b', action='store_true',
                       help='Delete after first view (all plans)')
-    p_up.add_argument('--password', '-p', default=None, metavar='PASSWORD',
-                      help='Password-protect this drop (paid accounts only)')
+    p_up.add_argument('--password', '-p', default=None, nargs='?', const='__prompt__',
+                      metavar='PASSWORD',
+                      help='Password-protect this drop (prompted if omitted; paid accounts only)')
     p_up.add_argument('--schedule', default=None, metavar='DURATION',
                       help='Schedule drop visibility: 2h, 30m, 1d (paid)')
     p_up.add_argument('--webhook', default=None, metavar='URL',
@@ -233,7 +234,8 @@ def _configure_subparsers(sub):
                        help='Auto-detect content format and print parsed output')
     p_get.add_argument('--field', default=None, metavar='PATH',
                        help='Extract a nested field via dot-path (e.g. data.items.0.name)')
-    p_get.add_argument('--password', '-p', default=None, metavar='PASSWORD',
+    p_get.add_argument('--password', '-p', default=None, nargs='?', const='__prompt__',
+                       metavar='PASSWORD',
                        help='Password for a protected drop (prompted if omitted)')
 
     p_edit = sub._name_parser_map['edit']

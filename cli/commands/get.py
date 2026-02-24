@@ -20,6 +20,7 @@ import getpass
 from cli import api
 from cli.commands._context import load_context
 from cli.timing import Timer
+from cli.prompt import prompt_for_value
 
 
 def cmd_get(args):
@@ -61,7 +62,13 @@ def cmd_get(args):
     t.instrument(session)
     t.checkpoint('load config')
 
-    password = getattr(args, 'password', None) or ''
+    password = getattr(args, 'password', None)  # Can be None, '', '__prompt__', or a value
+    
+    # Prompt for password if requested but not provided
+    if password == '__prompt__':
+        password = prompt_for_value('password', '', secret=True, allow_empty=False)
+    elif password is None:
+        password = ''
 
     if getattr(args, 'file', False) and not getattr(args, 'clip', False):
         _get_file(args, host, session, t, password)
