@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Commercial License — drp{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/licensing.css' %}">{% endblock %}
+
+{% block content %}
+<div class="licensing-page">
+  <h1>Commercial Self-Hosted License</h1>
+  <p class="subtitle">Deploy drp on your own infrastructure for your organization.</p>
+
+  <div class="license-hero">
+    <div>
+      <div class="price">CA$299 <span>/ year</span></div>
+      <div class="features">
+        Single-instance · Source code · Modify freely
+      </div>
+    </div>
+    {% if checkout_url %}
+    <a href="{{ checkout_url }}" class="btn" target="_blank" rel="noopener">Buy on Lemon Squeezy</a>
+    {% endif %}
+  </div>
+
+  <div class="license-steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-title">Purchase</div>
+      <div class="step-desc">Buy a license through Lemon Squeezy. You'll receive a license key by email.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-title">Fill Form</div>
+      <div class="step-desc">Enter your name and license key in the form below.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-title">Download PDF</div>
+      <div class="step-desc">Get your signed license agreement as a PDF download.</div>
+    </div>
+  </div>
+
+  <div class="license-form">
+    <h2>Generate your license PDF</h2>
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="{% url 'licensing_generate' %}">
+      {% csrf_token %}
+      <div class="field">
+        <label for="licensee_name">Organization / Licensee Name</label>
+        <input type="text" id="licensee_name" name="licensee_name"
+               value="{{ form_name|default:'' }}" required
+               placeholder="Acme Corp" maxlength="256">
+      </div>
+      <div class="field">
+        <label for="license_key">License Key</label>
+        <input type="text" id="license_key" name="license_key"
+               value="{{ form_key|default:'' }}" required
+               placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX" maxlength="128">
+      </div>
+      <button type="submit" class="btn" style="margin-top:.6rem; width:100%;">
+        Download License PDF
+      </button>
+    </form>
+  </div>
+
+  <div class="license-includes">
+    <h2>What's included</h2>
+    <ul>
+      <li>Full source code access</li>
+      <li>Deploy on your own servers or cloud</li>
+      <li>Modify the codebase for internal use</li>
+      <li>Create integrations with internal systems</li>
+      <li>Security updates within 30 days of release</li>
+      <li>Bug reports via GitHub Issues</li>
+      <li>Annual renewal — cancel anytime</li>
+    </ul>
+  </div>
+
+  <p style="font-size:.8rem; color:var(--muted);">
+    Questions? Contact <a href="mailto:licensing@drp.fyi">licensing@drp.fyi</a>.
+    View the full <a href="https://github.com/vicnasdev/drp/blob/dev/COMMERCIAL.md">license text on GitHub</a>.
+  </p>
+</div>
+{% endblock %}

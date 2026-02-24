@@ -14,6 +14,8 @@ from django.views.decorators.http import require_POST
 
 from core.models import UserProfile, Plan
 
+from billing.models import CommercialLicense
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -137,6 +139,27 @@ def webhook(request):
     variant_id      = str(attrs.get("variant_id", ""))
 
     logger.info("LS webhook: event=%s status=%s variant=%s user_id=%s", event, status, variant_id, user_id)
+
+    # ── License key events (no user profile needed) ───────────────────────────
+    if event == "license_key_created":
+        key_str   = attrs.get("key", "")
+        email     = attrs.get("user_email", "")
+        order_id  = str(attrs.get("order_id", ""))
+        if key_str:
+            from datetime import timedelta
+            expires = timezone.now() + timedelta(days=365)
+            CommercialLicense.objects.update_or_create(
+                license_key=key_str,
+                defaults={
+                    "licensee_email": email,
+                    "order_id":       order_id,
+                    "ls_customer_id": customer_id,
+                    "expires_at":     expires,
+                    "is_active":      True,
+                },
+            )
+            logger.info("LS webhook: stored commercial license key for %s", email)
+        return HttpResponse("OK", status=200)
 
     # ── Locate the profile ────────────────────────────────────────────────────
     profile = None

@@ -1,0 +1,115 @@
+/* ── licensing.css ─────────────────────────────────────────────────────────────
+   Commercial license purchase + PDF generation page.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.licensing-page { max-width: 680px; }
+.licensing-page h1 { font-size: 1.8rem; font-weight: 800; letter-spacing: -1px; margin-bottom: .3rem; }
+.licensing-page .subtitle { color: var(--muted); font-size: .95rem; margin-bottom: 2rem; }
+
+/* ── Price hero ── */
+.license-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.license-hero .price { font-size: 2.2rem; font-weight: 800; letter-spacing: -1px; }
+.license-hero .price span { font-size: .85rem; font-weight: 400; color: var(--muted); }
+.license-hero .features { font-size: .85rem; color: var(--muted); line-height: 1.8; }
+
+/* ── Steps ── */
+.license-steps {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+.step-num {
+  display: inline-block;
+  width: 1.6rem;
+  height: 1.6rem;
+  line-height: 1.6rem;
+  text-align: center;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 50%;
+  font-size: .8rem;
+  font-weight: 700;
+  margin-bottom: .5rem;
+}
+.step-title { font-weight: 700; font-size: .9rem; margin-bottom: .25rem; }
+.step-desc { font-size: .8rem; color: var(--muted); }
+
+/* ── Form ── */
+.license-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+.license-form h2 {
+  font-size: .82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+.license-form .field { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .8rem; }
+.license-form .field label { font-size: .82rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.license-form .field input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: .95rem;
+  padding: .55rem .8rem;
+  outline: none;
+  transition: border-color .15s;
+}
+.license-form .field input:focus { border-color: var(--accent); }
+
+.license-form .error {
+  background: rgba(224, 85, 85, .12);
+  color: var(--danger);
+  border: 1px solid rgba(224, 85, 85, .25);
+  border-radius: var(--radius);
+  padding: .6rem .8rem;
+  font-size: .85rem;
+  margin-bottom: 1rem;
+}
+
+/* ── Included list ── */
+.license-includes {
+  margin-bottom: 2rem;
+}
+.license-includes h2 {
+  font-size: .82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  margin-bottom: .6rem;
+}
+.license-includes ul { list-style: none; display: flex; flex-direction: column; gap: .3rem; }
+.license-includes ul li { font-size: .85rem; color: var(--muted); }
+.license-includes ul li::before { content: '✓ '; color: #5bc87a; }
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .license-steps { grid-template-columns: 1fr; }
+  .license-hero { flex-direction: column; align-items: flex-start; }
+}
