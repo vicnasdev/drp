@@ -180,17 +180,19 @@ def home(request):
 # ── Public search ─────────────────────────────────────────────────────────────
 
 def public_feed(request):
-    """GET /explore/?q=search&tag=python — public drop search/feed."""
-    from django.db.models import Q
+    """GET /explore/?q=search&tag=python&sort=likes — public drop search/feed."""
+    from django.db.models import Q, Count
 
-    q   = request.GET.get("q", "").strip()
-    tag = request.GET.get("tag", "").strip().lower()
+    q    = request.GET.get("q", "").strip()
+    tag  = request.GET.get("tag", "").strip().lower()
+    sort = request.GET.get("sort", "").strip().lower()
 
     qs = (
         Drop.objects
         .filter(is_public=True, burn=False)
         .exclude(password_hash__gt="")
         .select_related("owner")
+        .annotate(like_count=Count("likes"))
     )
 
     if q:
@@ -198,7 +200,20 @@ def public_feed(request):
     if tag:
         qs = qs.filter(tags__icontains=tag)
 
-    drops = qs.order_by("-created_at")[:50]
+    if sort == "likes":
+        drops = qs.order_by("-like_count", "-created_at")[:50]
+    else:
+        drops = qs.order_by("-created_at")[:50]
+
+    # Build set of drop IDs the current user has liked (for toggle state)
+    user_liked_ids = set()
+    if request.user.is_authenticated:
+        drop_ids = [d.pk for d in drops]
+        from core.models import DropLike
+        user_liked_ids = set(
+            DropLike.objects.filter(user=request.user, drop_id__in=drop_ids)
+            .values_list("drop_id", flat=True)
+        )
 
     if "application/json" in request.headers.get("Accept", ""):
         return JsonResponse({
@@ -209,6 +224,8 @@ def public_feed(request):
                     "kind": d.kind,
                     "owner": d.owner.username if d.owner else None,
                     "tags": d.tags,
+                    "like_count": d.like_count,
+                    "liked": d.pk in user_liked_ids,
                     "created_at": d.created_at.isoformat(),
                     "url": f"/{'f/' if d.ns == 'f' else ''}{d.key}/",
                 }
@@ -216,7 +233,13 @@ def public_feed(request):
             ]
         })
 
-    return render(request, "explore.html", {"drops": drops, "q": q, "tag": tag})
+    return render(request, "explore.html", {
+        "drops": drops,
+        "q": q,
+        "tag": tag,
+        "sort": sort,
+        "user_liked_ids": user_liked_ids,
+    })
 
 
 # ── Check key ─────────────────────────────────────────────────────────────────
@@ -726,6 +749,7 @@ def _drop_response(request, drop):
                                   if drop.last_viewed_at else None),
             "is_public":         drop.is_public,
             "tags":              drop.tags,
+            "like_count":        drop.likes.count(),
         }
         if drop.kind == Drop.TEXT:
             # Live API reference — fetch fresh content from source_url

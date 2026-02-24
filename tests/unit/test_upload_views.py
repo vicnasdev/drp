@@ -450,3 +450,88 @@ class TestDropTransfer(TestCase):
         self.client.force_login(self.bob)
         res = self.client.post(f'/claim/{old_token}/', HTTP_ACCEPT='application/json')
         self.assertEqual(res.status_code, 410)
+
+
+# ── Like / Unlike ─────────────────────────────────────────────────────────────
+
+class TestDropLikes(TestCase):
+    def setUp(self):
+        self.alice = _make_user('alice-like')
+        self.bob   = _make_user('bob-like')
+        self.client.force_login(self.alice)
+        _post_text(self.client, 'pub-like', 'hello', is_public='true')
+        _post_text(self.client, 'priv-like', 'secret')
+        self.client.logout()
+
+    # ── toggle like ──────────────────────────────────────────────────────
+
+    def test_like_requires_login(self):
+        res = self.client.post('/pub-like/like/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 302)  # redirect to login
+
+    def test_like_toggle_on(self):
+        self.client.force_login(self.bob)
+        res = self.client.post('/pub-like/like/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data['liked'])
+        self.assertEqual(data['like_count'], 1)
+
+    def test_like_toggle_off(self):
+        self.client.force_login(self.bob)
+        self.client.post('/pub-like/like/', HTTP_ACCEPT='application/json')
+        res = self.client.post('/pub-like/like/', HTTP_ACCEPT='application/json')
+        data = res.json()
+        self.assertFalse(data['liked'])
+        self.assertEqual(data['like_count'], 0)
+
+    def test_like_private_drop_404(self):
+        self.client.force_login(self.bob)
+        res = self.client.post('/priv-like/like/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 404)
+
+    def test_like_nonexistent_drop_404(self):
+        self.client.force_login(self.bob)
+        res = self.client.post('/nonexist999/like/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 404)
+
+    def test_multiple_users_like(self):
+        self.client.force_login(self.alice)
+        self.client.post('/pub-like/like/', HTTP_ACCEPT='application/json')
+        self.client.force_login(self.bob)
+        res = self.client.post('/pub-like/like/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.json()['like_count'], 2)
+
+    # ── public feed sort ─────────────────────────────────────────────────
+
+    def test_public_feed_sort_recent(self):
+        res = self.client.get('/explore/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn('drops', data)
+        # all drops should have like_count field
+        for d in data['drops']:
+            self.assertIn('like_count', d)
+
+    def test_public_feed_sort_likes(self):
+        # Like pub-like with both users
+        self.client.force_login(self.alice)
+        self.client.post('/pub-like/like/', HTTP_ACCEPT='application/json')
+        self.client.force_login(self.bob)
+        self.client.post('/pub-like/like/', HTTP_ACCEPT='application/json')
+
+        res = self.client.get('/explore/?sort=likes', HTTP_ACCEPT='application/json')
+        data = res.json()
+        drops = data['drops']
+        self.assertTrue(len(drops) >= 1)
+        # First drop should be the most liked
+        self.assertEqual(drops[0]['key'], 'pub-like')
+        self.assertEqual(drops[0]['like_count'], 2)
+
+    def test_public_feed_json_liked_field(self):
+        self.client.force_login(self.bob)
+        self.client.post('/pub-like/like/', HTTP_ACCEPT='application/json')
+        res = self.client.get('/explore/', HTTP_ACCEPT='application/json')
+        data = res.json()
+        pub = next(d for d in data['drops'] if d['key'] == 'pub-like')
+        self.assertTrue(pub['liked'])

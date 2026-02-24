@@ -959,3 +959,19 @@ class TransferToken(models.Model):
     def __str__(self):
         status = "claimed" if self.claimed_by else ("expired" if not self.is_valid() else "pending")
         return f"Transfer {self.drop} [{status}]"
+
+
+# ── DropLike ──────────────────────────────────────────────────────────────────
+
+class DropLike(models.Model):
+    """One like per user per drop. Only public drops can be liked."""
+    drop       = models.ForeignKey(Drop, on_delete=models.CASCADE, related_name="likes")
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name="drop_likes")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("drop", "user")]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.username} liked {self.drop}"

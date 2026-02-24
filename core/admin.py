@@ -12,7 +12,7 @@ from .models import (
     Collection, CollectionMembership, PlanLimit,
     Group, GroupMembership, GroupInviteToken,
     APIToken, Alias, DropTemplate,
-    FeatureProposal, FeatureVote,
+    FeatureProposal, FeatureVote, DropLike,
 )
 
 
@@ -365,3 +365,10 @@ class FeatureProposalAdmin(admin.ModelAdmin):
     def close_proposals(self, request, queryset):
         updated = queryset.update(closed=True)
         messages.success(request, f"{updated} proposal(s) closed.")
+
+
+@admin.register(DropLike)
+class DropLikeAdmin(admin.ModelAdmin):
+    list_display = ('drop', 'user', 'created_at')
+    raw_id_fields = ('drop', 'user')
+    readonly_fields = ('created_at',)

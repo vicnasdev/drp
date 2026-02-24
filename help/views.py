@@ -229,6 +229,7 @@ Flags (only add if user asks): --burn (one-view self-destruct), --password (prom
 Burn-after-reading: `drp up "secret" --burn` — drop is DELETED after ONE view. Not time-based.
 CLI install: `pip install drp-cli && drp setup`. Commands: up get ls cp edit diff save load status ask shell collection token send claim cache rmcache.
 Transfer ownership: `drp send <key>` generates a one-time token (24h expiry). Recipient runs `drp claim <token>` to take ownership. For file drops: `drp send -f <key>`. New send revokes the previous token.
+Likes: logged-in users can like public drops (toggle). Explore page (/explore/) supports ?sort=likes to sort by most liked (default: most recent). Like counts appear in the JSON API and the explore UI.
 Plans: anon, free, starter, pro → drp.fyi/help/plans/
 """
 

@@ -6,13 +6,22 @@
 <div class="drop-page" style="max-width:700px;margin:2rem auto">
   <h2 style="margin-bottom:1rem">explore public drops</h2>
 
-  <form method="get" action="/explore/" style="display:flex;gap:.5rem;margin-bottom:1.5rem;flex-wrap:wrap">
+  <form method="get" action="/explore/" style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap">
     <input name="q" type="text" value="{{ q }}" placeholder="search drops…"
            style="flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:.9rem;padding:.5rem .7rem;outline:none">
     <input name="tag" type="text" value="{{ tag }}" placeholder="tag…"
            style="width:120px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:.9rem;padding:.5rem .7rem;outline:none">
+    {% if sort %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
     <button type="submit" class="btn">search</button>
   </form>
+
+  <div style="margin-bottom:1rem;font-size:.85rem;display:flex;gap:.75rem">
+    <span class="muted">sort:</span>
+    <a href="?{% if q %}q={{ q }}&{% endif %}{% if tag %}tag={{ tag }}&{% endif %}"
+       style="{% if sort != 'likes' %}font-weight:600;color:var(--text){% else %}color:var(--muted){% endif %};text-decoration:none">recent</a>
+    <a href="?{% if q %}q={{ q }}&{% endif %}{% if tag %}tag={{ tag }}&{% endif %}sort=likes"
+       style="{% if sort == 'likes' %}font-weight:600;color:var(--text){% else %}color:var(--muted){% endif %};text-decoration:none">most liked</a>
+  </div>
 
   {% if drops %}
   <div class="drops-list">
@@ -24,9 +33,18 @@
           {% if drop.kind == 'text' %}📋{% else %}📎{% endif %}
           /{% if drop.ns == 'f' %}f/{% endif %}{{ drop.key }}/
         </a>
-        <span class="muted" style="font-size:.8rem">
-          {% if drop.owner %}@{{ drop.owner.username }}{% else %}anon{% endif %}
-        </span>
+        <div style="display:flex;align-items:center;gap:.75rem">
+          <button class="like-btn" data-ns="{{ drop.ns }}" data-key="{{ drop.key }}"
+                  style="background:none;border:none;cursor:pointer;font-size:.9rem;color:var(--muted);display:flex;align-items:center;gap:.25rem;padding:0"
+                  title="{% if user.is_authenticated %}like{% else %}log in to like{% endif %}"
+                  {% if not user.is_authenticated %}disabled{% endif %}>
+            <span class="like-icon">{% if drop.pk in user_liked_ids %}❤️{% else %}🤍{% endif %}</span>
+            <span class="like-count">{{ drop.like_count }}</span>
+          </button>
+          <span class="muted" style="font-size:.8rem">
+            {% if drop.owner %}@{{ drop.owner.username }}{% else %}anon{% endif %}
+          </span>
+        </div>
       </div>
       {% if drop.tags %}
       <div style="margin-top:.25rem">
@@ -47,4 +65,24 @@
   <p class="muted">No public drops found{% if q or tag %} matching your search{% endif %}.</p>
   {% endif %}
 </div>
+
+<script>
+document.querySelectorAll('.like-btn:not([disabled])').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const ns = btn.dataset.ns;
+    const key = btn.dataset.key;
+    const prefix = ns === 'f' ? 'f/' : '';
+    const res = await fetch(`/${prefix}${key}/like/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                || '{{ csrf_token }}'},
+    });
+    if (res.ok) {
+      const data = await res.json();
+      btn.querySelector('.like-icon').textContent = data.liked ? '❤️' : '🤍';
+      btn.querySelector('.like-count').textContent = data.like_count;
+    }
+  });
+});
+</script>
 {% endblock %}

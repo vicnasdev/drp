@@ -15,6 +15,7 @@ from core.views.aliases import create_alias, list_aliases, delete_alias, resolve
 from core.views.templates import create_template, list_templates, get_template, delete_template
 from core.views.features import feature_list, feature_submit, feature_vote
 from core.views.transfers import send_transfer, claim_transfer
+from core.views.likes import toggle_like
 
 KEY = r"(?P<key>[^/\s]+)"
 
@@ -107,6 +108,7 @@ urlpatterns = [
     re_path(rf"^f/{KEY}/unsave/$",        views.unsave_bookmark, {"ns": "f"},          name="unsave_bookmark_file"),
     re_path(rf"^f/{KEY}/set-password/$",  set_drop_password,    {"ns": "f"},           name="set_password_file"),
     re_path(rf"^f/{KEY}/send/$",          send_transfer,        {"ns": "f"},           name="send_file"),
+    re_path(rf"^f/{KEY}/like/$",          toggle_like,          {"ns": "f"},           name="like_file"),
     re_path(rf"^f/{KEY}/$",               views.file_view,                             name="file_view"),
     re_path(rf"^{KEY}/rename/$",       views.rename_drop,    {"ns": "c"},              name="rename_clipboard"),
     re_path(rf"^{KEY}/delete/$",       views.delete_drop,    {"ns": "c"},              name="delete_clipboard"),
@@ -116,6 +118,7 @@ urlpatterns = [
     re_path(rf"^{KEY}/unsave/$",       views.unsave_bookmark, {"ns": "c"},             name="unsave_bookmark_clipboard"),
     re_path(rf"^{KEY}/set-password/$", set_drop_password,    {"ns": "c"},              name="set_password_clipboard"),
     re_path(rf"^{KEY}/send/$",         send_transfer,        {"ns": "c"},              name="send_clipboard"),
+    re_path(rf"^{KEY}/like/$",         toggle_like,          {"ns": "c"},              name="like_clipboard"),
     path("claim/<str:token>/",          claim_transfer,                                name="claim_transfer"),
     re_path(rf"^{KEY}/$",              views.clipboard_view,                            name="clipboard_view"),
 ]
