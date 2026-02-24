@@ -21,6 +21,7 @@ from cli.commands.collection import cmd_collection
 from cli.commands.token import cmd_token
 from cli.commands.ask import cmd_ask
 from cli.commands.cache import cmd_cache, cmd_rmcache
+from cli.commands.send import cmd_send, cmd_claim
 
 COMMANDS = [
     ('setup',      cmd_setup,       'Configure host and log in'),
@@ -42,6 +43,8 @@ COMMANDS = [
     ('collection', cmd_collection,  'Manage drop collections (paid accounts)'),
     ('token',      cmd_token,       'Manage API tokens (paid accounts)'),
     ('ask',        cmd_ask,         'Ask the help bot a question about drp'),
+    ('send',       cmd_send,        'Transfer drop ownership via one-time token'),
+    ('claim',      cmd_claim,       'Claim a drop sent to you'),
     ('cache',      cmd_cache,       'View the local drop cache'),
     ('rmcache',    cmd_rmcache,     'Remove entries from the local drop cache'),
     ('shell',      cmd_shell,       'Interactive shell with ls, rm, cp, cd and more'),
@@ -53,7 +56,7 @@ COMMANDS = [
 
 COMMAND_GROUPS = [
     ('upload / download',  ['up', 'get', 'edit', 'serve']),
-    ('manage',             ['rm', 'mv', 'cp', 'renew']),
+    ('manage',             ['rm', 'mv', 'cp', 'renew', 'send', 'claim']),
     ('account',            ['save', 'ls', 'load', 'collection', 'token']),
     ('info',               ['status', 'ping']),
     ('help',               ['ask']),
@@ -99,6 +102,8 @@ EXAMPLES = [
     ('drp collection', 'new "my notes"',              'create a collection'),
     ('drp collection', 'add my-notes key',            'add drop to collection'),
     ('drp shell',   '',                               'interactive shell (ls, rm, cd, …)'),
+    ('drp send',    'mykey',                          'generate transfer token'),
+    ('drp claim',   '<token>',                        'claim a drop sent to you'),
     ('drp ask',     '"how do I upload a file?"',        'ask the help bot'),
     ('drp token',   'create --expires 90d',            'create an API key'),
     ('',            'DRP_API_KEY=xxx drp up file.py',  'upload with API key (no login)'),]
@@ -326,6 +331,16 @@ def _configure_subparsers(sub):
                            help='Drop key to remove from cache')
     p_rmcache.add_argument('--all', '-a', action='store_true',
                            help='Clear the entire cache')
+
+    # send subcommand
+    p_send = sub._name_parser_map['send']
+    p_send.add_argument('-f', '--file', action='store_true')
+    p_send.add_argument('-c', '--clip', action='store_true')
+    _attach(p_send.add_argument('key'), 'key')
+
+    # claim subcommand
+    p_claim = sub._name_parser_map['claim']
+    p_claim.add_argument('token', help='Transfer token from drp send')
 
 
 _HANDLERS = {name: handler for name, handler, _ in COMMANDS}

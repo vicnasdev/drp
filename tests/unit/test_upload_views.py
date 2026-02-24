@@ -353,3 +353,100 @@ class TestLiveAPIReference(TestCase):
         _post_text(self.client, 'normal-text', 'hello world')
         drop = Drop.objects.get(key='normal-text')
         self.assertEqual(drop.source_url, '')
+
+
+# ── Drop transfer (send / claim) ─────────────────────────────────────────────
+
+class TestDropTransfer(TestCase):
+
+    def setUp(self):
+        self.alice = _make_user('alice', plan=Plan.FREE)
+        self.bob   = _make_user('bob',   plan=Plan.FREE)
+
+    def _create_drop(self, owner, key='xfer-test'):
+        self.client.force_login(owner)
+        _post_text(self.client, key, 'transfer me')
+        return Drop.objects.get(key=key)
+
+    def test_send_generates_token(self):
+        drop = self._create_drop(self.alice)
+        res = self.client.post(f'/{drop.key}/send/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn('token', data)
+        self.assertEqual(data['key'], drop.key)
+
+    def test_send_requires_ownership(self):
+        self._create_drop(self.alice, key='notown')
+        self.client.force_login(self.bob)
+        res = self.client.post('/notown/send/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 404)
+
+    def test_send_requires_login(self):
+        self._create_drop(self.alice, key='nologin')
+        self.client.logout()
+        res = self.client.post('/nologin/send/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 401)
+
+    def test_claim_transfers_ownership(self):
+        drop = self._create_drop(self.alice, key='claim-me')
+        res = self.client.post(f'/{drop.key}/send/', HTTP_ACCEPT='application/json')
+        token = res.json()['token']
+
+        self.client.force_login(self.bob)
+        res = self.client.post(f'/claim/{token}/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data['key'], 'claim-me')
+        self.assertEqual(data['from'], 'alice')
+
+        drop.refresh_from_db()
+        self.assertEqual(drop.owner, self.bob)
+
+    def test_claim_requires_login(self):
+        drop = self._create_drop(self.alice, key='claim-nologin')
+        res = self.client.post(f'/{drop.key}/send/', HTTP_ACCEPT='application/json')
+        token = res.json()['token']
+
+        self.client.logout()
+        res = self.client.post(f'/claim/{token}/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 401)
+
+    def test_cannot_claim_own_drop(self):
+        drop = self._create_drop(self.alice, key='self-claim')
+        res = self.client.post(f'/{drop.key}/send/', HTTP_ACCEPT='application/json')
+        token = res.json()['token']
+        # Alice tries to claim her own token
+        res = self.client.post(f'/claim/{token}/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 400)
+
+    def test_token_single_use(self):
+        drop = self._create_drop(self.alice, key='single-use')
+        res = self.client.post(f'/{drop.key}/send/', HTTP_ACCEPT='application/json')
+        token = res.json()['token']
+
+        self.client.force_login(self.bob)
+        self.client.post(f'/claim/{token}/', HTTP_ACCEPT='application/json')
+        # Second claim by another user should fail
+        charlie = _make_user('charlie', plan=Plan.FREE)
+        self.client.force_login(charlie)
+        res = self.client.post(f'/claim/{token}/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 410)
+
+    def test_invalid_token_rejected(self):
+        self.client.force_login(self.bob)
+        res = self.client.post('/claim/nonexistent-token/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 404)
+
+    def test_new_send_revokes_old_token(self):
+        drop = self._create_drop(self.alice, key='revoke-old')
+        res1 = self.client.post(f'/{drop.key}/send/', HTTP_ACCEPT='application/json')
+        old_token = res1.json()['token']
+        res2 = self.client.post(f'/{drop.key}/send/', HTTP_ACCEPT='application/json')
+        new_token = res2.json()['token']
+        self.assertNotEqual(old_token, new_token)
+
+        # Old token should be expired
+        self.client.force_login(self.bob)
+        res = self.client.post(f'/claim/{old_token}/', HTTP_ACCEPT='application/json')
+        self.assertEqual(res.status_code, 410)

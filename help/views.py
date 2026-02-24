@@ -227,7 +227,8 @@ Sub-collections: `drp collection new "work" --parent notes` creates a sub-collec
 Shell navigation: `drp shell` → `cd notes` → `cd work` (or `cd notes/work`). `cd ..` goes up. `pwd` shows path. `ls` lists drops + sub-collections.
 Flags (only add if user asks): --burn (one-view self-destruct), --password (prompt for password), --expiry 1h/7d/30d, --public.
 Burn-after-reading: `drp up "secret" --burn` — drop is DELETED after ONE view. Not time-based.
-CLI install: `pip install drp-cli && drp setup`. Commands: up get ls cp edit diff save load status ask shell collection token cache rmcache.
+CLI install: `pip install drp-cli && drp setup`. Commands: up get ls cp edit diff save load status ask shell collection token send claim cache rmcache.
+Transfer ownership: `drp send <key>` generates a one-time token (24h expiry). Recipient runs `drp claim <token>` to take ownership. For file drops: `drp send -f <key>`. New send revokes the previous token.
 Plans: anon, free, starter, pro → drp.fyi/help/plans/
 """
 

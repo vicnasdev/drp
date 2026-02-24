@@ -1535,3 +1535,30 @@ class TestParserHasParseField:
         args = parser.parse_args(['get', 'key'])
         assert args.parse is False
         assert args.field is None
+
+
+# ── Parser: send / claim ─────────────────────────────────────────────────────
+
+class TestParserSendClaim:
+    """Verify drp send/claim parser args."""
+
+    def test_send_parser(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['send', 'mykey'])
+        assert args.key == 'mykey'
+        assert args.command == 'send'
+
+    def test_send_file_flag(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['send', '-f', 'myfile'])
+        assert args.file is True
+        assert args.key == 'myfile'
+
+    def test_claim_parser(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['claim', 'some-token-value'])
+        assert args.token == 'some-token-value'
+        assert args.command == 'claim'

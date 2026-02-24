@@ -935,3 +935,27 @@ class FeatureVote(models.Model):
 
     def __str__(self):
         return f"{self.user.username} voted on '{self.proposal.title}' (w={self.weight})"
+
+
+# ── TransferToken ─────────────────────────────────────────────────────────────
+
+class TransferToken(models.Model):
+    """One-time token to transfer drop ownership. Expires after 24 h."""
+    drop       = models.ForeignKey(Drop, on_delete=models.CASCADE, related_name="transfer_tokens")
+    token      = models.CharField(max_length=64, unique=True, db_index=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transfer_tokens_sent")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    claimed_by = models.ForeignKey(User, null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name="transfer_tokens_claimed")
+    claimed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def is_valid(self):
+        return self.claimed_by is None and timezone.now() < self.expires_at
+
+    def __str__(self):
+        status = "claimed" if self.claimed_by else ("expired" if not self.is_valid() else "pending")
+        return f"Transfer {self.drop} [{status}]"
