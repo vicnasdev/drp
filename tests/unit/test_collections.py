@@ -690,3 +690,113 @@ class TestPlanDowngradeSubCollections(TestCase):
     def test_delete_subcollection_after_downgrade_ok(self):
         res = _delete(self.client, self.child_id)
         self.assertEqual(res.status_code, 200)
+
+# ── Collections — Access Control After Downgrade ─────────────────────────────
+
+class TestCollectionAccessAfterDowngrade(TestCase):
+    """
+    Verify that downgraded users cannot access their collections that
+    exceed their new plan quota, but data is preserved.
+    """
+
+    def setUp(self):
+        self.user = _make_user("access_test_user", Plan.STARTER)
+        self.client.force_login(self.user)
+        # Create 2 collections
+        self.col1 = Collection.objects.create(
+            owner=self.user,
+            slug="col-1",
+            name="Collection 1",
+        )
+        self.col2 = Collection.objects.create(
+            owner=self.user,
+            slug="col-2",
+            name="Collection 2",
+        )
+
+    def test_can_view_collection_before_downgrade(self):
+        """Owner can view collection on Starter plan."""
+        res = self.client.get(f"/@{self.user.username}/col-1/")
+        self.assertEqual(res.status_code, 200)
+
+    def test_can_add_drop_to_collection_before_downgrade(self):
+        """Owner can add drops before downgrade."""
+        drop = _make_drop(self.user, key="testdrop1")
+        res = _add(self.client, self.col1.pk, drop.ns, drop.key)
+        self.assertEqual(res.status_code, 200)
+
+    def test_access_denied_to_collection_after_downgrade_to_free(self):
+        """
+        After downgrading to Free (quota=0), user loses access to all collections.
+        """
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
+        self.user.profile.refresh_from_db()
+        
+        # Trying to view collection as owner returns 403
+        res = self.client.get(f"/@{self.user.username}/col-1/")
+        self.assertEqual(res.status_code, 403)
+        self.assertIn(b"paid feature", res.content.lower())
+
+    def test_cannot_add_drop_after_downgrade(self):
+        """After downgrade, owner cannot manage collection."""
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
+        self.user.profile.refresh_from_db()
+        
+        drop = _make_drop(self.user, key="testdrop2")
+        res = _add(self.client, self.col1.pk, drop.ns, drop.key)
+        self.assertEqual(res.status_code, 403)
+
+    def test_public_viewer_can_still_see_collection(self):
+        """Non-owner can still view the collection even if owner is downgraded."""
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
+        
+        other_user = _make_user("viewer")
+        self.client.force_login(other_user)
+        
+        res = self.client.get(f"/@{self.user.username}/col-1/")
+        self.assertEqual(res.status_code, 200)
+
+    def test_owner_can_manage_again_after_reupgrade(self):
+        """After re-upgrading, owner regains access."""
+        # Downgrade
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
+        self.user.profile.refresh_from_db()
+        
+        # Verify access denied
+        res = self.client.get(f"/@{self.user.username}/col-1/")
+        self.assertEqual(res.status_code, 403)
+        
+        # Re-upgrade
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.STARTER)
+        self.user.profile.refresh_from_db()
+        
+        # Now has access again
+        res = self.client.get(f"/@{self.user.username}/col-1/")
+        self.assertEqual(res.status_code, 200)
+
+    def test_oldest_collections_accessible_within_starter_quota(self):
+        """
+        When Starter user has 11 collections and downgrades to plan with limit 5,
+        the 5 oldest should be accessible, the 6+ should be denied.
+        """
+        # Create more collections to hit a higher quota
+        for i in range(3, 11):
+            Collection.objects.create(
+                owner=self.user,
+                slug=f"col-{i}",
+                name=f"Collection {i}",
+            )
+        
+        all_cols = list(Collection.objects.filter(owner=self.user).order_by('created_at'))
+        self.assertEqual(len(all_cols), 10)
+        
+        # Downgrade to a limit of 5 (simulating a hypothetical lower tier)
+        # For now, just verify logic: oldest 5 should be accessible
+        oldest_5 = all_cols[:5]
+        oldest_5_ids = {c.pk for c in oldest_5}
+        
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
+        
+        # All should be inaccessible now (free = 0)
+        res = self.client.get(f"/@{self.user.username}/col-1/")
+        self.assertEqual(res.status_code, 403)

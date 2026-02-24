@@ -29,7 +29,7 @@ from core.models import (
     Group, GroupMembership, GroupInviteToken,
     Plan, Collection,
 )
-from core.views.helpers import user_plan
+from core.views.helpers import user_plan, can_user_access_group
 
 
 def _group_quota_ok(user):
@@ -179,11 +179,20 @@ def create_group(request):
 @login_required
 @require_POST
 def create_invite(request, group_id):
-    """POST /groups/<id>/invite/ — generate an invite token (admin only)."""
+    """POST /groups/<id>/invite/ — generate an invite token (admin only).
+    
+    Admin must have access after plan downgrade.
+    """
     group = get_object_or_404(Group, pk=group_id)
 
     if not _is_group_admin(request.user, group):
         return JsonResponse({"error": "Only admins can create invites."}, status=403)
+
+    # Plan downgrade check for group creator
+    if group.created_by_id == request.user.pk:
+        allowed, reason = can_user_access_group(request.user, group)
+        if not allowed:
+            return JsonResponse({"error": reason or "You no longer have access to this group."}, status=403)
 
     import json
     try:
@@ -275,11 +284,20 @@ def join_group(request):
 @login_required
 @require_POST
 def change_member_role(request, group_id, user_id):
-    """POST /groups/<id>/members/<uid>/role/ — change role (admin only)."""
+    """POST /groups/<id>/members/<uid>/role/ — change role (admin only).
+    
+    Admin must have access after plan downgrade.
+    """
     group = get_object_or_404(Group, pk=group_id)
 
     if not _is_group_admin(request.user, group):
         return JsonResponse({"error": "Only admins can change roles."}, status=403)
+
+    # Plan downgrade check for group creator
+    if group.created_by_id == request.user.pk:
+        allowed, reason = can_user_access_group(request.user, group)
+        if not allowed:
+            return JsonResponse({"error": reason or "You no longer have access to this group."}, status=403)
 
     membership = GroupMembership.objects.filter(group=group, user_id=user_id).first()
     if not membership:
@@ -308,11 +326,20 @@ def change_member_role(request, group_id, user_id):
 @login_required
 @require_POST
 def remove_member(request, group_id, user_id):
-    """POST /groups/<id>/members/<uid>/remove/ — remove member (admin only)."""
+    """POST /groups/<id>/members/<uid>/remove/ — remove member (admin only).
+    
+    Admin must have access after plan downgrade.
+    """
     group = get_object_or_404(Group, pk=group_id)
 
     if not _is_group_admin(request.user, group):
         return JsonResponse({"error": "Only admins can remove members."}, status=403)
+
+    # Plan downgrade check for group creator
+    if group.created_by_id == request.user.pk:
+        allowed, reason = can_user_access_group(request.user, group)
+        if not allowed:
+            return JsonResponse({"error": reason or "You no longer have access to this group."}, status=403)
 
     # Can't remove yourself if you're the only admin
     if user_id == request.user.pk:

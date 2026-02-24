@@ -31,7 +31,8 @@ from core.models import Drop, Plan, SavedDrop
 from .helpers import (
     user_plan, max_file_bytes, max_text_bytes, storage_ok,
     is_paid_user, max_lifetime_secs, gen_key, is_valid_drop_key,
-    upload_to_b2, delete_from_b2, add_storage,
+    upload_to_b2, delete_from_b2, add_storage, check_password_attempt_rate,
+    validate_webhook_url,
 )
 
 ANON_COOKIE = "drp_anon"
@@ -416,6 +417,12 @@ def _save_text(request, ns, key, existing, paid, anon_token):
     tags        = request.POST.get("tags", "").strip()
     source_url  = request.POST.get("source_url", "").strip()
 
+    # Validate webhook URL if provided
+    if webhook_url:
+        wh_error = validate_webhook_url(webhook_url)
+        if wh_error:
+            return JsonResponse({"error": f"Invalid webhook URL: {wh_error}"}, status=400)
+
     if existing:
         existing.content = text
         existing.last_accessed_at = timezone.now()
@@ -430,7 +437,8 @@ def _save_text(request, ns, key, existing, paid, anon_token):
         owner = request.user if request.user.is_authenticated else None
 
         visible_from = _parse_schedule(schedule) if paid and schedule else None
-        wh = webhook_url if paid and webhook_url else ""
+        # Only allow webhooks for paid users
+        wh = webhook_url if (paid and webhook_url) else ""
         notify_secs = _parse_notify(notify) if paid and notify else None
 
         drop = Drop.objects.create(
@@ -548,6 +556,12 @@ def upload_confirm(request):
     notify       = (data.get("notify") or "").strip()
     is_public    = bool(data.get("is_public", False))
     tags         = (data.get("tags") or "").strip()
+
+    # Validate webhook URL if provided
+    if webhook_url:
+        wh_error = validate_webhook_url(webhook_url)
+        if wh_error:
+            return JsonResponse({"error": f"Invalid webhook URL: {wh_error}"}, status=400)
 
     # ── Short expiry for test-mode drops ──────────────────────────────────
 
@@ -683,6 +697,8 @@ def _check_drop_password(request, drop):
       - Requester is the owner
       - Browser session already unlocked this drop
       - Correct password supplied via X-Drop-Password header (CLI) or POST
+    
+    Rate limits password attempts (10 per IP per drop per hour) to prevent brute forcing.
     """
     if not drop.is_password_protected:
         return None
@@ -695,15 +711,23 @@ def _check_drop_password(request, drop):
 
     # CLI / JSON path: password in header
     header_pw = request.headers.get("X-Drop-Password", "")
-    if header_pw and drop.check_password(header_pw):
-        return None
+    if header_pw:
+        allowed, remaining = check_password_attempt_rate(request, drop.key, drop.ns)
+        if not allowed:
+            return JsonResponse({"error": "Too many password attempts. Try again later."}, status=429)
+        if drop.check_password(header_pw):
+            return None
 
     # Web POST path: password submitted via prompt form
     if request.method == "POST":
         form_pw = request.POST.get("drop_password", "")
-        if form_pw and drop.check_password(form_pw):
-            _mark_password_unlocked(request, drop)
-            return None
+        if form_pw:
+            allowed, remaining = check_password_attempt_rate(request, drop.key, drop.ns)
+            if not allowed:
+                return JsonResponse({"error": "Too many password attempts. Try again later."}, status=429)
+            if drop.check_password(form_pw):
+                _mark_password_unlocked(request, drop)
+                return None
 
     return _password_required_response(request, drop)
 

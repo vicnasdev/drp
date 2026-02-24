@@ -30,6 +30,70 @@ def check_signup_rate(request):
     return True
 
 
+def check_password_attempt_rate(request, drop_key: str, ns: str = "c"):
+    """
+    Rate limit password attempts on protected drops.
+    Max 10 attempts per IP per drop per hour.
+    Returns (allowed: bool, remaining: int).
+    """
+    key = f"pw_attempt:{client_ip(request)}:{ns}:{drop_key}"
+    count = cache.get(key, 0)
+    max_attempts = 10
+    if count >= max_attempts:
+        return False, 0
+    cache.set(key, count + 1, timeout=3600)
+    return True, max_attempts - count - 1
+
+
+def validate_webhook_url(url: str) -> str | None:
+    """
+    Validate webhook URL for security (SSRF prevention).
+    - Must be http:// or https://
+    - Cannot be internal/loopback IPs
+    - Cannot use credentials in URL
+    
+    Returns error message if invalid, None if valid.
+    """
+    if not url:
+        return None
+    
+    from urllib.parse import urlparse
+    import ipaddress
+    
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return "Invalid webhook URL format."
+    
+    # Check scheme
+    if parsed.scheme not in ("http", "https"):
+        return "Webhook URL must use http:// or https://."
+    
+    # Check for credentials in URL
+    if parsed.username or parsed.password:
+        return "Credentials in webhook URL are not allowed. Use headers instead."
+    
+    # Extract hostname (remove port)
+    hostname = parsed.hostname or ""
+    if not hostname:
+        return "Webhook URL must have a valid hostname."
+    
+    # Check for localhost/loopback
+    if hostname.lower() in ("localhost", "127.0.0.1", "[::1]", "::1"):
+        return "Webhook URL cannot be localhost."
+    
+    # Check for private/reserved IP ranges
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_reserved:
+            return "Webhook URL cannot use private or reserved IP addresses."
+    except ValueError:
+        # Not an IP address, likely a domain name - ok
+        pass
+    
+    return None
+
+
 # ── Plan helpers ──────────────────────────────────────────────────────────────
 
 def user_plan(user):
@@ -60,6 +124,101 @@ def storage_ok(user, extra_bytes):
 
 def is_paid_user(user):
     return user.is_authenticated and user_plan(user) in (Plan.STARTER, Plan.PRO)
+
+
+def can_user_access_collection(user, collection):
+    """
+    Check if user can access a collection they own.
+    Returns (allowed: bool, reason: str | None).
+    
+    Based on plan quotas:
+      - Free: 0 collections (cannot access any owned collections)
+      - Starter: up to 10 collections
+      - Pro: unlimited
+      
+    If user is downgraded and over quota, they cannot access excess collections.
+    """
+    if not user.is_authenticated or collection.owner_id != user.id:
+        return False, "You don't own this collection."
+    
+    plan = user_plan(user)
+    max_allowed = Plan.get(plan, "max_collections")
+    
+    if max_allowed == 0:
+        return False, "Collections are a paid feature. Upgrade to Starter or Pro to access this collection."
+    
+    if max_allowed is None:
+        # Pro: unlimited
+        return True, None
+    
+    # Starter: check if user is within their quota
+    # Count collections *in order of creation* so they keep access to oldest ones
+    owned_count = collection.owner.collections.filter(parent=None).count()
+    if owned_count <= max_allowed:
+        return True, None
+    
+    # User is over quota — deny access to collections beyond the limit
+    # Get the limit-th collection in creation order
+    oldest_accessible = (
+        collection.owner.collections
+        .filter(parent=None)
+        .order_by('created_at')[:max_allowed]
+        .last()
+    )
+    
+    if oldest_accessible and collection.created_at <= oldest_accessible.created_at:
+        return True, None
+    
+    return (
+        False,
+        f"You've exceeded your collection limit ({max_allowed}). "
+        "Upgrade to Pro for unlimited collections, or delete some collections to regain access."
+    )
+
+
+def can_user_access_group(user, group):
+    """
+    Check if user can access a group they created/own.
+    Returns (allowed: bool, reason: str | None).
+    
+    Based on plan quotas:
+      - Free: 0 groups (cannot access any owned groups)
+      - Starter: up to 3 groups
+      - Pro: unlimited
+    """
+    if not user.is_authenticated or group.created_by_id != user.id:
+        return False, "You don't own this group."
+    
+    plan = user_plan(user)
+    max_allowed = Plan.get(plan, "max_groups")
+    
+    if max_allowed == 0:
+        return False, "Groups are a paid feature. Upgrade to Starter or Pro to access this group."
+    
+    if max_allowed is None:
+        # Pro: unlimited
+        return True, None
+    
+    # Starter: check if user is within their quota
+    owned_count = group.created_by.created_groups.count()
+    if owned_count <= max_allowed:
+        return True, None
+    
+    # User is over quota — deny access to groups beyond the limit
+    oldest_accessible = (
+        group.created_by.created_groups
+        .order_by('created_at')[:max_allowed]
+        .last()
+    )
+    
+    if oldest_accessible and group.created_at <= oldest_accessible.created_at:
+        return True, None
+    
+    return (
+        False,
+        f"You've exceeded your group limit ({max_allowed}). "
+        "Upgrade to Pro for unlimited groups, or delete some groups to regain access."
+    )
 
 
 def max_lifetime_secs(user, ns):

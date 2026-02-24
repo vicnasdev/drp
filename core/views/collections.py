@@ -33,7 +33,7 @@ from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from core.models import Collection, CollectionMembership, Drop, Plan
-from core.views.helpers import user_plan
+from core.views.helpers import user_plan, can_user_access_collection
 
 
 _SLUG_RE = re.compile(r'^[a-zA-Z0-9_-]{1,60}$')
@@ -64,10 +64,26 @@ def user_collections(request, username):
 
 def collection_view(request, username, slug, collection=None):
     """GET /@username/<path>/ — view a single collection (supports sub-collections).
-       POST /@username/<path>/ — drop into public inbox (if enabled)."""
+       POST /@username/<path>/ — drop into public inbox (if enabled).
+       
+    Plan downgrade check: If the collection owner has downgraded their plan and is now
+    over their quota (e.g., Starter→Free), the owner loses access but public viewers
+    can still see the collection read-only.
+    """
     owner = get_object_or_404(User, username__iexact=username)
     if collection is None:
         collection = get_object_or_404(Collection, owner=owner, slug=slug, parent=None)
+
+    is_own = request.user.is_authenticated and request.user.pk == owner.pk
+
+    # ── Access check for owner after plan downgrade ──
+    if is_own:
+        allowed, reason = can_user_access_collection(request.user, collection)
+        if not allowed:
+            return JsonResponse(
+                {"error": reason or "You no longer have access to this collection."},
+                status=403,
+            )
 
     # ── Inbox POST (anyone can drop into public_inbox collections) ──
     if request.method == "POST":
@@ -131,11 +147,21 @@ def collection_view(request, username, slug, collection=None):
     # Owned drops available to add (for the add-drop UI)
     addable_drops = []
     if is_own:
-        existing_ns_keys = {(m.ns, m.key) for m in memberships}
-        addable_drops = [
-            d for d in Drop.objects.filter(owner=request.user).order_by("-created_at")
-            if (d.ns, d.key) not in existing_ns_keys
-        ]
+        # Get drops that aren't in this collection, using OuterRef/Subquery for DB-level filtering
+        from django.db.models import OuterRef, Subquery, Exists
+        
+        existing_memberships = CollectionMembership.objects.filter(
+            collection=collection,
+            ns=OuterRef('ns'),
+            key=OuterRef('key')
+        )
+        
+        addable_drops = list(
+            Drop.objects
+            .filter(owner=request.user)
+            .exclude(Exists(existing_memberships))
+            .order_by("-created_at")[:100]  # Limit to prevent huge lists
+        )
 
     return render(request, "collections/detail.html", {
         "collection":   collection,
@@ -213,11 +239,19 @@ def create_collection(request):
 @login_required
 @require_POST
 def add_to_collection(request, collection_id):
-    """POST /collections/<id>/add/  body: {ns, key}"""
+    """POST /collections/<id>/add/  body: {ns, key}
+    
+    Owner-only. Owner must have access after plan downgrade.
+    """
     import json
     collection = get_object_or_404(Collection, pk=collection_id)
     if not collection.can_edit(request.user):
         return JsonResponse({"error": "Only the owner can edit this collection."}, status=403)
+
+    # Plan downgrade check
+    allowed, reason = can_user_access_collection(request.user, collection)
+    if not allowed:
+        return JsonResponse({"error": reason or "You no longer have access to this collection."}, status=403)
 
     try:
         data = json.loads(request.body)
@@ -243,11 +277,19 @@ def add_to_collection(request, collection_id):
 @login_required
 @require_POST
 def remove_from_collection(request, collection_id):
-    """POST /collections/<id>/remove/  body: {ns, key}"""
+    """POST /collections/<id>/remove/  body: {ns, key}
+    
+    Owner-only. Owner must have access after plan downgrade.
+    """
     import json
     collection = get_object_or_404(Collection, pk=collection_id)
     if not collection.can_edit(request.user):
         return JsonResponse({"error": "Only the owner can edit this collection."}, status=403)
+
+    # Plan downgrade check
+    allowed, reason = can_user_access_collection(request.user, collection)
+    if not allowed:
+        return JsonResponse({"error": reason or "You no longer have access to this collection."}, status=403)
 
     try:
         data = json.loads(request.body)

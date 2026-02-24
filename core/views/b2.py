@@ -50,14 +50,20 @@ def presigned_put(ns: str, drop_key: str, content_type: str = "application/octet
 def presigned_get(ns: str, drop_key: str, filename: str = "",
                   expires_in: int = 3600, b2_key: str = "") -> str:
     """
-    Return a presigned GET URL for a B2 object.
+    Return a presigned GET URL for a B2 object with proper filename encoding.
     """
+    import urllib.parse
+    
     client, bucket = _b2()
     b2_obj_key = b2_key if b2_key else object_key(ns, drop_key)
-    safe_name  = filename.replace('"', "") if filename else ""
     params     = {"Bucket": bucket, "Key": b2_obj_key}
-    if safe_name:
-        params["ResponseContentDisposition"] = f'attachment; filename="{safe_name}"'
+    
+    if filename:
+        # RFC 5987: Use RFC 2231 encoding for non-ASCII or special chars
+        # For simplicity, encode all special chars to be safe
+        safe_name = urllib.parse.quote(filename, safe='')
+        # Use RFC 2231 syntax: filename*=UTF-8''<encoded_name>
+        params["ResponseContentDisposition"] = f'attachment; filename*=UTF-8\'\'{safe_name}'
     return client.generate_presigned_url(
         "get_object", Params=params, ExpiresIn=expires_in,
     )

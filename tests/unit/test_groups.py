@@ -223,3 +223,157 @@ class TestRoleEnforcement(TestCase):
                 group=self.group, user=self.member
             ).exists()
         )
+
+# ── Group Plan Downgrade Tests ───────────────────────────────────────────────────
+
+class TestPlanDowngradeGroups(TestCase):
+    """
+    When a user's plan goes from paid → free, existing groups should
+    remain visible but the user (group creator) cannot manage them.
+    This tests the "soft downgrade" approach: data is preserved, actions blocked.
+    """
+
+    def setUp(self):
+        self.user = _make_user("downgrade_group_user", Plan.STARTER)
+        self.client.force_login(self.user)
+        # Create 3 groups while on Starter
+        for i in range(3):
+            Group.objects.create(
+                handle=f"dg-group-{i}",
+                name=f"Downgrade Group {i}",
+                created_by=self.user,
+            )
+            # Add user as admin
+            GroupMembership.objects.create(
+                group=Group.objects.get(handle=f"dg-group-{i}"),
+                user=self.user,
+                role=GroupMembership.ROLE_ADMIN,
+            )
+        # Downgrade to Free
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
+        self.user.profile.refresh_from_db()
+
+    def test_groups_still_exist_after_downgrade(self):
+        """Groups created before downgrade should still exist in DB."""
+        self.assertEqual(Group.objects.filter(created_by=self.user).count(), 3)
+
+    def test_cannot_create_new_group_after_downgrade(self):
+        """Free user cannot create new groups."""
+        res = self.client.post(
+            "/groups/create/",
+            json.dumps({"handle": "newgroupfail", "name": "New Group"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_cannot_invite_to_owned_group_after_downgrade(self):
+        """Creator cannot manage (invite) their groups after downgrade."""
+        group = Group.objects.filter(created_by=self.user).first()
+        res = self.client.post(
+            f"/groups/{group.pk}/invite/",
+            json.dumps({"role": "reader", "max_uses": 1}),
+            content_type="application/json",
+        )
+        # Access denied due to plan downgrade
+        self.assertEqual(res.status_code, 403)
+        self.assertIn(b"paid feature", res.content.lower())
+
+    def test_cannot_change_member_role_after_downgrade(self):
+        """Admin cannot manage members of group after downgrade."""
+        group = Group.objects.filter(created_by=self.user).first()
+        other_user = _make_user("other_member")
+        GroupMembership.objects.create(
+            group=group, user=other_user, role=GroupMembership.ROLE_READER
+        )
+        res = self.client.post(
+            f"/groups/{group.pk}/members/{other_user.pk}/role/",
+            json.dumps({"role": "writer"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_cannot_remove_member_after_downgrade(self):
+        """Admin cannot remove members after downgrade."""
+        group = Group.objects.filter(created_by=self.user).first()
+        other_user = _make_user("other_member2")
+        GroupMembership.objects.create(
+            group=group, user=other_user, role=GroupMembership.ROLE_READER
+        )
+        res = self.client.post(
+            f"/groups/{group.pk}/members/{other_user.pk}/remove/",
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_other_admin_can_still_manage_group(self):
+        """Other admins (not the creator) can still manage the group."""
+        group = Group.objects.filter(created_by=self.user).first()
+        other_user = _make_user("other_admin")
+        GroupMembership.objects.create(
+            group=group, user=other_user, role=GroupMembership.ROLE_ADMIN
+        )
+        
+        self.client.force_login(other_user)
+        res = self.client.post(
+            f"/groups/{group.pk}/invite/",
+            json.dumps({"role": "reader", "max_uses": 1}),
+            content_type="application/json",
+        )
+        # Other admin can still manage
+        self.assertEqual(res.status_code, 201)
+
+
+class TestPlanDowngradeGroupReUpgrade(TestCase):
+    """
+    When a user re-upgrades after downgrade, they should regain group
+    management access.
+    """
+
+    def setUp(self):
+        self.user = _make_user("reupgrade_group_user", Plan.STARTER)
+        self.client.force_login(self.user)
+        self.group = Group.objects.create(
+            handle="reupgrade-group",
+            name="Reupgrade Group",
+            created_by=self.user,
+        )
+        GroupMembership.objects.create(
+            group=self.group, user=self.user, role=GroupMembership.ROLE_ADMIN
+        )
+        # Downgrade
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
+        self.user.profile.refresh_from_db()
+
+    def test_cannot_invite_while_free(self):
+        res = self.client.post(
+            f"/groups/{self.group.pk}/invite/",
+            json.dumps({"role": "reader"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_re_upgrade_unlocks_group_management(self):
+        # Re-upgrade to Starter
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.STARTER)
+        self.user.profile.refresh_from_db()
+        res = self.client.post(
+            f"/groups/{self.group.pk}/invite/",
+            json.dumps({"role": "reader", "max_uses": 1}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 201)
+
+    def test_group_persists_through_cycle(self):
+        """Group survives downgrade + re-upgrade cycle."""
+        self.assertTrue(
+            Group.objects.filter(
+                handle="reupgrade-group", created_by=self.user
+            ).exists()
+        )
+        # Re-upgrade
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.STARTER)
+        self.assertTrue(
+            Group.objects.filter(
+                handle="reupgrade-group", created_by=self.user
+            ).exists()
+        )
