@@ -10,7 +10,7 @@ __pycache__/
 *.db
 *.sqlite
 *.sqlite3
-staticfiles/
-!statifiles/.gitkeep
+staticfiles/*
+!staticfiles/.gitkeep
 *.egg-info/
 TODO.md
