@@ -182,9 +182,19 @@ textarea:disabled { opacity: .4; }
 .storage-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
 .storage-bar-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .3s; }
 
+/* ── Ad middle wrapper ── */
+.ad-middle-wrapper {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 2rem;
+  margin-top: 2.5rem;
+}
+.ad-middle-wrapper > * { grid-column: 1; }
+
 /* ── Responsive ── */
 @media (max-width: 700px) {
   .home-wrap { grid-template-columns: 1fr; }
+  .ad-middle-wrapper { grid-template-columns: 1fr; }
   .dashboard { order: -1; }
   .creator h1 { font-size: 1.8rem; }
   .key-row { flex-wrap: wrap; }
