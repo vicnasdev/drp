@@ -253,3 +253,22 @@ class TestDropRenew(TestCase):
         drop.renew()
         drop.refresh_from_db()
         self.assertEqual(drop.renewal_count, 0)
+
+
+# ── source_url (live API reference) ──────────────────────────────────────────
+
+class TestSourceUrl(TestCase):
+
+    def test_default_empty(self):
+        drop = _make_db_drop(key="no-url")
+        self.assertEqual(drop.source_url, "")
+
+    def test_set_source_url(self):
+        drop = _make_db_drop(key="url-set", source_url="https://api.example.com/data")
+        self.assertEqual(drop.source_url, "https://api.example.com/data")
+
+    def test_bool_check_for_source_url(self):
+        drop = _make_db_drop(key="url-bool", source_url="https://api.example.com")
+        self.assertTrue(bool(drop.source_url))
+        empty = _make_db_drop(key="url-empty")
+        self.assertFalse(bool(empty.source_url))

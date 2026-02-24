@@ -315,3 +315,41 @@ class TestRenewEndpoint(TestCase):
         self.client.force_login(self.other)
         res = self.client.post('/renew-steal/renew/', HTTP_ACCEPT='application/json')
         self.assertEqual(res.status_code, 403)
+
+
+# ── Live API reference (source_url) ──────────────────────────────────────────
+
+class TestLiveAPIReference(TestCase):
+
+    def setUp(self):
+        self.starter = _make_user('ref-starter', plan=Plan.STARTER)
+        self.free = _make_user('ref-free', plan=Plan.FREE)
+
+    def test_paid_user_can_set_source_url(self):
+        self.client.force_login(self.starter)
+        res = _post_text(self.client, 'api-ref', 'https://httpbin.org/get',
+                         source_url='https://httpbin.org/get')
+        self.assertEqual(res.status_code, 200)
+        drop = Drop.objects.get(key='api-ref')
+        self.assertEqual(drop.source_url, 'https://httpbin.org/get')
+
+    def test_free_user_source_url_ignored(self):
+        self.client.force_login(self.free)
+        res = _post_text(self.client, 'api-free', 'https://httpbin.org/get',
+                         source_url='https://httpbin.org/get')
+        self.assertEqual(res.status_code, 200)
+        drop = Drop.objects.get(key='api-free')
+        self.assertEqual(drop.source_url, '')
+
+    def test_source_url_returned_in_json(self):
+        self.client.force_login(self.starter)
+        _post_text(self.client, 'api-check', 'https://example.com/api',
+                   source_url='https://example.com/api')
+        drop = Drop.objects.get(key='api-check')
+        self.assertEqual(drop.source_url, 'https://example.com/api')
+
+    def test_drop_without_source_url_has_empty_field(self):
+        self.client.force_login(self.starter)
+        _post_text(self.client, 'normal-text', 'hello world')
+        drop = Drop.objects.get(key='normal-text')
+        self.assertEqual(drop.source_url, '')

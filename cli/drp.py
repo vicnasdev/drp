@@ -70,7 +70,7 @@ EXAMPLES = [
     ('drp up',      'report.pdf --expires 30d',       'file with 30-day expiry'),
     ('drp up',      '"secret token" --burn',          'delete after first view'),
     ('drp up',      '"secret" --password pw',         'password-protect (paid)'),
-    ('drp up',      'https://example.com/file.pdf',   'fetch URL and re-host'),
+    ('drp up',      'https://example.com/api',        'live API reference (fresh on each get)'),
     ('drp get',     'hello',                          'print clipboard to stdout'),
     ('drp get',     'hello --parse',                  'auto-detect format (JSON, CSV, …)'),
     ('drp get',     'hello --field data.name',        'extract nested value from JSON/XML'),

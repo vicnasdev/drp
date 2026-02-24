@@ -217,8 +217,8 @@ _FEATURE_REFERENCE = """\
 Upload: `drp up <file-or-text>` or `echo text | drp up`.
 Get: `drp get <key>` or visit `drp.fyi/<key>/`.
 Smart get: `drp get <key> --parse` auto-detects content format (JSON, CSV, XML, YAML) and prints parsed output. `drp get <key> --field a.b` extracts a nested value. Shorthand: `drp get key.field`.
-URL fetch (paid): `drp get https://api.example.com/data` fetches an external URL. Use `--parse` or `--field` to extract data. Requires Starter or Pro plan.
-Web API: Add `?parse=1` to any drop JSON request to get `content_format` and `parsed` fields. Add `&field=a.b` to extract a specific value.
+URL fetch (paid): `drp get https://api.example.com/data` fetches an external URL once. Use `--parse` or `--field` to extract data. Requires Starter or Pro plan.
+Live API reference (paid): `drp up https://api.example.com/data -k myapi` stores the URL. Every `drp get myapi` fetches fresh data from the API. Use `--parse`/`--field` to extract fields. The drop acts as a persistent, shareable endpoint.\nWeb API: Add `?parse=1` to any drop JSON request to get `content_format` and `parsed` fields. Add `&field=a.b` to extract a specific value. Live references return fresh content + `source_url`.
 Embed URL: `drp.fyi/embed/<key>/` (use in iframes, markdown, etc). Embed HTML: `<iframe src="https://drp.fyi/embed/<key>/"></iframe>`
 Custom key: `drp up file.png -k myname` → `drp.fyi/embed/myname/` (predictable URL).
 Raw URL: `drp.fyi/raw/<key>/` (plain text for curl/scripts).

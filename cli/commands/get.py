@@ -98,6 +98,8 @@ def _get_clipboard(args, host, session, t, password='', parse=False, field=''):
         if parse or field:
             _print_smart(content, field)
         else:
+            # Check if it's a live reference (source_url)
+            # The API returns source_url when the drop is a live ref
             print(content)
         return
 

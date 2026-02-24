@@ -4,7 +4,7 @@ drp up — upload text or a file.
   drp up "hello"              clipboard from string
   echo "hello" | drp up       clipboard from stdin
   drp up report.pdf           file upload
-  drp up https://example.com/file.pdf   fetch URL and re-host
+  drp up https://example.com/api     live API reference (fetched fresh on each get)
   drp up report.pdf --expires 7d
   drp up "secret" --burn      delete after first view
   drp up "secret" --password pw  password-protect (paid accounts only)
@@ -158,62 +158,34 @@ def cmd_up(args):
 def _upload_url(host, session, url, key, cfg, args, password='',
                 schedule=None, webhook=None, notify=None,
                 is_public=False, tags=None):
-    from cli.progress import ProgressBar
+    """Store a URL as a live API reference — drp get will fetch fresh each time."""
     from cli.format import dim
-    import mimetypes, tempfile
-
-    _test_mode = os.environ.get('DRP_TEST_MODE') == '1'
-
-    print(f'  {dim("fetching")} {url}')
-
-    try:
-        r = requests.get(url, stream=True, timeout=30)
-        r.raise_for_status()
-    except Exception as e:
-        print(f'  ✗ Could not fetch URL: {e}')
-        sys.exit(1)
-
-    filename = _filename_from_response(r, url)
-    total    = int(r.headers.get('Content-Length', 0))
-
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1])
-    bar = ProgressBar(max(total, 1), label='downloading')
-    try:
-        for chunk in r.iter_content(chunk_size=256 * 1024):
-            if chunk:
-                tmp.write(chunk)
-                bar.update(len(chunk))
-        bar.done()
-        tmp.flush()
-        tmp_path = tmp.name
-    finally:
-        tmp.close()
-
-    if not key:
-        key = api.slug(filename)
 
     expiry_days = _parse_expires(getattr(args, 'expires', None))
+    _test_mode = os.environ.get('DRP_TEST_MODE') == '1'
 
-    try:
-        result_key = api.upload_file(host, session, tmp_path, key=key,
-                                     expiry_days=expiry_days, password=password or None,
-                                     is_test=_test_mode, schedule=schedule,
-                                     webhook_url=webhook, notify=notify,
-                                     is_public=is_public, tags=tags)
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-
+    result_key = api.upload_text(
+        host, session, url, key=key,
+        expiry_days=expiry_days,
+        burn=False,
+        password=password or None,
+        is_test=_test_mode,
+        schedule=schedule,
+        webhook_url=webhook,
+        notify=notify,
+        is_public=is_public,
+        tags=tags,
+        source_url=url,
+    )
     if not result_key:
-        report_outcome('up', 'upload_file returned None for URL fetch')
+        report_outcome('up', 'upload_text returned None for URL reference')
         sys.exit(1)
 
-    final_url = f'{host}/f/{result_key}/'
+    final_url = f'{host}/{result_key}/'
     print(final_url)
+    print(f'  {dim("live reference")} → {url}')
     _try_copy(final_url)
-    config.record_drop(result_key, 'file', ns='f', filename=filename, host=host)
+    config.record_drop(result_key, 'text', ns='c', host=host)
 
 
 def _upload_file(host, session, path, key, cfg, args, password='',

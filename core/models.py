@@ -373,6 +373,11 @@ class Drop(models.Model):
         help_text="Comma-separated tags for public discovery. e.g. 'python,snippet'.",
     )
 
+    source_url = models.URLField(
+        blank=True, default="",
+        help_text="Live API reference. When set, drp get fetches from this URL each time.",
+    )
+
     is_test = models.BooleanField(default=False, db_index=True,
                                   help_text="Created by the integration test suite. Purged at deploy.")
 

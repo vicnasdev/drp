@@ -391,6 +391,7 @@ def _save_text(request, ns, key, existing, paid, anon_token):
     notify      = request.POST.get("notify", "").strip()
     is_public   = request.POST.get("is_public") in ("1", "true", "True")
     tags        = request.POST.get("tags", "").strip()
+    source_url  = request.POST.get("source_url", "").strip()
 
     if existing:
         existing.content = text
@@ -423,6 +424,7 @@ def _save_text(request, ns, key, existing, paid, anon_token):
             notify_before_secs=notify_secs,
             is_public=is_public if request.user.is_authenticated else False,
             tags=tags if request.user.is_authenticated else "",
+            source_url=source_url if paid else "",
         )
 
     # Set password if provided and caller is owner on paid plan
@@ -726,19 +728,46 @@ def _drop_response(request, drop):
             "tags":              drop.tags,
         }
         if drop.kind == Drop.TEXT:
-            data["content"] = drop.content
-            # Auto-detect content format for smart clients
-            if request.GET.get("parse") == "1":
-                from cli.smart_parse import smart_parse, dot_access
-                fmt, parsed = smart_parse(drop.content)
-                data["content_format"] = fmt
-                data["parsed"] = parsed
-                field = request.GET.get("field", "").strip()
-                if field:
-                    try:
-                        data["field_value"] = dot_access(parsed, field)
-                    except (KeyError, TypeError):
-                        data["field_error"] = f"Field '{field}' not found."
+            # Live API reference — fetch fresh content from source_url
+            if drop.source_url:
+                import requests as _req
+                try:
+                    r = _req.get(drop.source_url, timeout=15,
+                                 headers={'User-Agent': 'drp/live-fetch'})
+                    r.raise_for_status()
+                    live_content = r.text
+                except Exception as exc:
+                    data["source_url"] = drop.source_url
+                    data["fetch_error"] = str(exc)
+                    live_content = None
+                if live_content is not None:
+                    data["content"] = live_content
+                    data["source_url"] = drop.source_url
+                    if request.GET.get("parse") == "1":
+                        from cli.smart_parse import smart_parse, dot_access
+                        fmt, parsed = smart_parse(live_content)
+                        data["content_format"] = fmt
+                        data["parsed"] = parsed
+                        field = request.GET.get("field", "").strip()
+                        if field:
+                            try:
+                                data["field_value"] = dot_access(parsed, field)
+                            except (KeyError, TypeError):
+                                data["field_error"] = f"Field '{field}' not found."
+            else:
+                data["content"] = drop.content
+                # Auto-detect content format for smart clients
+                if request.GET.get("parse") == "1":
+                    from cli.smart_parse import smart_parse, dot_access
+                    fmt, parsed = smart_parse(drop.content)
+                    data["content_format"] = fmt
+                    data["parsed"] = parsed
+                    field = request.GET.get("field", "").strip()
+                    if field:
+                        try:
+                            data["field_value"] = dot_access(parsed, field)
+                        except (KeyError, TypeError):
+                            data["field_error"] = f"Field '{field}' not found."
         else:
             data["filename"] = drop.filename
             data["filesize"]  = drop.filesize
