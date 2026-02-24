@@ -221,32 +221,8 @@
 
 </div>
 
-<!-- Use cases showcase -->
-<div style="max-width:700px;margin:2.5rem auto 0;padding:0 1rem">
-  <h2 style="font-size:1.1rem;margin-bottom:1rem;color:var(--text)">what people use drp for</h2>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem">
-    <div style="background:var(--surface);border-radius:var(--radius);padding:1rem">
-      <div style="font-size:1.2rem;margin-bottom:.3rem">🔐</div>
-      <strong style="font-size:.9rem">secret sharing</strong>
-      <p class="muted" style="font-size:.82rem;margin-top:.3rem"><code>drp up "secret" --burn --password</code><br>View once, then it's gone.</p>
-    </div>
-    <div style="background:var(--surface);border-radius:var(--radius);padding:1rem">
-      <div style="font-size:1.2rem;margin-bottom:.3rem">📋</div>
-      <strong style="font-size:.9rem">clipboard sync</strong>
-      <p class="muted" style="font-size:.82rem;margin-top:.3rem"><code>echo "data" | drp up</code><br>Paste on any device.</p>
-    </div>
-    <div style="background:var(--surface);border-radius:var(--radius);padding:1rem">
-      <div style="font-size:1.2rem;margin-bottom:.3rem">📎</div>
-      <strong style="font-size:.9rem">file hosting</strong>
-      <p class="muted" style="font-size:.82rem;margin-top:.3rem"><code>drp up report.pdf</code><br>Instant shareable link.</p>
-    </div>
-    <div style="background:var(--surface);border-radius:var(--radius);padding:1rem">
-      <div style="font-size:1.2rem;margin-bottom:.3rem">🔗</div>
-      <strong style="font-size:.9rem">embeds &amp; stable URLs</strong>
-      <p class="muted" style="font-size:.82rem;margin-top:.3rem"><code>/embed/mykey/</code><br>Embed in docs &amp; wikis.</p>
-    </div>
-  </div>
-</div>
+<!-- Sponsored content -->
+{% include 'ads/middle.html' %}
 
 <!-- Public drops feed -->
 {% if public_drops %}

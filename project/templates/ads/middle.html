@@ -1,0 +1,33 @@
+{% comment %}
+ads/middle.html — centered ad slot for mid-page insertion.
+
+Behavior:
+  ADSENSE_CLIENT set    → Google AdSense responsive ad (auto-sized, centered, max-width 700px)
+  ADSENSE_CLIENT unset  → Koho referral card (max-width 600px)
+{% endcomment %}
+{% if adsense_client %}
+<div style="max-width:700px;margin:2.5rem auto;padding:0 1rem;text-align:center">
+  <ins class="adsbygoogle"
+       style="display:block"
+       data-ad-client="{{ adsense_client }}"
+       data-ad-slot="{{ adsense_slot|default:'' }}"
+       data-ad-format="auto"
+       data-full-width-responsive="true"></ins>
+  <script>
+    (adsbygoogle = window.adsbygoogle || []).push({});
+  </script>
+</div>
+{% else %}
+<div style="max-width:600px;margin:2.5rem auto;padding:0 1rem">
+  <a href="https://referral.koho.ca/mzHiGL4" target="_blank" rel="noopener sponsored" style="display:block;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border-radius:12px;padding:2rem;text-align:center;text-decoration:none;color:white;box-shadow:0 8px 16px rgba(102,126,234,.3);transition:transform .2s, box-shadow .2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 20px rgba(102,126,234,.4)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 8px 16px rgba(102,126,234,.3)'">
+    <div style="font-size:1.5rem;margin-bottom:.5rem">💳</div>
+    <div style="font-size:1.1rem;font-weight:600;margin-bottom:.3rem">Get Koho free</div>
+    <div style="font-size:.9rem;opacity:.95;line-height:1.5">
+      Spend smarter with real-time insights, budgets, and roundups that make saving automatic. Join thousands of Canadians building better financial habits.
+    </div>
+    <div style="font-size:.85rem;font-weight:500;margin-top:1rem;opacity:.9">
+      Start free →
+    </div>
+  </a>
+</div>
+{% endif %}
