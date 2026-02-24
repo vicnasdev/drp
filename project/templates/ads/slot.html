@@ -1,24 +1,67 @@
 {% comment %}
-ads/slot.html — responsive left-rail ad.
+ads/slot.html — responsive left-rail ad with conditional Railway fallback.
 
 Rail width is fluid (fills gutter up to 300px), height fixed at 600px.
 Hidden below 1000px (phones/small tablets) where there's no gutter.
 
 Behaviour:
   ADSENSE_CLIENT unset  → Railway referral card (fluid)
-  ADSENSE_CLIENT set    → AdSense 300×600 centered inside the fluid rail
+  ADSENSE_CLIENT set    → Up to 3 AdSense ads stacked + Railway fallback
+                          Railway visibility auto-adjusts based on actual ad fill
 {% endcomment %}
 {% if adsense_client %}
-<div class="ad-rail">
-  <div class="ad-adsense-wrap">
+<div class="ad-rail" id="ad-rail-container">
+  <div class="ad-adsense-wrap" id="ad-adsense-wrap">
+    {# Slot 1 #}
     <ins class="adsbygoogle ad-adsense"
-         style="display:block;width:300px;height:600px"
+         style="display:block;width:300px;height:250px"
          data-ad-client="{{ adsense_client }}"
          data-ad-slot="{{ adsense_slot|default:'' }}"
-         data-ad-format="fixed"></ins>
-    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+         data-ad-format="auto"
+         data-full-width-responsive="false"></ins>
+    {# Slot 2 #}
+    <ins class="adsbygoogle ad-adsense"
+         style="display:block;width:300px;height:250px;margin-top:.5rem"
+         data-ad-client="{{ adsense_client }}"
+         data-ad-slot="{{ adsense_slot|default:'' }}"
+         data-ad-format="auto"
+         data-full-width-responsive="false"></ins>
+    {# Slot 3 #}
+    <ins class="adsbygoogle ad-adsense"
+         style="display:block;width:300px;height:250px;margin-top:.5rem"
+         data-ad-client="{{ adsense_client }}"
+         data-ad-slot="{{ adsense_slot|default:'' }}"
+         data-ad-format="auto"
+         data-full-width-responsive="false"></ins>
+    <script>
+      (adsbygoogle = window.adsbygoogle || []).push({});
+      (adsbygoogle = window.adsbygoogle || []).push({});
+      (adsbygoogle = window.adsbygoogle || []).push({});
+    </script>
   </div>
+  {# Railway fallback — shown if ads don't fill the space #}
+  <a href="https://railway.com?referralCode=ZIdvo-" target="_blank" rel="noopener sponsored" class="ad-railway ad-railway--fallback" id="ad-railway-fallback">
+    <span class="ad-railway__logo">Railway</span>
+    <span class="ad-railway__tagline">The platform drp runs on — deploy your own app in minutes</span>
+    <span class="ad-railway__cta">For free →</span>
+  </a>
 </div>
+<script>
+  function _adjustRailwayVisibility() {
+    const wrap = document.getElementById('ad-adsense-wrap');
+    const railway = document.getElementById('ad-railway-fallback');
+    if (!wrap || !railway) return;
+    const googleAdFrames = wrap.querySelectorAll('iframe[id^="google_ads"]').length;
+    const filledHeight = googleAdFrames * 258 + (googleAdFrames > 0 ? (googleAdFrames - 1) * 8 : 0);
+    railway.style.display = filledHeight >= 600 ? 'none' : 'flex';
+  }
+  setTimeout(_adjustRailwayVisibility, 500);
+  setTimeout(_adjustRailwayVisibility, 1500);
+  setTimeout(_adjustRailwayVisibility, 3000);
+  const observer = new MutationObserver(_adjustRailwayVisibility);
+  const wrap = document.getElementById('ad-adsense-wrap');
+  if (wrap) observer.observe(wrap, { childList: true, subtree: true, attributes: true });
+</script>
 {% else %}
 <div class="ad-rail">
   <a href="https://railway.com?referralCode=ZIdvo-" target="_blank" rel="noopener sponsored" class="ad-railway">

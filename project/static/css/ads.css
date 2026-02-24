@@ -76,18 +76,42 @@
   color: #7c3aed;
 }
 
-/* ── AdSense — fixed 300×600, centered in the fluid rail ── */
+/* ── AdSense — stacked ads in the fluid rail ── */
 .ad-rail .ad-adsense-wrap {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   width: 100%;
-  height: 100%;
   overflow: hidden;
+  gap: .5rem;
 }
 .ad-rail .ad-adsense {
   display: block;
   width: 300px;
-  height: 600px;
+  height: auto;
   flex-shrink: 0;
+}
+
+/* ── Railway fallback — responsive flex layout ── */
+.ad-rail .ad-railway--fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .75rem;
+  width: 100%;
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-decoration: none;
+  text-align: center;
+  padding: 1rem .5rem;
+  transition: border-color .15s, background .15s;
+}
+.ad-rail .ad-railway--fallback:hover {
+  border-color: #7c3aed;
+  background: rgba(124, 58, 237, .06);
+  text-decoration: none;
 }
