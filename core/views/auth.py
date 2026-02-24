@@ -108,7 +108,7 @@ def login_view(request):
                 response.delete_cookie(ANON_COOKIE)
             return response
 
-        error = 'Invalid email or password.'
+        error = 'Invalid username/email or password.'
 
     return render(request, 'auth/login.html', {'error': error})
 

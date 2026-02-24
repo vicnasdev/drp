@@ -11,8 +11,8 @@
   <form method="post" class="auth-form">
     {% csrf_token %}
     <div class="field">
-      <label for="email">Email</label>
-      <input type="email" name="email" id="email" required autofocus placeholder="you@example.com"/>
+      <label for="email">Username or email</label>
+      <input type="text" name="email" id="email" required autofocus placeholder="alice or you@example.com"/>
     </div>
     <div class="field">
       <label for="password">Password</label>

@@ -24,16 +24,16 @@ def _first_csrf(session):
     return None
 
 
-def login(host, session, email, password):
+def login(host, session, identifier, password):
     """
-    Authenticate with the drp server.
+    Authenticate with the drp server using username or email.
     Returns True on success, False on bad credentials.
     Raises requests.RequestException on network errors.
     """
     csrf = get_csrf(host, session)
     res = session.post(
         f'{host}/auth/login/',
-        data={'email': email, 'password': password, 'csrfmiddlewaretoken': csrf},
+        data={'email': identifier, 'password': password, 'csrfmiddlewaretoken': csrf},
         timeout=10,
         allow_redirects=False,
     )
