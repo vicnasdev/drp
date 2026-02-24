@@ -44,3 +44,10 @@ drp setup && drp up "hello world"
 
 Server: source-available, personal/internal use only — see [LICENSE](https://github.com/vicnasdev/drp/blob/main/LICENSE).  
 CLI (`cli/`): MIT.
+
+### Commercial License
+
+Want to deploy drp for your organization? A **Commercial Self-Hosted License** is available for **CA$299/year** — includes full source access, modification rights, and security updates.
+
+[Purchase & generate your license PDF →](https://drp.fyi/billing/licensing/)  
+See [COMMERCIAL.md](https://github.com/vicnasdev/drp/blob/dev/COMMERCIAL.md) for full terms.
