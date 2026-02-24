@@ -1,0 +1,95 @@
+{% extends 'help/base.html' %}
+{% block title %}drp — security{% endblock %}
+
+{% block help_content %}
+<h1>Security</h1>
+<p class="tagline">drp is built with security-first practices to protect your data.</p>
+
+<section>
+  <h2>Your data is safe</h2>
+  <p>Whether you're using drp anonymously or with a paid plan, your privacy and security are paramount. Here's how we protect you:</p>
+</section>
+
+<section>
+  <h2>Access control by plan</h2>
+  <p><strong>Collections and groups are plan-aware.</strong> When you downgrade your plan, your existing data is preserved but access is restricted based on your quota. When you upgrade again, full access is immediately restored. Your data is never deleted.</p>
+  <ul>
+    <li><strong>Pro and Pro+ plans:</strong> Unlimited collections and groups</li>
+    <li><strong>Starter plan:</strong> Up to 10 collections and 3 groups</li>
+    <li><strong>Free plan:</strong> No collections or groups (read-only access to shared drops)</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Password protection is rate-limited</h2>
+  <p>Drops with password protection are defended against brute-force attacks. <strong>Maximum 10 password attempts per hour per IP address.</strong> After hitting the limit, you'll need to wait an hour before trying again.</p>
+</section>
+
+<section>
+  <h2>Webhooks are validated</h2>
+  <p>If you use webhooks to notify external systems when drops are created or accessed, those URLs are validated before use. We automatically reject:</p>
+  <ul>
+    <li>URLs pointing to localhost or local IP addresses (127.0.0.1, 10.x.x.x, 192.168.x.x, etc.)</li>
+    <li>URLs containing credentials (username:password@host)</li>
+    <li>Protocols other than HTTP and HTTPS</li>
+  </ul>
+  <p>This prevents <abbr title="Server-Side Request Forgery">SSRF</abbr> attacks that could compromise your internal infrastructure.</p>
+</section>
+
+<section>
+  <h2>File names are safely encoded</h2>
+  <p>When you download files, the Content-Disposition header is correctly encoded according to <a href="https://tools.ietf.org/html/rfc5987" target="_blank" rel="noopener">RFC 5987</a>. This prevents header injection attacks even if your file names contain special characters.</p>
+</section>
+
+<section>
+  <h2>Passwords are hashed, not stored in plain text</h2>
+  <p>Drop passwords are hashed using Django's battle-tested password hashing system (PBKDF2), not stored in plain text. Even if your account data were somehow compromised, your passwords would be unreadable.</p>
+</section>
+
+<section>
+  <h2>Sessions are secure</h2>
+  <p>We use Django's built-in session framework with HttpOnly and Secure flags, preventing JavaScript access and ensuring cookies are only sent over HTTPS.</p>
+</section>
+
+<section>
+  <h2>Anonymous drops are pseudo-random, not sequential</h2>
+  <p>Drop keys for anonymous drops are generated using cryptographically secure random functions, not sequential numbers. Every attempt to guess a key is computationally infeasible.</p>
+</section>
+
+<section>
+  <h2>Inputs are validated</h2>
+  <p>All user inputs are validated and sanitized. File uploads are scanned, email addresses are verified, and URLs are checked before use.</p>
+</section>
+
+<section>
+  <h2>No third-party tracking or analytics</h2>
+  <p>We do not run Google Analytics, Mixpanel, or similar behavioural trackers. We do not collect or sell user data for profiling or marketing. If you see ads on drp, those are powered only by Google AdSense, and you can <a href="https://adssettings.google.com" target="_blank" rel="noopener">opt out of personalized ads</a>.</p>
+</section>
+
+<section>
+  <h2>Storage is encrypted at rest</h2>
+  <p>Files stored in Backblaze B2 are encrypted at rest. Access to your files is strictly controlled by presigned URLs that expire after one hour.</p>
+</section>
+
+<section>
+  <h2>Best practices for you</h2>
+  <p>Security is a shared responsibility. Here's what you can do:</p>
+  <ul>
+    <li><strong>Don't use anonymous drops for sensitive information.</strong> They are only protected by a hard-to-guess URL. If you need real privacy, use a password and set an expiry.</li>
+    <li><strong>Use strong passwords.</strong> A simple password like "abc123" can be guessed in seconds. Aim for 12+ characters with mixed case, numbers, and symbols.</li>
+    <li><strong>Set appropriate expiry times.</strong> The shorter the expiry, the less time an attacker has to exploit a compromised link.</li>
+    <li><strong>Don't share drop links in plain text emails or messages.</strong> URLs are logged in email providers and message histories. Consider using a password-protected drop with a separate password delivery channel.</li>
+    <li><strong>Regular security updates.</strong> Keep your OS, browser, and password manager updated to patch known vulnerabilities.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Reporting security issues</h2>
+  <p>Found a security vulnerability? Please email <strong>security@{{ domain }}</strong> instead of filing a public issue. We take security seriously and will respond within 48 hours.</p>
+</section>
+
+<section>
+  <h2>Want more details?</h2>
+  <p>Check out our <a href="/privacy/">Privacy Policy</a> and <a href="/terms/">Terms of Service</a> for comprehensive information about how we handle your data.</p>
+</section>
+{% endblock %}

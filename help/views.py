@@ -66,6 +66,10 @@ def plans(request):
     return render(request, 'help/plans.html', {'plans': ordered})
 
 
+def security(request):
+    return render(request, 'help/security.html')
+
+
 @cache
 def _get_readme_html():
     readme_path = Path(__file__).resolve().parent.parent / 'README.md'

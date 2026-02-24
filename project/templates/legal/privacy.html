@@ -26,6 +26,21 @@
   </section>
 
   <section>
+    <h2>Security</h2>
+    <p>Your security is a core responsibility. We implement industry-standard protections:</p>
+    <ul>
+      <li><strong>Passwords are hashed</strong> using Django's PBKDF2 algorithm, never stored in plain text.</li>
+      <li><strong>Password attempts are rate-limited</strong> to 10 attempts per hour per IP address per drop, protecting against brute-force attacks.</li>
+      <li><strong>Webhooks are validated</strong> before use, preventing SSRF attacks against your infrastructure.</li>
+      <li><strong>File names are safely encoded</strong> according to RFC 5987, preventing header injection attacks.</li>
+      <li><strong>Sessions use HttpOnly and Secure flags</strong>, preventing JavaScript-based session hijacking.</li>
+      <li><strong>All inputs are validated and sanitized</strong> before storage or processing.</li>
+      <li><strong>Collection and group access is plan-aware</strong> — when you downgrade, your data is preserved but access is restricted based on your quota. Re-upgrading immediately restores full access.</li>
+    </ul>
+    <p>For detailed security information, see our <a href="/help/security/">Security page</a>. If you discover a vulnerability, please email <strong>security@{{ domain }}</strong> instead of filing a public issue.</p>
+  </section>
+
+  <section>
     <h2>Third-party services</h2>
     <p><strong>Backblaze B2</strong> — file content is stored in B2. Files are served via presigned URLs that expire after one hour.</p>
     <p><strong>Railway</strong> — the application runs on Railway's hosting platform. Railway may log request metadata for infrastructure purposes.</p>
