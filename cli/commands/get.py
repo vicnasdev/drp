@@ -225,7 +225,9 @@ def _get_url(args, url, host, session, t):
 
     try:
         with Spinner('fetching URL'):
-            r = session.get(url, timeout=30, headers={'User-Agent': 'drp-cli'})
+            # Use a clean request (no drp auth headers) for external URLs
+            import requests as _req
+            r = _req.get(url, timeout=30, headers={'User-Agent': 'drp-cli'})
             r.raise_for_status()
             content = r.text
     except Exception as e:
