@@ -49,4 +49,7 @@
 /* ── Responsive ── */
 @media (max-width: 500px) {
   .plan-grid { grid-template-columns: 1fr; }
+  .drops-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .account-header h1 { font-size: 1.4rem; }
+  .plan-status { flex-direction: column; align-items: flex-start; gap: .3rem; }
 }

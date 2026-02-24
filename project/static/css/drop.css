@@ -149,3 +149,14 @@
 }
 #diffOutput .d2h-wrapper { border-radius: var(--radius); }
 #diffOutput .d2h-file-header { display: none; }  /* we show our own key labels */
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .share-url { flex-wrap: wrap; gap: .4rem; font-size: .82rem; }
+  .share-url span { min-width: 0; }
+  .file-card.big { flex-wrap: wrap; gap: .8rem; }
+  .clip-actions { flex-wrap: wrap; }
+  .qr-panel { width: 100%; }
+  .pw-panel { max-width: 100%; }
+  .render-pane { padding: .7rem; }
+}

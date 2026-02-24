@@ -187,4 +187,9 @@ textarea:disabled { opacity: .4; }
   .home-wrap { grid-template-columns: 1fr; }
   .dashboard { order: -1; }
   .creator h1 { font-size: 1.8rem; }
+  .key-row { flex-wrap: wrap; }
+  .result-box { flex-wrap: wrap; gap: .4rem; }
+  .result-box a { white-space: normal; word-break: break-all; }
+  .drop-item { flex-wrap: wrap; }
+  .expiry-row { flex-wrap: wrap; }
 }

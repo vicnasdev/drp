@@ -165,7 +165,16 @@ nav a:hover { color: var(--text); text-decoration: none; }
 
 /* ── Responsive base ── */
 @media (max-width: 700px) {
+  header { padding: .8rem 1rem; }
+  nav { gap: .6rem; flex-wrap: wrap; }
+  nav a { font-size: .82rem; }
   .page-content { padding: 1.5rem 1rem; }
+  footer small { display: flex; flex-wrap: wrap; justify-content: center; gap: .2rem .5rem; line-height: 1.8; }
+}
+
+@media (max-width: 480px) {
+  nav { gap: .4rem .6rem; }
+  .btn-nav { padding: .3em .7em; font-size: .8rem; }
 }
 
 /* ── Help bot widget ── */

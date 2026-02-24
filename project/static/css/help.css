@@ -136,6 +136,10 @@
     flex-wrap: wrap;
     gap: .3rem;
   }
+  .help-page h1 { font-size: 1.5rem; }
+  .help-page table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .cmd-args { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .cmd-header { gap: .4rem; }
 }
 /* ── Plans page: plan grid ── */
 .plan-grid {
