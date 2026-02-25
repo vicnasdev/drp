@@ -123,7 +123,7 @@ textarea:disabled { opacity: .4; }
 }
 
 /* ── Anon nudge ── */
-.anon-nudge { font-size: .82rem; color: var(--muted); margin-top: .5rem; }
+.anon-nudge { font-size: .82rem; color: var(--muted); margin-top: .5rem; text-align: center; }
 .anon-nudge a { color: var(--accent); }
 
 /* ── Anon upsell ── */
@@ -172,6 +172,9 @@ textarea:disabled { opacity: .4; }
   border-radius: var(--radius);
   padding: .6rem .9rem;
   margin-top: .8rem;
+  margin-left: auto;
+  margin-right: auto;
+  width: fit-content;
   font-family: monospace;
   font-size: .9rem;
 }
