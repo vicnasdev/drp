@@ -71,10 +71,14 @@ HOST = _resolve_host()
 # ── User management ───────────────────────────────────────────────────────────
 
 def _manage(code):
+    # Build env: merge os.environ + .env values, but strip _PYTEST_UNIT
+    # so the subprocess uses the real DB_URL (PostgreSQL), not SQLite.
+    sub_env = {**os.environ, **_env}
+    sub_env.pop('_PYTEST_UNIT', None)
     result = subprocess.run(
         ['python', 'manage.py', 'shell', '-c', code],
         capture_output=True, text=True, cwd=_ROOT,
-        env={**os.environ, **_env},
+        env=sub_env,
     )
     if result.returncode != 0:
         raise RuntimeError(f'manage.py shell failed:\n{result.stdout}\n{result.stderr}')

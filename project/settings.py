@@ -83,7 +83,7 @@ DATABASES = {
     }
 }
 
-if os.environ.get("DB_URL") and not os.environ.get("TESTING"):
+if os.environ.get("DB_URL") and not os.environ.get("_PYTEST_UNIT"):
     import dj_database_url
     DATABASES["default"] = dj_database_url.parse(os.environ.get("DB_URL"))
 
