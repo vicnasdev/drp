@@ -20,6 +20,7 @@ from cli.commands.shell import cmd_shell
 from cli.commands.collection import cmd_collection
 from cli.commands.token import cmd_token
 from cli.commands.ask import cmd_ask
+from cli.commands.lock import cmd_lock
 from cli.commands.cache import cmd_cache, cmd_rmcache
 from cli.commands.send import cmd_send, cmd_claim
 
@@ -42,6 +43,7 @@ COMMANDS = [
     ('serve',      cmd_serve,       'Upload a directory or file list, print URL table'),
     ('collection', cmd_collection,  'Manage drop collections (paid accounts)'),
     ('token',      cmd_token,       'Manage API tokens (paid accounts)'),
+    ('lock',       cmd_lock,        'Set or remove password on an existing drop'),
     ('ask',        cmd_ask,         'Ask the help bot a question about drp'),
     ('send',       cmd_send,        'Transfer drop ownership via one-time token'),
     ('claim',      cmd_claim,       'Claim a drop sent to you'),
@@ -56,7 +58,7 @@ COMMANDS = [
 
 COMMAND_GROUPS = [
     ('upload / download',  ['up', 'get', 'edit', 'serve']),
-    ('manage',             ['rm', 'mv', 'cp', 'renew', 'send', 'claim']),
+    ('manage',             ['rm', 'mv', 'cp', 'renew', 'lock', 'send', 'claim']),
     ('account',            ['save', 'ls', 'load', 'collection', 'token']),
     ('info',               ['status', 'ping']),
     ('help',               ['ask']),
@@ -108,6 +110,9 @@ EXAMPLES = [
     ('drp send',    'mykey',                          'generate transfer token'),
     ('drp claim',   '<token>',                        'claim a drop sent to you'),
     ('drp ask',     '"how do I upload a file?"',        'ask the help bot'),
+    ('drp ask',     '--clear',                          'clear help bot history'),
+    ('drp lock',    'mykey',                            'set password on existing drop'),
+    ('drp lock',    '-f myfile --remove',               'remove password from file drop'),
     ('drp token',   'create --expires 90d',            'create an API key'),
     ('',            'DRP_API_KEY=xxx drp up file.py',  'upload with API key (no login)'),]
 
@@ -331,6 +336,20 @@ def _configure_subparsers(sub):
     p_ask = sub._name_parser_map['ask']
     p_ask.add_argument('question', nargs='?', default=None,
                        help='Question to ask (prompted if omitted)')
+    p_ask.add_argument('--clear', action='store_true',
+                       help='Clear help bot conversation history')
+
+    # lock subcommand
+    p_lock = sub._name_parser_map['lock']
+    p_lock.add_argument('key', help='Drop key to lock/unlock')
+    p_lock.add_argument('-f', '--file', action='store_true',
+                        help='Target a file drop instead of clipboard')
+    p_lock.add_argument('-c', '--clip', action='store_true')
+    p_lock.add_argument('--password', '-p', default=None, nargs='?', const='__prompt__',
+                        metavar='PASSWORD',
+                        help='Password to set (prompted if omitted)')
+    p_lock.add_argument('--remove', '-r', action='store_true',
+                        help='Remove password protection')
 
     # rmcache subcommand
     p_rmcache = sub._name_parser_map['rmcache']

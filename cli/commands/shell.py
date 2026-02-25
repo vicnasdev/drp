@@ -46,7 +46,7 @@ _BUILTIN_CMDS = [
 
 # Delegated drp commands (handled by the top-level CLI parser/handlers)
 _DELEGATED_CMDS = [
-    'up', 'get', 'edit', 'save', 'renew', 'serve',
+    'up', 'get', 'edit', 'save', 'renew', 'serve', 'lock',
     'collection', 'token', 'ask', 'load', 'ping',
     'setup', 'login', 'logout', 'cache', 'rmcache',
 ]

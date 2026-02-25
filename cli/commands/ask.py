@@ -3,6 +3,7 @@ drp ask — ask the help bot a question about drp.
 
   drp ask "how do I upload a file?"
   drp ask                          (prompts interactively)
+  drp ask --clear                  clear conversation history
 """
 
 import json
@@ -10,9 +11,45 @@ import re
 import sys
 
 from cli.commands._context import load_context
+from cli.config import CONFIG_DIR
 
+HISTORY_FILE = CONFIG_DIR / "ask_history.json"
+_MAX_HISTORY = 20
+
+
+# ── History ───────────────────────────────────────────────────────────────────
+
+def _read_history() -> list[dict]:
+    try:
+        return json.loads(HISTORY_FILE.read_text())
+    except Exception:
+        return []
+
+
+def _write_history(history: list[dict]):
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        HISTORY_FILE.write_text(json.dumps(history[-_MAX_HISTORY:]))
+    except Exception:
+        pass
+
+
+def _clear_history():
+    try:
+        HISTORY_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+# ── Command ───────────────────────────────────────────────────────────────────
 
 def cmd_ask(args):
+    # Handle --clear
+    if getattr(args, 'clear', False):
+        _clear_history()
+        print('  ✓ Help bot history cleared.')
+        return
+
     cfg, host, session = load_context(require_login=True)
 
     question = getattr(args, "question", None)
@@ -53,10 +90,10 @@ def cmd_ask(args):
         sys.exit(1)
 
     data = resp.json()
-    answer = data.get("answer", "")
+    answer_html = data.get("answer", "")
 
     # Strip HTML tags for terminal display
-    text = re.sub(r"<[^>]+>", "", answer)
+    text = re.sub(r"<[^>]+>", "", answer_html)
     text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
     text = text.replace("&#x27;", "'").replace("&quot;", '"')
     text = text.strip()
@@ -66,3 +103,8 @@ def cmd_ask(args):
             print(f"  {line}")
     else:
         print("  No answer returned.")
+
+    # Save to history (same format as web: {q, a})
+    history = _read_history()
+    history.append({"q": question, "a": answer_html})
+    _write_history(history)

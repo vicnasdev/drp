@@ -763,3 +763,207 @@ class TestDownloadRetry:
         kind, data = get_file('https://h', sess, 'k')
         assert kind is None
         assert data is None
+
+
+# ── drp lock ──────────────────────────────────────────────────────────────────
+
+class TestLockParser:
+    """Parser for drp lock parses all expected flags."""
+
+    def test_lock_basic(self):
+        from cli.drp import build_parser
+        ns = build_parser().parse_args(['lock', 'mykey'])
+        assert ns.command == 'lock'
+        assert ns.key == 'mykey'
+        assert ns.file is False
+        assert ns.remove is False
+        assert ns.password is None
+
+    def test_lock_file(self):
+        from cli.drp import build_parser
+        ns = build_parser().parse_args(['lock', '-f', 'mykey'])
+        assert ns.file is True
+
+    def test_lock_remove(self):
+        from cli.drp import build_parser
+        ns = build_parser().parse_args(['lock', 'mykey', '--remove'])
+        assert ns.remove is True
+
+    def test_lock_password_inline(self):
+        from cli.drp import build_parser
+        ns = build_parser().parse_args(['lock', 'mykey', '--password', 'secret'])
+        assert ns.password == 'secret'
+
+    def test_lock_password_prompt_sentinel(self):
+        from cli.drp import build_parser
+        ns = build_parser().parse_args(['lock', 'mykey', '-p'])
+        assert ns.password == '__prompt__'
+
+
+class TestLockCommand:
+    """Mock network tests for cmd_lock."""
+
+    def _make_args(self, key='test', file=False, remove=False, password='pw'):
+        a = MagicMock()
+        a.key = key
+        a.file = file
+        a.remove = remove
+        a.password = password
+        return a
+
+    @patch('cli.commands.lock.Spinner', MagicMock())
+    @patch('cli.commands.lock.load_context')
+    @patch('cli.api.auth.get_csrf', return_value='tok')
+    def test_set_password(self, _csrf, mock_ctx, capsys):
+        sess = MagicMock()
+        resp = MagicMock(ok=True, status_code=200)
+        resp.json.return_value = {'password_protected': True, 'message': 'Password set.'}
+        sess.post.return_value = resp
+        mock_ctx.return_value = ({}, 'https://h', sess)
+
+        from cli.commands.lock import cmd_lock
+        cmd_lock(self._make_args())
+        assert 'Password set' in capsys.readouterr().out
+
+    @patch('cli.commands.lock.Spinner', MagicMock())
+    @patch('cli.commands.lock.load_context')
+    @patch('cli.api.auth.get_csrf', return_value='tok')
+    def test_remove_password(self, _csrf, mock_ctx, capsys):
+        sess = MagicMock()
+        resp = MagicMock(ok=True, status_code=200)
+        resp.json.return_value = {'password_protected': False, 'message': 'Password removed.'}
+        sess.post.return_value = resp
+        mock_ctx.return_value = ({}, 'https://h', sess)
+
+        from cli.commands.lock import cmd_lock
+        cmd_lock(self._make_args(remove=True, password=None))
+        assert 'Password removed' in capsys.readouterr().out
+
+    @patch('cli.commands.lock.Spinner', MagicMock())
+    @patch('cli.commands.lock.load_context')
+    @patch('cli.api.auth.get_csrf', return_value='tok')
+    def test_file_drop_url(self, _csrf, mock_ctx, capsys):
+        sess = MagicMock()
+        resp = MagicMock(ok=True, status_code=200)
+        resp.json.return_value = {'message': 'Password set.'}
+        sess.post.return_value = resp
+        mock_ctx.return_value = ({}, 'https://h', sess)
+
+        from cli.commands.lock import cmd_lock
+        cmd_lock(self._make_args(key='fkey', file=True))
+        url_used = sess.post.call_args[0][0]
+        assert '/f/fkey/set-password/' in url_used
+
+    @patch('cli.commands.lock.Spinner', MagicMock())
+    @patch('cli.commands.lock.load_context')
+    @patch('cli.api.auth.get_csrf', return_value='tok')
+    def test_text_drop_url(self, _csrf, mock_ctx, capsys):
+        sess = MagicMock()
+        resp = MagicMock(ok=True, status_code=200)
+        resp.json.return_value = {'message': 'Password set.'}
+        sess.post.return_value = resp
+        mock_ctx.return_value = ({}, 'https://h', sess)
+
+        from cli.commands.lock import cmd_lock
+        cmd_lock(self._make_args(key='tkey', file=False))
+        url_used = sess.post.call_args[0][0]
+        assert '/tkey/set-password/' in url_used
+        assert '/f/' not in url_used
+
+    @patch('cli.commands.lock.Spinner', MagicMock())
+    @patch('cli.commands.lock.load_context')
+    @patch('cli.api.auth.get_csrf', return_value='tok')
+    def test_403_paid_feature(self, _csrf, mock_ctx, capsys):
+        sess = MagicMock()
+        resp = MagicMock(ok=False, status_code=403)
+        resp.json.return_value = {'error': 'Password protection is a paid feature.'}
+        sess.post.return_value = resp
+        mock_ctx.return_value = ({}, 'https://h', sess)
+
+        from cli.commands.lock import cmd_lock
+        with pytest.raises(SystemExit):
+            cmd_lock(self._make_args())
+        assert 'paid feature' in capsys.readouterr().err
+
+    @patch('cli.commands.lock.Spinner', MagicMock())
+    @patch('cli.commands.lock.load_context')
+    @patch('cli.api.auth.get_csrf', return_value='tok')
+    def test_404_not_found(self, _csrf, mock_ctx, capsys):
+        sess = MagicMock()
+        resp = MagicMock(ok=False, status_code=404)
+        resp.json.return_value = {}
+        sess.post.return_value = resp
+        mock_ctx.return_value = ({}, 'https://h', sess)
+
+        from cli.commands.lock import cmd_lock
+        with pytest.raises(SystemExit):
+            cmd_lock(self._make_args())
+        assert 'not found' in capsys.readouterr().err
+
+
+# ── drp ask history ───────────────────────────────────────────────────────────
+
+class TestAskHistory:
+    """Tests for ask history file operations and --clear flag."""
+
+    def test_write_and_read(self, tmp_path):
+        from cli.commands import ask
+        orig = ask.HISTORY_FILE
+        try:
+            ask.HISTORY_FILE = tmp_path / 'history.json'
+            ask._write_history([{'q': 'hi', 'a': '<p>hello</p>'}])
+            h = ask._read_history()
+            assert len(h) == 1
+            assert h[0]['q'] == 'hi'
+            assert h[0]['a'] == '<p>hello</p>'
+        finally:
+            ask.HISTORY_FILE = orig
+
+    def test_clear_history(self, tmp_path):
+        from cli.commands import ask
+        orig = ask.HISTORY_FILE
+        try:
+            ask.HISTORY_FILE = tmp_path / 'history.json'
+            ask._write_history([{'q': 'hi', 'a': 'bye'}])
+            assert ask.HISTORY_FILE.exists()
+            ask._clear_history()
+            assert not ask.HISTORY_FILE.exists()
+            assert ask._read_history() == []
+        finally:
+            ask.HISTORY_FILE = orig
+
+    def test_read_missing_file(self, tmp_path):
+        from cli.commands import ask
+        orig = ask.HISTORY_FILE
+        try:
+            ask.HISTORY_FILE = tmp_path / 'nope.json'
+            assert ask._read_history() == []
+        finally:
+            ask.HISTORY_FILE = orig
+
+    def test_max_history_capped(self, tmp_path):
+        from cli.commands import ask
+        orig = ask.HISTORY_FILE
+        try:
+            ask.HISTORY_FILE = tmp_path / 'history.json'
+            big = [{'q': f'q{i}', 'a': f'a{i}'} for i in range(30)]
+            ask._write_history(big)
+            h = ask._read_history()
+            assert len(h) == ask._MAX_HISTORY
+            # Should keep the last 20
+            assert h[0]['q'] == 'q10'
+        finally:
+            ask.HISTORY_FILE = orig
+
+    def test_ask_clear_parser_flag(self):
+        from cli.drp import build_parser
+        ns = build_parser().parse_args(['ask', '--clear'])
+        assert ns.clear is True
+        assert ns.question is None
+
+    def test_cmd_ask_clear(self, capsys):
+        from cli.commands.ask import cmd_ask, _clear_history
+        args = MagicMock()
+        args.clear = True
+        cmd_ask(args)
+        assert 'cleared' in capsys.readouterr().out
