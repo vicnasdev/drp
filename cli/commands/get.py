@@ -99,6 +99,21 @@ def _get_clipboard(args, host, session, t, password='', parse=False, field=''):
             t.print()
             sys.exit(1)
 
+    if kind == 'binary_ref':
+        # The live reference points to binary content — don't dump it
+        data = content  # content is the full JSON dict here
+        url = data.get('source_url', '')
+        ct  = data.get('content_type', 'binary')
+        sz  = data.get('content_length')
+        t.print()
+        print(f'  ↳ Live reference points to binary content ({ct})')
+        if sz:
+            print(f'    Size: {sz:,} bytes')
+        print(f'    URL:  {url}')
+        print(f'  Tip: download directly with  curl -Lo file "{url}"')
+        print(f'       or re-upload with        drp up "{url}" --remote')
+        return
+
     if kind == 'text':
         t.print()
         # Smart parse / field extraction

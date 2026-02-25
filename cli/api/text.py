@@ -93,6 +93,9 @@ def get_clipboard(host, session, key, timer=None, password=''):
             if timer:
                 timer.checkpoint('parse JSON')
             if data.get('kind') == 'text':
+                # Guard: server flagged this as binary live reference
+                if data.get('binary'):
+                    return 'binary_ref', data
                 return 'text', data.get('content', '')
             return None, None
 

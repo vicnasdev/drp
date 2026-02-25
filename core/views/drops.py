@@ -1009,7 +1009,24 @@ def _drop_response(request, drop):
                     r = _req.get(drop.source_url, timeout=15,
                                  headers={'User-Agent': 'drp/live-fetch'})
                     r.raise_for_status()
-                    live_content = r.text
+                    ct = r.headers.get('Content-Type', '')
+                    # Guard: if the remote resource is binary, don't dump
+                    # it through r.text — return the URL + metadata instead.
+                    _TEXT_TYPES = ('text/', 'application/json', 'application/xml',
+                                   'application/javascript', 'application/yaml',
+                                   'application/x-yaml', 'application/ld+json',
+                                   'application/graphql', 'application/toml')
+                    if not any(ct.startswith(t) for t in _TEXT_TYPES) and ct:
+                        data["source_url"] = drop.source_url
+                        data["content"] = drop.source_url
+                        data["content_type"] = ct
+                        data["binary"] = True
+                        cl = r.headers.get('Content-Length')
+                        if cl:
+                            data["content_length"] = int(cl)
+                        live_content = None
+                    else:
+                        live_content = r.text
                 except Exception as exc:
                     data["source_url"] = drop.source_url
                     data["fetch_error"] = str(exc)
