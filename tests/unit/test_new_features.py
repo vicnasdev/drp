@@ -334,10 +334,13 @@ class TestUploadFromUrlView:
         """Ensure DB is available."""
         pass
 
+    _user_counter = 0
+
     def _user(self, plan):
         from django.contrib.auth.models import User
         from core.models import Plan, UserProfile
-        u = User.objects.create_user(f'user_{plan}', password='pw')
+        TestUploadFromUrlView._user_counter += 1
+        u = User.objects.create_user(f'user_{plan}_{self._user_counter}', password='pw')
         UserProfile.objects.filter(user=u).update(plan=plan)
         u.refresh_from_db()
         return u
@@ -356,23 +359,24 @@ class TestUploadFromUrlView:
                       content_type='application/json')
         assert res.status_code == 401
 
-    def test_requires_paid_plan(self):
+    def test_requires_pro_plan(self):
         import json
         from django.test import Client
         from core.models import Plan
         c = Client()
-        u = self._user(Plan.FREE)
-        c.force_login(u)
-        res = c.post('/upload/from-url/', json.dumps({'url': 'https://example.com/f.pdf'}),
-                      content_type='application/json')
-        assert res.status_code == 403
+        for plan in (Plan.FREE, Plan.STARTER):
+            u = self._user(plan)
+            c.force_login(u)
+            res = c.post('/upload/from-url/', json.dumps({'url': 'https://example.com/f.pdf'}),
+                          content_type='application/json')
+            assert res.status_code == 403, f'{plan} should be blocked'
 
     def test_rejects_invalid_url(self):
         import json
         from django.test import Client
         from core.models import Plan
         c = Client()
-        u = self._user(Plan.STARTER)
+        u = self._user(Plan.PRO)
         c.force_login(u)
         res = c.post('/upload/from-url/', json.dumps({'url': 'ftp://bad'}),
                       content_type='application/json')
@@ -383,7 +387,7 @@ class TestUploadFromUrlView:
         from django.test import Client
         from core.models import Plan
         c = Client()
-        u = self._user(Plan.STARTER)
+        u = self._user(Plan.PRO)
         c.force_login(u)
         res = c.post('/upload/from-url/', json.dumps({'url': ''}),
                       content_type='application/json')
@@ -411,7 +415,7 @@ class TestUploadFromUrlView:
         mock_get.return_value = mock_resp
 
         c = Client()
-        u = self._user(Plan.STARTER)
+        u = self._user(Plan.PRO)
         c.force_login(u)
         res = c.post('/upload/from-url/',
                       json.dumps({'url': 'https://example.com/report.pdf', 'key': 'remote-test'}),
@@ -432,7 +436,7 @@ class TestUploadFromUrlView:
         from django.test import Client
         from core.models import Plan
         c = Client()
-        u = self._user(Plan.STARTER)
+        u = self._user(Plan.PRO)
         c.force_login(u)
         res = c.post('/upload/from-url/',
                       json.dumps({'url': 'http://localhost/secret'}),

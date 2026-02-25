@@ -226,7 +226,7 @@ def _configure_subparsers(sub):
     p_up.add_argument('--tag', default=None, metavar='TAGS',
                       help='Comma-separated tags for public discovery')
     p_up.add_argument('--remote', action='store_true', default=False,
-                      help='Upload URL server-side (server fetches the file; paid plans)')
+                      help='Upload URL server-side (server fetches the file; Pro plan)')
 
     p_get = sub._name_parser_map['get']
     p_get.add_argument('-f', '--file', action='store_true')

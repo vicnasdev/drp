@@ -697,9 +697,9 @@ def upload_from_url(request):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "Login required."}, status=401)
 
-    if not is_paid_user(request.user):
+    if user_plan(request.user) != Plan.PRO:
         return JsonResponse(
-            {"error": "Remote URL upload requires a Starter or Pro plan."},
+            {"error": "Remote URL upload requires a Pro plan."},
             status=403,
         )
 
