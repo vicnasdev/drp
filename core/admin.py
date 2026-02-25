@@ -247,7 +247,7 @@ class PlanLimitAdmin(admin.ModelAdmin):
         'plan', 'label', 'price_monthly',
         'max_file_mb', 'max_text_kb', 'storage_gb',
         'max_collections', 'max_groups', 'webhooks', 'api_keys', 'scheduled_drops',
-        'password_protection',
+        'password_protection', 'remote_upload',
     )
     ordering = ('price_monthly',)
 

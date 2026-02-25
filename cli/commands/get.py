@@ -11,7 +11,7 @@ drp get — fetch a clipboard drop, download a file, or fetch an external URL.
   drp get <key> --parse          auto-detect format and print parsed output
   drp get <key> --field a.b      extract a nested field (dot-separated path)
   drp get <key>.field            shorthand for --field
-  drp get https://api.example.com/data  fetch external URL (paid plans)
+  drp get https://api.example.com/data  fetch external URL
 """
 
 import sys
@@ -28,7 +28,7 @@ def cmd_get(args):
 
     key = args.key
 
-    # ── External URL fetch (paid feature) ─────────────────────────────────
+    # ── External URL fetch ─────────────────────────────────────────────────
     if key.startswith('http://') or key.startswith('https://'):
         cfg, host, session = load_context()
         t.instrument(session)
@@ -235,7 +235,7 @@ def _is_binary_content(content_type: str) -> bool:
 
 
 def _get_url(args, url, host, session, t):
-    """Fetch content from an external URL (paid feature).
+    """Fetch content from an external URL.
 
     Text responses (JSON, HTML, plain text) are printed to stdout.
     Binary responses (PDFs, images, archives) are saved to a file, with a
@@ -251,26 +251,6 @@ def _get_url(args, url, host, session, t):
     from cli.spinner import Spinner
     from cli.progress import ProgressBar
     import requests as _req
-
-    # Plan gate — URL fetch requires starter+
-    try:
-        with Spinner('checking plan'):
-            res = session.get(
-                f'{host}/auth/account/',
-                headers={'Accept': 'application/json'},
-                timeout=10,
-            )
-        if res.ok:
-            plan = res.json().get('plan', 'free')
-            if plan not in ('starter', 'pro'):
-                print('  ✗ URL fetch requires a Starter or Pro plan.')
-                print('    Upgrade at https://drp.fyi/help/plans/')
-                sys.exit(1)
-        elif res.status_code in (401, 403):
-            print('  ✗ Login required for URL fetch. Run: drp login')
-            sys.exit(1)
-    except Exception:
-        pass  # Network issue — optimistic allow
 
     t.checkpoint('plan check')
 

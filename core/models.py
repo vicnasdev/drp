@@ -37,7 +37,8 @@ class Plan:
             "scheduled_drops":            0,
             "helpbot_hourly":             0,
             "smart_parse":                True,
-            "api_fetch":                  False,
+            "api_fetch":                  True,
+            "remote_upload":              False,
         },
         FREE: {
             "label":                      "Free",
@@ -58,7 +59,8 @@ class Plan:
             "scheduled_drops":            0,
             "helpbot_hourly":             5,
             "smart_parse":                True,
-            "api_fetch":                  False,
+            "api_fetch":                  True,
+            "remote_upload":              False,
         },
         STARTER: {
             "label":                      "Starter",
@@ -80,6 +82,7 @@ class Plan:
             "helpbot_hourly":             25,
             "smart_parse":                True,
             "api_fetch":                  True,
+            "remote_upload":              False,
         },
         PRO: {
             "label":                      "Pro",
@@ -101,6 +104,7 @@ class Plan:
             "helpbot_hourly":             50,
             "smart_parse":                True,
             "api_fetch":                  True,
+            "remote_upload":              True,
         },
     }
 
@@ -151,6 +155,8 @@ class PlanLimit(models.Model):
                                      help_text="Allow smart content parsing (--parse, --field).")
     api_fetch                  = models.BooleanField(default=False,
                                      help_text="Allow fetching external URLs via drp get.")
+    remote_upload              = models.BooleanField(default=False,
+                                     help_text="Allow server-side URL upload (drp up --remote).")
 
     class Meta:
         ordering = ["price_monthly"]
@@ -179,6 +185,7 @@ class PlanLimit(models.Model):
             "helpbot_hourly":              self.helpbot_hourly,
             "smart_parse":                 self.smart_parse,
             "api_fetch":                   self.api_fetch,
+            "remote_upload":               self.remote_upload,
         }
 
     @classmethod

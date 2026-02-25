@@ -1502,12 +1502,19 @@ class TestPlanLimitsSmartParse:
         for plan_key in (Plan.ANON, Plan.FREE, Plan.STARTER, Plan.PRO):
             assert 'smart_parse' in Plan.LIMITS[plan_key]
 
-    def test_api_fetch_only_paid(self):
+    def test_api_fetch_all_plans(self):
+        """api_fetch is True for all plans — runs on client, no server cost."""
         from core.models import Plan
-        assert Plan.LIMITS[Plan.ANON]['api_fetch'] is False
-        assert Plan.LIMITS[Plan.FREE]['api_fetch'] is False
-        assert Plan.LIMITS[Plan.STARTER]['api_fetch'] is True
-        assert Plan.LIMITS[Plan.PRO]['api_fetch'] is True
+        for plan_key in (Plan.ANON, Plan.FREE, Plan.STARTER, Plan.PRO):
+            assert Plan.LIMITS[plan_key]['api_fetch'] is True
+
+    def test_remote_upload_only_pro(self):
+        """remote_upload defaults to True only for Pro."""
+        from core.models import Plan
+        assert Plan.LIMITS[Plan.ANON]['remote_upload'] is False
+        assert Plan.LIMITS[Plan.FREE]['remote_upload'] is False
+        assert Plan.LIMITS[Plan.STARTER]['remote_upload'] is False
+        assert Plan.LIMITS[Plan.PRO]['remote_upload'] is True
 
     def test_smart_parse_all_plans(self):
         from core.models import Plan

@@ -359,7 +359,8 @@ class TestUploadFromUrlView:
                       content_type='application/json')
         assert res.status_code == 401
 
-    def test_requires_pro_plan(self):
+    def test_requires_remote_upload_permission(self):
+        """Plans without remote_upload=True get 403."""
         import json
         from django.test import Client
         from core.models import Plan
