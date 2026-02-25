@@ -194,6 +194,43 @@ textarea:disabled { opacity: .4; }
 }
 .ad-middle-wrapper > * { grid-column: 1; }
 
+/* ── GitHub star banner ── */
+.gh-star {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: .3rem .5rem .3rem .8rem;
+  margin-bottom: 1rem;
+  font-size: .82rem;
+  transition: opacity .2s, border-color .2s;
+}
+.gh-star:hover { border-color: var(--muted); }
+.gh-star a {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color .15s;
+}
+.gh-star a:hover { color: #e8b84b; text-decoration: none; }
+.gh-star a svg { flex-shrink: 0; }
+.gh-star-x {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 .2rem;
+  opacity: .5;
+  transition: opacity .15s;
+}
+.gh-star-x:hover { opacity: 1; }
+
 /* ── Responsive ── */
 @media (max-width: 700px) {
   .home-wrap { grid-template-columns: 1fr; }

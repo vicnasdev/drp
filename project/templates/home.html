@@ -11,6 +11,14 @@
     <h1>drop it.</h1>
     <p class="tagline">paste text or drop a file. get a key. share the link.</p>
 
+    <div class="gh-star" id="ghStar" style="display:none">
+      <a href="https://github.com/vicnasdev/drp" target="_blank" rel="noopener" id="ghStarLink">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25z"/></svg>
+        star on github
+      </a>
+      <button class="gh-star-x" id="ghStarX" title="Dismiss">&times;</button>
+    </div>
+
     {% if claimed %}
     <div class="claim-banner">
       ✓ {{ claimed }} drop{{ claimed|pluralize }} claimed and added to your account.
@@ -605,5 +613,19 @@ async function doSave(type) {
 
   xhr.send(fd);
 }
+
+/* ── GitHub star banner (dismiss) ── */
+(function() {
+  var K = 'drp_gh_starred', el = document.getElementById('ghStar');
+  if (!el) return;
+  if (localStorage.getItem(K)) { el.remove(); return; }
+  el.style.display = 'inline-flex';
+  document.getElementById('ghStarLink').addEventListener('click', function() {
+    localStorage.setItem(K, '1');
+  });
+  document.getElementById('ghStarX').addEventListener('click', function() {
+    localStorage.setItem(K, '1'); el.remove();
+  });
+})();
 </script>
 {% endblock %}
