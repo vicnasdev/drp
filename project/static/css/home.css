@@ -194,12 +194,6 @@ textarea:disabled { opacity: .4; }
 }
 .ad-middle-wrapper > * { grid-column: 1; }
 
-#saveBtn {
-  display: block;
-  margin-left: auto;
-  margin-right: auto;
-}
-
 /* ── Responsive ── */
 @media (max-width: 700px) {
   .home-wrap { grid-template-columns: 1fr; }

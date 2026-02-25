@@ -82,10 +82,6 @@
         <input type="text" id="getKeyInput" placeholder="enter key…"
                autocomplete="off" spellcheck="false"/>
       </div>
-      <div style="display:flex;gap:.5rem;margin-bottom:.8rem">
-        <button class="btn-sm" id="getBtn">get clip</button>
-        <button class="btn-sm" id="getFileBtn">get file</button>
-      </div>
       <p id="getError" class="error hidden"></p>
 
       <!-- Text drop result -->
@@ -211,10 +207,13 @@
   {% include 'ads/middle.html' %}
 </div>
 
-<!-- Save button and results -->
+<!-- Action buttons and results -->
 <div class="ad-middle-wrapper" style="margin-top:1.5rem">
   <div style="text-align:center">
-    <button class="btn" id="saveBtn">save & get link</button>
+    <div style="display:flex;gap:.5rem;justify-content:center">
+      <button class="btn" id="clipActionBtn">Get clip</button>
+      <button class="btn" id="fileActionBtn">Get file</button>
+    </div>
     <p id="errorMsg" class="error hidden"></p>
 
     <div id="resultBox" class="result-box hidden">
@@ -263,7 +262,10 @@ const IS_PAID   = {{ user.is_authenticated|yesno:"true,false" }}
                   && {{ user.profile.is_paid|default:"false"|yesno:"true,false" }};
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
+let activeTab = 'save';
+
 function switchTab(tab) {
+  activeTab = tab;
   document.getElementById('panelSave').classList.toggle('hidden', tab !== 'save');
   document.getElementById('panelGet').classList.toggle('hidden', tab !== 'get');
   document.getElementById('tabSave').classList.toggle('active', tab === 'save');
@@ -292,7 +294,7 @@ async function doGet(isFile) {
   _currentGetKey = key;
   const url = isFile ? `/f/${key}/` : `/${key}/`;
 
-  const btn = isFile ? document.getElementById('getFileBtn') : document.getElementById('getBtn');
+  const btn = isFile ? document.getElementById('fileActionBtn') : document.getElementById('clipActionBtn');
   btn.disabled = true;
   const orig = btn.textContent;
   btn.textContent = '…';
@@ -339,8 +341,14 @@ function copyGetContent() {
   showToast('copied!');
 }
 
-document.getElementById('getBtn').addEventListener('click', () => doGet(false));
-document.getElementById('getFileBtn').addEventListener('click', () => doGet(true));
+document.getElementById('clipActionBtn').addEventListener('click', () => {
+  if (activeTab === 'get') doGet(false);
+  else doSave('clip');
+});
+document.getElementById('fileActionBtn').addEventListener('click', () => {
+  if (activeTab === 'get') doGet(true);
+  else doSave('file');
+});
 document.getElementById('getKeyInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') doGet(false);
 });
@@ -503,28 +511,36 @@ function updateProgress(loaded, total) {
 }
 
 // ── Save ──────────────────────────────────────────────────────────────────────
-document.getElementById('saveBtn').addEventListener('click', async () => {
+async function doSave(type) {
   const key    = keyInput.value.trim();
   const text   = textInput.value.trim();
   const errEl  = document.getElementById('errorMsg');
-  const saveBtn = document.getElementById('saveBtn');
+  const btn    = type === 'file'
+    ? document.getElementById('fileActionBtn')
+    : document.getElementById('clipActionBtn');
+  const origLabel = btn.textContent;
   errEl.classList.add('hidden');
 
-  if (!text && !selectedFile) {
-    errEl.textContent = 'Add some text or a file first.';
+  if (type === 'clip' && !text) {
+    errEl.textContent = 'Add some text first.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  if (type === 'file' && !selectedFile) {
+    errEl.textContent = 'Drop or select a file first.';
     errEl.classList.remove('hidden');
     return;
   }
 
-  saveBtn.disabled    = true;
-  saveBtn.textContent = 'saving…';
+  btn.disabled    = true;
+  btn.textContent = 'saving…';
 
   const fd = new FormData();
   if (key) fd.append('key', key);
   const expiryEl = document.getElementById('expiryDays');
   if (expiryEl) fd.append('expiry_days', expiryEl.value);
 
-  if (selectedFile) {
+  if (type === 'file') {
     fd.append('file', selectedFile);
     showProgress();
   } else {
@@ -562,20 +578,20 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
         keyInput.value     = '';
         keyStatus.textContent = '';
         clearFile();
-        saveBtn.disabled    = false;
-        saveBtn.textContent = 'save & get link';
+        btn.disabled    = false;
+        btn.textContent = origLabel;
         showToast('drop created!');
       } else {
         errEl.textContent = data.error || 'Something went wrong.';
         errEl.classList.remove('hidden');
-        saveBtn.disabled    = false;
-        saveBtn.textContent = 'save & get link';
+        btn.disabled    = false;
+        btn.textContent = origLabel;
       }
     } catch {
       errEl.textContent = 'Unexpected error.';
       errEl.classList.remove('hidden');
-      saveBtn.disabled    = false;
-      saveBtn.textContent = 'save & get link';
+      btn.disabled    = false;
+      btn.textContent = origLabel;
     }
   });
 
@@ -583,11 +599,11 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     hideProgress();
     errEl.textContent = 'Network error.';
     errEl.classList.remove('hidden');
-    saveBtn.disabled    = false;
-    saveBtn.textContent = 'save & get link';
+    btn.disabled    = false;
+    btn.textContent = origLabel;
   });
 
   xhr.send(fd);
-});
+}
 </script>
 {% endblock %}
