@@ -399,6 +399,11 @@ def main():
     if args.command is None:
         _print_colored_help()
         return
+
+    # Fire-and-forget background version check (never blocks the command)
+    from cli.version_check import start_check, show_notice
+    checker = start_check()
+
     if args.command in _HANDLERS:
         try:
             _HANDLERS[args.command](args)
@@ -414,6 +419,9 @@ def main():
             sys.exit(1)
     else:
         parser.print_help()
+
+    # Show upgrade notice (if the thread finished and a newer version exists)
+    show_notice(checker)
 
 
 if __name__ == '__main__':

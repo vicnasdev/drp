@@ -486,3 +486,197 @@ class TestRemoteFlag:
         parser = build_parser()
         args = parser.parse_args(['up', 'https://example.com/file.pdf'])
         assert args.remote is False
+
+
+# ── Version check ─────────────────────────────────────────────────────────────
+
+class TestParseVersion:
+    def _f(self, v):
+        from cli.version_check import _parse_version
+        return _parse_version(v)
+
+    def test_simple(self):
+        assert self._f('1.2.3') == (1, 2, 3)
+
+    def test_two_part(self):
+        assert self._f('0.3') == (0, 3)
+
+    def test_single(self):
+        assert self._f('5') == (5,)
+
+    def test_invalid(self):
+        assert self._f('abc') == (0,)
+
+    def test_none(self):
+        assert self._f(None) == (0,)
+
+
+class TestIsNewer:
+    def _f(self, latest, current):
+        from cli.version_check import is_newer
+        return is_newer(latest, current)
+
+    def test_newer_patch(self):
+        assert self._f('1.0.2', '1.0.1') is True
+
+    def test_newer_minor(self):
+        assert self._f('1.1.0', '1.0.9') is True
+
+    def test_newer_major(self):
+        assert self._f('2.0.0', '1.9.9') is True
+
+    def test_same(self):
+        assert self._f('1.0.0', '1.0.0') is False
+
+    def test_older(self):
+        assert self._f('1.0.0', '1.0.1') is False
+
+    def test_two_vs_three(self):
+        assert self._f('0.4.0', '0.3') is True
+
+    def test_three_vs_two(self):
+        assert self._f('0.3', '0.3.1') is False
+
+
+class TestShouldCheck:
+    def test_no_cache(self):
+        from cli.version_check import _should_check
+        assert _should_check({}) is True
+
+    def test_recent(self):
+        import time
+        from cli.version_check import _should_check
+        assert _should_check({"last_checked": time.time() - 60}) is False
+
+    def test_stale(self):
+        import time
+        from cli.version_check import _should_check, CHECK_INTERVAL_HOURS
+        stale_time = time.time() - (CHECK_INTERVAL_HOURS * 3600 + 1)
+        assert _should_check({"last_checked": stale_time}) is True
+
+
+class TestCacheReadWrite:
+    def test_round_trip(self, tmp_path):
+        from cli import version_check
+        orig_file = version_check.CACHE_FILE
+        try:
+            version_check.CACHE_FILE = tmp_path / "vc.json"
+            version_check._write_cache("9.8.7")
+            data = version_check._read_cache()
+            assert data["latest_version"] == "9.8.7"
+            assert "last_checked" in data
+        finally:
+            version_check.CACHE_FILE = orig_file
+
+    def test_read_missing(self, tmp_path):
+        from cli import version_check
+        orig_file = version_check.CACHE_FILE
+        try:
+            version_check.CACHE_FILE = tmp_path / "nonexistent.json"
+            assert version_check._read_cache() == {}
+        finally:
+            version_check.CACHE_FILE = orig_file
+
+
+class TestFetchLatest:
+    @patch('requests.get')
+    def test_success(self, mock_get):
+        from cli.version_check import _fetch_latest
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.json.return_value = {"info": {"version": "1.2.3"}}
+        mock_get.return_value = mock_resp
+        assert _fetch_latest() == "1.2.3"
+
+    @patch('requests.get', side_effect=Exception("network down"))
+    def test_network_error(self, mock_get):
+        from cli.version_check import _fetch_latest
+        assert _fetch_latest() is None
+
+    @patch('requests.get')
+    def test_bad_response(self, mock_get):
+        from cli.version_check import _fetch_latest
+        mock_resp = MagicMock()
+        mock_resp.ok = False
+        mock_get.return_value = mock_resp
+        assert _fetch_latest() is None
+
+
+class TestVersionChecker:
+    @patch('cli.version_check._fetch_latest', return_value='9.9.9')
+    @patch('cli.version_check._read_cache', return_value={})
+    def test_updates_latest(self, mock_cache, mock_fetch, tmp_path):
+        from cli import version_check
+        orig_file = version_check.CACHE_FILE
+        try:
+            version_check.CACHE_FILE = tmp_path / "vc.json"
+            checker = version_check.VersionChecker()
+            checker._run()
+            assert checker.latest == '9.9.9'
+        finally:
+            version_check.CACHE_FILE = orig_file
+
+    @patch('cli.version_check._fetch_latest')
+    def test_uses_cache_when_recent(self, mock_fetch):
+        import time
+        from cli.version_check import VersionChecker
+        with patch('cli.version_check._read_cache', return_value={
+            "last_checked": time.time(),
+            "latest_version": "2.0.0",
+        }):
+            checker = VersionChecker()
+            checker._run()
+            assert checker.latest == "2.0.0"
+            mock_fetch.assert_not_called()
+
+
+class TestStartCheck:
+    def test_skipped_when_env_set(self):
+        import os
+        from cli.version_check import start_check
+        os.environ['DRP_NO_UPDATE_CHECK'] = '1'
+        try:
+            checker = start_check()
+            assert checker._thread is None
+        finally:
+            del os.environ['DRP_NO_UPDATE_CHECK']
+
+    def test_skipped_when_ci(self):
+        import os
+        from cli.version_check import start_check
+        os.environ['CI'] = 'true'
+        try:
+            checker = start_check()
+            assert checker._thread is None
+        finally:
+            del os.environ['CI']
+
+
+class TestShowNotice:
+    @patch('cli.version_check.__version__', '0.1.0')
+    def test_prints_when_newer(self, capsys):
+        from cli.version_check import VersionChecker, show_notice
+        checker = VersionChecker()
+        checker.latest = '9.0.0'
+        show_notice(checker)
+        out = capsys.readouterr().out
+        assert 'update available' in out
+        assert '9.0.0' in out
+        assert 'pipx upgrade' in out
+
+    @patch('cli.version_check.__version__', '9.0.0')
+    def test_silent_when_current(self, capsys):
+        from cli.version_check import VersionChecker, show_notice
+        checker = VersionChecker()
+        checker.latest = '9.0.0'
+        show_notice(checker)
+        out = capsys.readouterr().out
+        assert out == ''
+
+    def test_silent_when_no_data(self, capsys):
+        from cli.version_check import VersionChecker, show_notice
+        checker = VersionChecker()
+        checker.latest = None
+        show_notice(checker)
+        out = capsys.readouterr().out
+        assert out == ''
