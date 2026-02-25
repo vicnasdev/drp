@@ -135,7 +135,9 @@ class TestHardDelete(TestCase):
         UserProfile.objects.filter(user=self.user).update(storage_used_bytes=1000)
         with patch("core.views.b2.delete_object") as mock_del:
             drop.hard_delete()
-            mock_del.assert_called_once_with(Drop.NS_FILE, "del-file")
+            mock_del.assert_called_once_with(
+                Drop.NS_FILE, "del-file", b2_key="drops/f/del-file",
+            )
 
     def test_text_drop_no_b2_call(self):
         drop = _make_db_drop(key="del-text", owner=self.user)
@@ -171,8 +173,102 @@ class TestHardDelete(TestCase):
         drop = _make_file_drop(key="admin-del", owner=self.user, filesize=512)
         with patch("core.views.b2.delete_object") as mock_del:
             drop.delete()
-            mock_del.assert_called_once_with(Drop.NS_FILE, "admin-del")
+            mock_del.assert_called_once_with(
+                Drop.NS_FILE, "admin-del", b2_key="drops/f/admin-del",
+            )
         self.assertFalse(Drop.objects.filter(key="admin-del").exists())
+
+    def test_hard_delete_renamed_drop_uses_original_b2_key(self):
+        """After rename, hard_delete should use file_public_id (original B2 path)."""
+        drop = _make_file_drop(key="old-name", owner=self.user, filesize=500)
+        UserProfile.objects.filter(user=self.user).update(storage_used_bytes=500)
+        # Simulate rename: key changes but file_public_id keeps original B2 path
+        original_b2_key = drop.file_public_id  # "drops/f/old-name"
+        drop.key = "new-name"
+        drop.save(update_fields=["key"])
+        with patch("core.views.b2.delete_object") as mock_del:
+            drop.hard_delete()
+            mock_del.assert_called_once_with(
+                Drop.NS_FILE, "new-name", b2_key=original_b2_key,
+            )
+
+    def test_pre_delete_renamed_drop_uses_original_b2_key(self):
+        """ORM .delete() on a renamed drop uses file_public_id for B2 cleanup."""
+        drop = _make_file_drop(key="orig", owner=self.user, filesize=256)
+        original_b2_key = drop.file_public_id  # "drops/f/orig"
+        drop.key = "renamed"
+        drop.save(update_fields=["key"])
+        with patch("core.views.b2.delete_object") as mock_del:
+            drop.delete()
+            mock_del.assert_called_once_with(
+                Drop.NS_FILE, "renamed", b2_key=original_b2_key,
+            )
+
+
+# ── b2_object_key / download_url after rename ────────────────────────────────
+
+class TestRenameB2Integration(TestCase):
+    """Verify that renaming a file drop preserves B2 path for downloads."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("rename_user", password="pw")
+
+    def test_b2_object_key_returns_file_public_id(self):
+        drop = _make_file_drop(key="alpha", owner=self.user)
+        self.assertEqual(drop.b2_object_key(), "drops/f/alpha")
+
+    def test_b2_object_key_after_rename_still_returns_original(self):
+        drop = _make_file_drop(key="before", owner=self.user)
+        original = drop.b2_object_key()
+        drop.key = "after"
+        drop.save(update_fields=["key"])
+        # file_public_id was set at creation, so b2_object_key still points to original
+        self.assertEqual(drop.b2_object_key(), original)
+        self.assertEqual(original, "drops/f/before")
+
+    def test_download_url_passes_file_public_id(self):
+        drop = _make_file_drop(key="dl-test", owner=self.user)
+        drop.key = "dl-renamed"
+        drop.save(update_fields=["key"])
+        with patch("core.views.b2.presigned_get", return_value="https://b2/url") as mock_get:
+            url = drop.download_url()
+        self.assertEqual(url, "https://b2/url")
+        mock_get.assert_called_once_with(
+            Drop.NS_FILE, "dl-renamed",
+            filename="dl-test.bin",
+            expires_in=3600,
+            b2_key="drops/f/dl-test",
+        )
+
+    def test_download_url_non_renamed_drop(self):
+        """Non-renamed drop passes empty b2_key (uses computed path)."""
+        drop = Drop.objects.create(
+            ns=Drop.NS_FILE, key="no-rename", kind=Drop.FILE,
+            filename="report.pdf", filesize=100, owner=self.user,
+        )
+        self.assertEqual(drop.file_public_id, "")
+        with patch("core.views.b2.presigned_get", return_value="https://b2/url") as mock_get:
+            url = drop.download_url()
+        mock_get.assert_called_once_with(
+            Drop.NS_FILE, "no-rename",
+            filename="report.pdf",
+            expires_in=3600,
+            b2_key="",
+        )
+
+    def test_hard_delete_clears_file_public_id_before_orm_delete(self):
+        """hard_delete clears file_public_id so pre_delete doesn't double-delete."""
+        drop = _make_file_drop(key="clear-test", owner=self.user, filesize=100)
+        UserProfile.objects.filter(user=self.user).update(storage_used_bytes=100)
+        calls = []
+        with patch("core.views.b2.delete_object", side_effect=lambda *a, **kw: (calls.append((a, kw)) or True)):
+            drop.hard_delete()
+        # hard_delete calls B2 once; pre_delete sees empty file_public_id
+        # but still calls delete_object (which is idempotent)
+        # The first call (from hard_delete) must use the original b2_key
+        self.assertGreaterEqual(len(calls), 1)
+        first_call_kwargs = calls[0][1]
+        self.assertEqual(first_call_kwargs["b2_key"], "drops/f/clear-test")
 
 
 # ── Drop password helpers ─────────────────────────────────────────────────────

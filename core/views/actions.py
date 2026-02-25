@@ -57,13 +57,18 @@ def rename_drop(request, ns, key):
     if Drop.objects.filter(ns=ns, key=new_key).exists():
         return JsonResponse({'error': 'Key already taken.'}, status=409)
 
-    # Bust presigned cache for the old key before renaming
+    # For file drops, preserve the B2 object key so downloads still work
     if drop.kind == Drop.FILE:
         from core.views.b2 import invalidate_presigned
         invalidate_presigned(ns, key, filename=drop.filename or "")
+        if not drop.file_public_id:
+            drop.file_public_id = drop.b2_object_key()
 
     drop.key = new_key
-    drop.save(update_fields=['key'])
+    fields = ['key']
+    if drop.kind == Drop.FILE:
+        fields.append('file_public_id')
+    drop.save(update_fields=fields)
 
     prefix = '' if ns == Drop.NS_CLIPBOARD else 'f/'
     return JsonResponse({'key': new_key, 'url': f'/{prefix}{new_key}/'})

@@ -148,19 +148,22 @@ def object_size(ns: str, drop_key: str) -> int:
         return 0
 
 
-def delete_object(ns: str, drop_key: str) -> bool:
+def delete_object(ns: str, drop_key: str, b2_key: str = "") -> bool:
+    """Delete a B2 object. If b2_key is provided, use it directly instead of
+    computing from ns/drop_key."""
     import logging
     logger = logging.getLogger(__name__)
     client, bucket = _b2()
+    key = b2_key if b2_key else object_key(ns, drop_key)
     try:
-        client.delete_object(Bucket=bucket, Key=object_key(ns, drop_key))
+        client.delete_object(Bucket=bucket, Key=key)
         return True
     except ClientError as e:
         code = e.response["Error"]["Code"]
         if code in ("404", "NoSuchKey"):
             return True
-        logger.error("B2 delete failed for %s/%s: %s", ns, drop_key, e)
+        logger.error("B2 delete failed for %s: %s", key, e)
         return False
     except Exception as e:
-        logger.error("B2 delete error for %s/%s: %s", ns, drop_key, e)
+        logger.error("B2 delete error for %s: %s", key, e)
         return False

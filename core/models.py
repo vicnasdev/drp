@@ -503,18 +503,19 @@ class Drop(models.Model):
         so cleanup can retry on the next run.
         The pre_delete signal is a safety net for admin / queryset deletes.
         """
-        if self.ns == self.NS_FILE and self.file_public_id:
+        if self.ns == self.NS_FILE:
             from core.views.b2 import delete_object
             try:
-                if not delete_object(self.ns, self.key):
+                if not delete_object(self.ns, self.key,
+                                     b2_key=self.b2_object_key()):
                     return False
             except Exception:
                 logger.error(
                     "hard_delete: B2 error for %s/%s", self.ns, self.key,
                 )
                 return False
-            # Clear so pre_delete signal won't attempt a second B2 call.
-            self.file_public_id = ""
+            # Flag so pre_delete signal won't attempt a second B2 call.
+            self._b2_cleaned = True
         self.delete()
         return True
 
@@ -539,7 +540,8 @@ class Drop(models.Model):
             raise ValueError("download_url() called on non-file drop")
         from core.views.b2 import presigned_get
         return presigned_get(self.ns, self.key, filename=self.filename,
-                     expires_in=expires_in)
+                     expires_in=expires_in,
+                     b2_key=self.file_public_id or "")
 
 
 # ── pre_delete signal — B2 object cleanup ─────────────────────────────────────
@@ -550,14 +552,17 @@ def delete_b2_object_on_delete(sender, instance, **kwargs):
 
     Runs on every deletion path: admin, hard_delete(), queryset.delete(), etc.
     """
-    if instance.ns == Drop.NS_FILE and instance.file_public_id:
+    if getattr(instance, '_b2_cleaned', False):
+        return
+    if instance.ns == Drop.NS_FILE:
         try:
             from core.views.b2 import delete_object
-            ok = delete_object(instance.ns, instance.key)
+            ok = delete_object(instance.ns, instance.key,
+                               b2_key=instance.b2_object_key())
             if not ok:
                 logger.error(
-                    "pre_delete: B2 delete failed for %s/%s",
-                    instance.ns, instance.key,
+                    "pre_delete: B2 delete failed for %s/%s (b2_key=%s)",
+                    instance.ns, instance.key, instance.b2_object_key(),
                 )
         except Exception as e:
             logger.error(

@@ -270,3 +270,52 @@ def _handle_http_error(res, key):
         msg = f"Server returned {res.status_code}"
         err(f"{msg}.")
         _report("get", msg)
+
+
+# ── Remote URL upload ─────────────────────────────────────────────────────────
+
+def upload_from_url(host, session, url, key=None, expiry_days=None,
+                    password=None, is_test=False, schedule=None,
+                    webhook_url=None, notify=None, is_public=False, tags=None):
+    """
+    Ask the server to fetch a URL and store it as a file drop.
+    Returns (key, filename, filesize) on success, None on failure.
+    """
+    payload = {"url": url}
+    if key:
+        payload["key"] = key
+    if expiry_days:
+        payload["expiry_days"] = expiry_days
+    if password:
+        payload["password"] = password
+    if is_test:
+        payload["is_test"] = True
+    if schedule:
+        payload["schedule"] = schedule
+    if webhook_url:
+        payload["webhook_url"] = webhook_url
+    if notify:
+        payload["notify"] = notify
+    if is_public:
+        payload["is_public"] = True
+    if tags:
+        payload["tags"] = tags
+
+    try:
+        csrf = get_csrf(host, session)
+        res = session.post(
+            f"{host}/upload/from-url/",
+            json=payload,
+            headers={"X-CSRFToken": csrf},
+            timeout=120,  # server-side fetch can take a while
+        )
+        if not res.ok:
+            _handle_error(res, "Remote upload failed")
+            _report("up", f"upload_from_url HTTP {res.status_code}")
+            return None
+        _touch_session()
+        data = res.json()
+        return data.get("key"), data.get("filename", ""), data.get("filesize", 0)
+    except Exception as e:
+        err(f"Remote upload error: {e}")
+        raise

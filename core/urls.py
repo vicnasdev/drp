@@ -27,6 +27,7 @@ urlpatterns = [
     path("check-key/",          views.check_key,        name="check_key"),
     path("upload/prepare/",     views.upload_prepare,   name="upload_prepare"),
     path("upload/confirm/",     views.upload_confirm,   name="upload_confirm"),
+    path("upload/from-url/",    views.upload_from_url,  name="upload_from_url"),
     re_path(rf"^raw/{KEY}/$",   raw_view,               name="raw_view"),
     re_path(rf"^embed/{KEY}/$", embed_view,             name="embed_view"),
     path("explore/",            public_feed,            name="public_feed"),

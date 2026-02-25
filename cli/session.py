@@ -9,6 +9,8 @@ import json
 import sys
 import time
 
+import requests
+
 from cli import config, api
 
 SESSION_FILE = config.CONFIG_DIR / 'session.json'
@@ -18,6 +20,45 @@ SESSION_FILE = config.CONFIG_DIR / 'session.json'
 # command. When the session does expire, the next real API call returns 302
 # which auto_login already handles by re-prompting.
 SESSION_CACHE_SECS = 3600  # 1 hour — long enough to cover a full test suite run
+
+# ── Retry configuration ──────────────────────────────────────────────────────
+# Covers short server downtimes (deploys, Railway cold starts, transient 502s).
+# Total wall-time budget: ~120 s (1 + 2 + 4 + 8 + 16 + 32 + 57 ≈ 120).
+RETRY_BACKOFF = [1, 2, 4, 8, 16, 32, 57]  # seconds between retries
+RETRY_STATUS_CODES = frozenset({502, 503, 504})
+
+_RETRIABLE = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+)
+
+
+class ResilientSession(requests.Session):
+    """requests.Session with transparent retry for transient failures.
+
+    Retries on ConnectionError, Timeout, and 502/503/504 with exponential
+    backoff. Total retry budget is ~120 s. Non-retryable errors propagate
+    immediately.
+    """
+
+    def request(self, method, url, **kwargs):
+        last_exc = None
+        for attempt, wait in enumerate([0] + RETRY_BACKOFF):
+            if wait:
+                time.sleep(wait)
+            try:
+                resp = super().request(method, url, **kwargs)
+                if resp.status_code in RETRY_STATUS_CODES and attempt < len(RETRY_BACKOFF):
+                    last_exc = None
+                    continue
+                return resp
+            except _RETRIABLE as exc:
+                last_exc = exc
+                continue
+        # Exhausted retries — raise last exception or return last response
+        if last_exc is not None:
+            raise last_exc
+        return resp  # noqa: the variable is always bound here
 
 
 def load_session(session):

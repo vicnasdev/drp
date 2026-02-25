@@ -669,6 +669,231 @@ def upload_confirm(request):
     })
 
 
+# ── Server-side URL upload ────────────────────────────────────────────────────
+
+def upload_from_url(request):
+    """
+    POST /upload/from-url/
+    Server fetches a remote URL and streams the content to B2 on behalf of
+    the user.  Avoids the client downloading the file only to re-upload it.
+
+    Requires authentication + Starter/Pro plan.
+
+    Body (JSON):
+      url           — the remote URL to fetch (required)
+      key           — desired drop key (optional; auto-generated if blank)
+      password      — password-protect the drop (optional)
+      expiry_days   — custom expiry in days (optional)
+      is_test       — short-lived test drop (optional)
+      schedule      — delayed visibility, e.g. "2h" (optional, paid)
+      webhook_url   — POST on access (optional, paid)
+      notify        — email before expiry (optional, paid)
+      is_public     — appear in public feed (optional)
+      tags          — comma-separated tags (optional)
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required."}, status=405)
+
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Login required."}, status=401)
+
+    if not is_paid_user(request.user):
+        return JsonResponse(
+            {"error": "Remote URL upload requires a Starter or Pro plan."},
+            status=403,
+        )
+
+    import json
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"error": "Invalid JSON."}, status=400)
+
+    url = (data.get("url") or "").strip()
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
+        return JsonResponse({"error": "A valid http(s) URL is required."}, status=400)
+
+    # SSRF check — reuse webhook validator
+    ssrf_err = validate_webhook_url(url)
+    if ssrf_err:
+        return JsonResponse({"error": f"Blocked URL: {ssrf_err}"}, status=400)
+
+    ns  = "f"
+    key = (data.get("key") or "").strip() or gen_key(ns)
+
+    if key in _get_reserved_keys():
+        return JsonResponse({"error": f'"{key}" is a reserved key.'}, status=400)
+
+    if not is_valid_drop_key(key):
+        return JsonResponse({"error": 'Keys cannot start with "@".'}, status=400)
+
+    # ── Fetch the remote URL ──────────────────────────────────────────────
+    import requests as _req, io, os.path, mimetypes
+    from urllib.parse import urlparse
+
+    try:
+        r = _req.get(url, stream=True, timeout=60,
+                     headers={"User-Agent": "drp-server/1.0"},
+                     allow_redirects=True)
+        r.raise_for_status()
+    except _req.RequestException as e:
+        return JsonResponse({"error": f"Could not fetch URL: {e}"}, status=502)
+
+    content_type = r.headers.get("Content-Type", "application/octet-stream").split(";")[0].strip()
+    content_length = int(r.headers.get("Content-Length", 0))
+
+    # Infer filename
+    cd = r.headers.get("Content-Disposition", "")
+    filename = ""
+    if "filename=" in cd:
+        for part in cd.split(";"):
+            part = part.strip()
+            if part.startswith("filename="):
+                filename = part[9:].strip("\"'")
+                break
+    if not filename:
+        path = urlparse(url).path.rstrip("/")
+        filename = os.path.basename(path) if path else key
+
+    # Size check (if Content-Length reported)
+    limit = max_file_bytes(request.user)
+    if content_length and content_length > limit:
+        r.close()
+        limit_mb = Plan.get(user_plan(request.user), "max_file_mb")
+        return JsonResponse({"error": f"Remote file exceeds {limit_mb} MB limit."}, status=413)
+
+    # Stream into an in-memory buffer (capped at plan limit)
+    buf = io.BytesIO()
+    total = 0
+    try:
+        for chunk in r.iter_content(chunk_size=256 * 1024):
+            if chunk:
+                total += len(chunk)
+                if total > limit:
+                    r.close()
+                    buf.close()
+                    limit_mb = Plan.get(user_plan(request.user), "max_file_mb")
+                    return JsonResponse(
+                        {"error": f"Remote file exceeds {limit_mb} MB limit."},
+                        status=413,
+                    )
+                buf.write(chunk)
+    except _req.RequestException as e:
+        buf.close()
+        return JsonResponse({"error": f"Download interrupted: {e}"}, status=502)
+    finally:
+        r.close()
+
+    if not storage_ok(request.user, total):
+        buf.close()
+        return JsonResponse({"error": "Storage quota exceeded."}, status=507)
+
+    # ── Handle existing drop ──────────────────────────────────────────────
+    existing = Drop.objects.filter(ns=ns, key=key).first()
+    if existing and existing.is_expired():
+        existing.hard_delete()
+        existing = None
+
+    if existing and not existing.can_edit(request.user):
+        buf.close()
+        if existing.is_creation_locked():
+            return JsonResponse(
+                {"error": "This drop is protected for 24 hours after creation."},
+                status=403,
+            )
+        return JsonResponse({"error": "This drop is locked to its owner."}, status=403)
+
+    # ── Upload to B2 ─────────────────────────────────────────────────────
+    buf.seek(0)
+    upload_to_b2(buf, ns, key, content_type)
+    buf.close()
+
+    paid = is_paid_user(request.user)
+
+    password     = (data.get("password") or "").strip()
+    is_test      = bool(data.get("is_test", False))
+    webhook_url  = (data.get("webhook_url") or "").strip()
+    schedule     = (data.get("schedule") or "").strip()
+    notify       = (data.get("notify") or "").strip()
+    is_public    = bool(data.get("is_public", False))
+    tags         = (data.get("tags") or "").strip()
+
+    if webhook_url:
+        wh_error = validate_webhook_url(webhook_url)
+        if wh_error:
+            return JsonResponse({"error": f"Invalid webhook URL: {wh_error}"}, status=400)
+
+    if existing:
+        old_size = existing.filesize
+        existing.file_public_id = b2_object_key(ns, key)
+        existing.file_url       = ""
+        existing.filename       = filename
+        existing.filesize       = total
+        existing.content_type   = content_type
+        existing.save(update_fields=[
+            "file_public_id", "file_url", "filename", "filesize", "content_type",
+        ])
+        if existing.owner_id:
+            from django.db import models as db_models
+            from core.models import UserProfile
+            UserProfile.objects.filter(user_id=existing.owner_id).update(
+                storage_used_bytes=db_models.F("storage_used_bytes") + (total - old_size)
+            )
+        drop = existing
+    else:
+        expiry_days = data.get("expiry_days")
+        expires_at = None
+        if paid and expiry_days:
+            try:
+                days = min(int(expiry_days),
+                           Plan.get(user_plan(request.user), "max_expiry_days"))
+                expires_at = timezone.now() + timedelta(days=days)
+            except (ValueError, TypeError):
+                pass
+
+        if is_test and expires_at is None:
+            expires_at = timezone.now() + timedelta(hours=1)
+
+        visible_from = _parse_schedule(schedule) if paid and schedule else None
+        wh = webhook_url if paid and webhook_url else ""
+        notify_secs = _parse_notify(notify) if paid and notify else None
+
+        drop = Drop.objects.create(
+            ns=ns, key=key, kind=Drop.FILE,
+            file_public_id=b2_object_key(ns, key),
+            file_url="",
+            filename=filename,
+            filesize=total,
+            content_type=content_type,
+            owner=request.user,
+            locked=paid,
+            expires_at=expires_at,
+            max_lifetime_secs=max_lifetime_secs(request.user, ns),
+            burn=False,
+            visible_from=visible_from,
+            webhook_url=wh,
+            notify_before_secs=notify_secs,
+            is_public=is_public,
+            tags=tags if is_public else "",
+        )
+        add_storage(request.user, total)
+
+    if password and paid and drop.owner_id == request.user.pk:
+        drop.set_password(password)
+        drop.save(update_fields=["password_hash"])
+
+    return JsonResponse({
+        "key":               drop.key,
+        "ns":                drop.ns,
+        "kind":              drop.kind,
+        "url":               f"/f/{drop.key}/",
+        "filename":          drop.filename,
+        "filesize":          drop.filesize,
+        "new":               existing is None,
+        "password_protected": drop.is_password_protected,
+    })
+
+
 # ── Password gate helpers ─────────────────────────────────────────────────────
 
 def _password_required_response(request, drop):

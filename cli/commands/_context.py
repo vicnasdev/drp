@@ -11,7 +11,7 @@ import sys
 import requests
 
 from cli import config
-from cli.session import auto_login
+from cli.session import auto_login, ResilientSession
 
 
 def load_context(require_login=False):
@@ -30,7 +30,7 @@ def load_context(require_login=False):
         print('  ✗ Not configured. Run: drp setup')
         sys.exit(1)
 
-    session = requests.Session()
+    session = ResilientSession()
 
     api_key = os.environ.get("DRP_API_KEY", "").strip() or cfg.get("api_key", "")
     if api_key:

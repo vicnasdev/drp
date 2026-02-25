@@ -74,11 +74,14 @@ EXAMPLES = [
     ('drp up',      '"secret token" --burn',          'delete after first view'),
     ('drp up',      '"secret" --password pw',         'password-protect (paid)'),
     ('drp up',      'https://example.com/api',        'live API reference (fresh on each get)'),
+    ('drp up',      'https://example.com/f.pdf --remote', 'server-side upload (server fetches URL)'),
     ('drp get',     'hello',                          'print clipboard to stdout'),
     ('drp get',     'hello --parse',                  'auto-detect format (JSON, CSV, …)'),
     ('drp get',     'hello --field data.name',        'extract nested value from JSON/XML'),
     ('drp get',     'hello.data.name',                'shorthand for --field'),
     ('drp get',     'https://api.example.com/data',   'fetch external URL (paid plans)'),
+    ('drp get',     'https://example.com/report.pdf', 'download binary file from URL'),
+    ('drp get',     'https://example.com/f -o out.pdf', 'save URL content with custom name'),
     ('drp get',     'hello --url',                    'print URL without fetching'),
     ('drp get',     '-f q3 -o my-report.pdf',         'download file with custom name'),
     ('drp get',     'secret --password mypass',       'supply password for protected drop'),
@@ -222,6 +225,8 @@ def _configure_subparsers(sub):
                       help='Make drop visible in public feed')
     p_up.add_argument('--tag', default=None, metavar='TAGS',
                       help='Comma-separated tags for public discovery')
+    p_up.add_argument('--remote', action='store_true', default=False,
+                      help='Upload URL server-side (server fetches the file; paid plans)')
 
     p_get = sub._name_parser_map['get']
     p_get.add_argument('-f', '--file', action='store_true')

@@ -23,10 +23,14 @@ def _parse_key(raw, is_file=False, is_clip=False):
 
 
 def cmd_rm(args):
+    from cli.spinner import Spinner
     cfg, host, session = load_context()
     ns, key = _parse_key(args.key, args.file, getattr(args, 'clip', False))
 
-    if api.delete(host, session, key, ns=ns):
+    with Spinner('deleting'):
+        ok = api.delete(host, session, key, ns=ns)
+
+    if ok:
         prefix = 'f/' if ns == 'f' else ''
         print(f'  ✓ Deleted /{prefix}{key}/')
         config.remove_local_drop(key)
@@ -41,9 +45,12 @@ def cmd_rm(args):
 
 
 def cmd_mv(args):
+    from cli.spinner import Spinner
     cfg, host, session = load_context()
     ns, key = _parse_key(args.key, args.file, getattr(args, 'clip', False))
-    result = api.rename(host, session, key, args.new_key, ns=ns)
+
+    with Spinner('renaming'):
+        result = api.rename(host, session, key, args.new_key, ns=ns)
 
     if isinstance(result, str):
         # Success — result is the confirmed new key from the server
@@ -67,9 +74,12 @@ def cmd_mv(args):
 
 
 def cmd_renew(args):
+    from cli.spinner import Spinner
     cfg, host, session = load_context()
     ns, key = _parse_key(args.key, args.file, getattr(args, 'clip', False))
-    expires_at, renewals = api.renew(host, session, key, ns=ns)
+
+    with Spinner('renewing'):
+        expires_at, renewals = api.renew(host, session, key, ns=ns)
 
     if expires_at:
         prefix = 'f/' if ns == 'f' else ''

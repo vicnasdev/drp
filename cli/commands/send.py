@@ -13,16 +13,18 @@ from cli.crash_reporter import report_outcome
 
 
 def cmd_send(args):
+    from cli.spinner import Spinner
     cfg, host, session = load_context()
     ns = 'f' if getattr(args, 'file', False) and not getattr(args, 'clip', False) else 'c'
     prefix = 'f/' if ns == 'f' else ''
 
     try:
-        res = session.post(
-            f'{host}/{prefix}{args.key}/send/',
-            headers={'Accept': 'application/json'},
-            timeout=15,
-        )
+        with Spinner('generating token'):
+            res = session.post(
+                f'{host}/{prefix}{args.key}/send/',
+                headers={'Accept': 'application/json'},
+                timeout=15,
+            )
     except Exception as e:
         print(f'  ✗ Network error: {e}', file=sys.stderr)
         sys.exit(1)
@@ -46,14 +48,16 @@ def cmd_send(args):
 
 
 def cmd_claim(args):
+    from cli.spinner import Spinner
     cfg, host, session = load_context()
 
     try:
-        res = session.post(
-            f'{host}/claim/{args.token}/',
-            headers={'Accept': 'application/json'},
-            timeout=15,
-        )
+        with Spinner('claiming'):
+            res = session.post(
+                f'{host}/claim/{args.token}/',
+                headers={'Accept': 'application/json'},
+                timeout=15,
+            )
     except Exception as e:
         print(f'  ✗ Network error: {e}', file=sys.stderr)
         sys.exit(1)

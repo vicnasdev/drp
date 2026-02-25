@@ -5,6 +5,7 @@ drp up — upload text or a file.
   echo "hello" | drp up       clipboard from stdin
   drp up report.pdf           file upload
   drp up https://example.com/api     live API reference (fetched fresh on each get)
+  drp up https://example.com/f.pdf --remote  server-side upload (no local download)
   drp up report.pdf --expires 7d
   drp up "secret" --burn      delete after first view
   drp up "secret" --password pw  password-protect (paid accounts only)
@@ -131,9 +132,14 @@ def cmd_up(args):
         password = ''
 
     if not force_clip and (target.startswith('http://') or target.startswith('https://')):
-        _upload_url(host, session, target, key, cfg, args, password,
-                    schedule=schedule, webhook=webhook, notify=notify,
-                    is_public=is_public, tags=tags)
+        if getattr(args, 'remote', False):
+            _upload_url_remote(host, session, target, key, cfg, args, password,
+                               schedule=schedule, webhook=webhook, notify=notify,
+                               is_public=is_public, tags=tags)
+        else:
+            _upload_url(host, session, target, key, cfg, args, password,
+                        schedule=schedule, webhook=webhook, notify=notify,
+                        is_public=is_public, tags=tags)
         return
 
     elif not force_clip and (force_file or os.path.isfile(target)):
@@ -167,23 +173,25 @@ def _upload_url(host, session, url, key, cfg, args, password='',
                 is_public=False, tags=None):
     """Store a URL as a live API reference — drp get will fetch fresh each time."""
     from cli.format import dim
+    from cli.spinner import Spinner
 
     expiry_days = _parse_expires(getattr(args, 'expires', None))
     _test_mode = os.environ.get('DRP_TEST_MODE') == '1'
 
-    result_key = api.upload_text(
-        host, session, url, key=key,
-        expiry_days=expiry_days,
-        burn=False,
-        password=password or None,
-        is_test=_test_mode,
-        schedule=schedule,
-        webhook_url=webhook,
-        notify=notify,
-        is_public=is_public,
-        tags=tags,
-        source_url=url,
-    )
+    with Spinner('uploading'):
+        result_key = api.upload_text(
+            host, session, url, key=key,
+            expiry_days=expiry_days,
+            burn=False,
+            password=password or None,
+            is_test=_test_mode,
+            schedule=schedule,
+            webhook_url=webhook,
+            notify=notify,
+            is_public=is_public,
+            tags=tags,
+            source_url=url,
+        )
     if not result_key:
         report_outcome('up', 'upload_text returned None for URL reference')
         sys.exit(1)
@@ -193,6 +201,54 @@ def _upload_url(host, session, url, key, cfg, args, password='',
     print(f'  {dim("live reference")} → {url}')
     _try_copy(final_url)
     config.record_drop(result_key, 'text', ns='c', host=host)
+
+
+def _upload_url_remote(host, session, url, key, cfg, args, password='',
+                       schedule=None, webhook=None, notify=None,
+                       is_public=False, tags=None):
+    """Server-side URL upload — server fetches the file directly to storage."""
+    from cli.format import dim
+    from cli.spinner import Spinner
+
+    expiry_days = _parse_expires(getattr(args, 'expires', None))
+    _test_mode = os.environ.get('DRP_TEST_MODE') == '1'
+
+    with Spinner('server uploading'):
+        result = api.upload_from_url(
+            host, session, url, key=key,
+            expiry_days=expiry_days,
+            password=password or None,
+            is_test=_test_mode,
+            schedule=schedule,
+            webhook_url=webhook,
+            notify=notify,
+            is_public=is_public,
+            tags=tags,
+        )
+    if not result:
+        report_outcome('up', 'upload_from_url returned None')
+        sys.exit(1)
+
+    result_key, filename, filesize = result
+    final_url = f'{host}/f/{result_key}/'
+    print(final_url)
+    size_str = _fmt_size(filesize) if filesize else ''
+    desc = f'{dim("remote")} ← {url}'
+    if filename:
+        desc += f'  {dim(filename)}'
+    if size_str:
+        desc += f'  {dim(size_str)}'
+    print(f'  {desc}')
+    _try_copy(final_url)
+    config.record_drop(result_key, 'file', ns='f', filename=filename, host=host)
+
+
+def _fmt_size(n: int) -> str:
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if n < 1024:
+            return f'{n:.0f} {unit}' if unit == 'B' else f'{n:.1f} {unit}'
+        n /= 1024
+    return f'{n:.1f} TB'
 
 
 def _upload_file(host, session, path, key, cfg, args, password='',
@@ -223,21 +279,23 @@ def _upload_file(host, session, path, key, cfg, args, password='',
 def _upload_text(host, session, text, key, cfg, args, burn=False, password='',
                  schedule=None, webhook=None, notify=None,
                  is_public=False, tags=None):
+    from cli.spinner import Spinner
     expiry_days = _parse_expires(getattr(args, 'expires', None))
     _test_mode = os.environ.get('DRP_TEST_MODE') == '1'
 
-    result_key = api.upload_text(
-        host, session, text, key=key,
-        expiry_days=expiry_days,
-        burn=burn,
-        password=password or None,
-        is_test=_test_mode,
-        schedule=schedule,
-        webhook_url=webhook,
-        notify=notify,
-        is_public=is_public,
-        tags=tags,
-    )
+    with Spinner('uploading'):
+        result_key = api.upload_text(
+            host, session, text, key=key,
+            expiry_days=expiry_days,
+            burn=burn,
+            password=password or None,
+            is_test=_test_mode,
+            schedule=schedule,
+            webhook_url=webhook,
+            notify=notify,
+            is_public=is_public,
+            tags=tags,
+        )
     if not result_key:
         report_outcome('up', 'upload_text returned None for clipboard drop')
         sys.exit(1)

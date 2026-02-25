@@ -17,12 +17,16 @@ from cli.commands.manage import _parse_key
 
 
 def cmd_save(args):
+    from cli.spinner import Spinner
     cfg, host, session = load_context(require_login=True)
 
     ns, key = _parse_key(args.key, args.file, getattr(args, 'clip', False))
     prefix = 'f/' if ns == 'f' else ''
 
-    if api.save_bookmark(host, session, key, ns=ns):
+    with Spinner('saving'):
+        ok = api.save_bookmark(host, session, key, ns=ns)
+
+    if ok:
         print(f'  ✓ Saved /{prefix}{key}/ — appears in drp ls')
     else:
         sys.exit(1)

@@ -164,8 +164,10 @@ def cmd_ping(args):
         print('  ✗ Not configured. Run: drp setup')
         sys.exit(1)
 
+    from cli.spinner import Spinner
     try:
-        res  = requests.get(f'{host}/', timeout=5)
+        with Spinner('pinging'):
+            res  = requests.get(f'{host}/', timeout=5)
         tick = green('✓')
         print(f'  {tick} {host} reachable (HTTP {res.status_code})')
     except requests.ConnectionError:

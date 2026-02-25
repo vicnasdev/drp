@@ -204,9 +204,53 @@ def _print_smart(content: str, field: str = ''):
 
 # ── URL fetch ─────────────────────────────────────────────────────────────────
 
+def _filename_from_url(r, url: str) -> str:
+    """Infer filename from Content-Disposition header or URL path."""
+    cd = r.headers.get('Content-Disposition', '')
+    if 'filename=' in cd:
+        for part in cd.split(';'):
+            part = part.strip()
+            if part.startswith('filename='):
+                return part[9:].strip('"\'')
+    from urllib.parse import urlparse
+    path = urlparse(url).path.rstrip('/')
+    import os
+    name = os.path.basename(path)
+    return name if name else 'download'
+
+
+def _is_binary_content(content_type: str) -> bool:
+    """Heuristic: is this content-type likely binary data (not text)?"""
+    ct = content_type.lower().split(';')[0].strip()
+    if ct.startswith('text/'):
+        return False
+    if ct in ('application/json', 'application/xml', 'application/javascript',
+              'application/x-yaml', 'application/yaml', 'application/toml',
+              'application/ld+json', 'application/graphql',
+              'application/x-www-form-urlencoded'):
+        return False
+    if '+json' in ct or '+xml' in ct:
+        return False
+    return True
+
+
 def _get_url(args, url, host, session, t):
-    """Fetch content from an external URL (paid feature)."""
+    """Fetch content from an external URL (paid feature).
+
+    Text responses (JSON, HTML, plain text) are printed to stdout.
+    Binary responses (PDFs, images, archives) are saved to a file, with a
+    progress bar if the size is known.
+
+    Use-cases:
+      drp get https://api.example.com/data           → print JSON
+      drp get https://api.example.com/data --parse    → parsed output
+      drp get https://api.example.com/data.name       → dot-access field
+      drp get https://example.com/report.pdf           → save report.pdf
+      drp get https://example.com/report.pdf -o r.pdf  → save as r.pdf
+    """
     from cli.spinner import Spinner
+    from cli.progress import ProgressBar
+    import requests as _req
 
     # Plan gate — URL fetch requires starter+
     try:
@@ -230,30 +274,71 @@ def _get_url(args, url, host, session, t):
 
     t.checkpoint('plan check')
 
+    # ── Streaming download with redirect support ─────────────────────────
     try:
-        with Spinner('fetching URL'):
-            # Use a clean request (no drp auth headers) for external URLs
-            import requests as _req
-            r = _req.get(url, timeout=30, headers={'User-Agent': 'drp-cli'})
+        with Spinner('connecting'):
+            r = _req.get(url, stream=True, timeout=30,
+                         headers={'User-Agent': 'drp-cli'},
+                         allow_redirects=True)
             r.raise_for_status()
-            content = r.text
     except Exception as e:
         print(f'  ✗ Failed to fetch URL: {e}', file=sys.stderr)
         t.print()
         sys.exit(1)
 
-    t.checkpoint('fetch URL')
-    t.print()
+    content_type = r.headers.get('content-type', '')
+    is_binary = _is_binary_content(content_type)
+    content_length = int(r.headers.get('content-length', 0))
 
     parse = getattr(args, 'parse', False)
     field = getattr(args, 'field', None) or ''
+    output = getattr(args, 'output', None)
+
+    # ── Binary file → save to disk ───────────────────────────────────────
+    if is_binary or output:
+        filename = output or _filename_from_url(r, url)
+        chunk_size = 256 * 1024
+        if content_length:
+            bar = ProgressBar(content_length, label='downloading')
+        else:
+            bar = None
+
+        try:
+            with open(filename, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+                        if bar:
+                            bar.update(len(chunk))
+        except OSError as e:
+            print(f'  ✗ Could not write {filename}: {e}', file=sys.stderr)
+            t.print()
+            sys.exit(1)
+        finally:
+            r.close()
+
+        if bar:
+            bar.done()
+
+        t.checkpoint('download complete')
+        t.print()
+        print(f'  ✓ Saved {filename}')
+        return
+
+    # ── Text content → stream into memory, print to stdout ───────────────
+    try:
+        content = r.text
+    finally:
+        r.close()
+
+    t.checkpoint('fetch URL')
+    t.print()
 
     if parse or field:
         _print_smart(content, field)
     else:
         # Auto-detect if JSON response
-        ct = getattr(r, 'headers', {}).get('content-type', '')
-        if 'json' in ct:
+        if 'json' in content_type:
             _print_smart(content, field)
         else:
             print(content)

@@ -16,6 +16,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from unittest import mock
 from unittest.mock import MagicMock, patch, call
 from datetime import datetime, timezone, timedelta
 
@@ -72,7 +73,7 @@ class TestCmdRm:
         import cli.commands.manage as m
         with patch('builtins.print') as mock_print:
             m.cmd_rm(args)
-        mock_api.delete.assert_called_once_with('https://x.com', mock_req.Session(), 'hello', ns='c')
+        mock_api.delete.assert_called_once_with('https://x.com', mock.ANY, 'hello', ns='c')
         mock_manage_config.remove_local_drop.assert_called_once_with('hello')
 
     @patch('cli.commands._context.config')
@@ -86,7 +87,7 @@ class TestCmdRm:
         import cli.commands.manage as m
         with patch('builtins.print'):
             m.cmd_rm(args)
-        mock_api.delete.assert_called_once_with('https://x.com', mock_req.Session(), 'q3', ns='f')
+        mock_api.delete.assert_called_once_with('https://x.com', mock.ANY, 'q3', ns='f')
 
     @patch('cli.commands._context.config')
     @patch('cli.commands._context.requests')
@@ -359,13 +360,13 @@ class TestCmdCp:
                 cp.cmd_cp(MagicMock(key='src', new_key='dst', file=False, clip=False))
 
     @patch('cli.commands._context.config')
-    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.ResilientSession')
     @patch('cli.commands._context.auto_login')
     @patch('cli.commands.cp.get_csrf', return_value='csrf-token')
-    def test_cp_posts_to_copy_endpoint(self, mock_csrf, mock_login, mock_req, mock_config):
+    def test_cp_posts_to_copy_endpoint(self, mock_csrf, mock_login, mock_rs, mock_config):
         mock_config.load.return_value = {'host': 'https://x.com'}
         mock_session = MagicMock()
-        mock_req.Session.return_value = mock_session
+        mock_rs.return_value = mock_session
         mock_response = MagicMock()
         mock_response.ok = True
         mock_response.json.return_value = {'key': 'dst'}
