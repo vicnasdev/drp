@@ -680,3 +680,86 @@ class TestShowNotice:
         show_notice(checker)
         out = capsys.readouterr().out
         assert out == ''
+
+
+# ── Download retry ────────────────────────────────────────────────────────────
+
+class TestDownloadRetry:
+    """get_file retries on ChunkedEncodingError with Range header."""
+
+    def _mock_session(self, json_data):
+        """Session whose .get() returns json_data for the metadata request."""
+        resp = MagicMock()
+        resp.ok = True
+        resp.status_code = 200
+        resp.json.return_value = json_data
+        sess = MagicMock()
+        sess.get.return_value = resp
+        return sess
+
+    @patch('cli.api.file._requests')
+    def test_retry_resumes_with_range(self, mock_requests):
+        """On ChunkedEncodingError, retry sends Range header from bytes downloaded."""
+        from cli.api.file import get_file
+        import requests as real_requests
+
+        sess = self._mock_session({
+            "kind": "file", "filename": "f.bin", "filesize": 100,
+            "presigned_url": "https://b2.example.com/f.bin",
+        })
+
+        # First attempt: delivers 60 bytes then raises ChunkedEncodingError
+        stream1 = MagicMock()
+        stream1.__enter__ = MagicMock(return_value=stream1)
+        stream1.__exit__ = MagicMock(return_value=False)
+        stream1.status_code = 200
+
+        def raise_after_chunks():
+            yield b'A' * 60
+            raise real_requests.exceptions.ChunkedEncodingError("broken")
+
+        stream1.iter_content.return_value = raise_after_chunks()
+
+        # Second attempt: delivers remaining 40 bytes
+        stream2 = MagicMock()
+        stream2.__enter__ = MagicMock(return_value=stream2)
+        stream2.__exit__ = MagicMock(return_value=False)
+        stream2.status_code = 206
+        stream2.iter_content.return_value = iter([b'B' * 40])
+
+        mock_requests.get.side_effect = [stream1, stream2]
+        mock_requests.exceptions = real_requests.exceptions
+
+        kind, (content, filename) = get_file('https://h', sess, 'k')
+        assert kind == 'file'
+        assert len(content) == 100
+        # Verify the second call included a Range header
+        second_call = mock_requests.get.call_args_list[1]
+        assert second_call.kwargs.get('headers', {}).get('Range') == 'bytes=60-'
+
+    @patch('cli.api.file._requests')
+    def test_retry_exhausted(self, mock_requests):
+        """After max retries, returns (None, None)."""
+        from cli.api.file import get_file
+        import requests as real_requests
+
+        sess = self._mock_session({
+            "kind": "file", "filename": "f.bin", "filesize": 100,
+            "presigned_url": "https://b2.example.com/f.bin",
+        })
+
+        def always_fail(**kwargs):
+            raise real_requests.exceptions.ChunkedEncodingError("broken")
+
+        stream = MagicMock()
+        stream.__enter__ = MagicMock(return_value=stream)
+        stream.__exit__ = MagicMock(return_value=False)
+        stream.status_code = 200
+        stream.iter_content.side_effect = always_fail
+
+        mock_requests.get.return_value = stream
+        mock_requests.exceptions = real_requests.exceptions
+
+        kind, data = get_file('https://h', sess, 'k')
+        assert kind is None
+        assert data is None

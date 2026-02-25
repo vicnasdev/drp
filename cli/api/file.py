@@ -232,18 +232,37 @@ def get_file(host, session, key, password=''):
                 _report("get", msg)
                 return None, None
 
-        bar    = ProgressBar(max(filesize, 1), label="downloading")
-        chunks = []
-        with _requests.get(b2_url, stream=True, timeout=None) as stream:
-            if not stream.ok:
-                msg = f"B2 download failed (HTTP {stream.status_code})"
-                err(f"{msg}.")
-                _report("get", msg)
+        bar        = ProgressBar(max(filesize, 1), label="downloading")
+        chunks     = []
+        downloaded = 0
+        retries    = 3
+
+        for attempt in range(retries + 1):
+            req_headers = {}
+            if downloaded:
+                req_headers["Range"] = f"bytes={downloaded}-"
+            try:
+                with _requests.get(b2_url, stream=True, timeout=30,
+                                   headers=req_headers) as stream:
+                    if stream.status_code not in (200, 206):
+                        msg = f"B2 download failed (HTTP {stream.status_code})"
+                        err(f"{msg}.")
+                        _report("get", msg)
+                        return None, None
+                    for chunk in stream.iter_content(chunk_size=CHUNK):
+                        if chunk:
+                            chunks.append(chunk)
+                            downloaded += len(chunk)
+                            bar.update(len(chunk))
+                break  # success — exit retry loop
+            except (_requests.exceptions.ChunkedEncodingError,
+                    _requests.exceptions.ConnectionError) as exc:
+                if attempt < retries:
+                    import time as _time
+                    _time.sleep(1)
+                    continue
+                err(f"Download failed after {retries + 1} attempts: {exc}")
                 return None, None
-            for chunk in stream.iter_content(chunk_size=CHUNK):
-                if chunk:
-                    chunks.append(chunk)
-                    bar.update(len(chunk))
 
         bar.done()
         return "file", (b"".join(chunks), filename)

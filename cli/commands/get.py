@@ -132,10 +132,7 @@ def _get_clipboard(args, host, session, t, password='', parse=False, field=''):
 # ── File ──────────────────────────────────────────────────────────────────────
 
 def _get_file(args, host, session, t, password=''):
-    from cli.spinner import Spinner
-
-    with Spinner('fetching'):
-        kind, result = api.get_file(host, session, args.key, password=password)
+    kind, result = api.get_file(host, session, args.key, password=password)
 
     if kind == 'password_required':
         try:
@@ -143,8 +140,7 @@ def _get_file(args, host, session, t, password=''):
         except (KeyboardInterrupt, EOFError):
             print()
             sys.exit(1)
-        with Spinner('fetching'):
-            kind, result = api.get_file(host, session, args.key, password=password)
+        kind, result = api.get_file(host, session, args.key, password=password)
         if kind == 'password_required':
             print('  ✗ Wrong password.', file=sys.stderr)
             t.print()
