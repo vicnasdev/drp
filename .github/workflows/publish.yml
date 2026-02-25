@@ -197,6 +197,8 @@ jobs:
         run: |
           # Override package name from drp-cli → drp at build time
           sed -i 's/^name = "drp-cli"/name = "drp"/' pyproject.toml
+          # Use main README for stable PyPI page (not dev warning readme)
+          sed -i 's/^readme = "PYPI_DEV_README.md"/readme = "README.md"/' pyproject.toml
           pip install build && python -m build
 
       - name: Publish to PyPI

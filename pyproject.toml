@@ -21,7 +21,7 @@ build-backend = "setuptools.build_meta"
 name = "drp-cli"
 dynamic = ["version"]
 description = "Drop text and files from the command line — get a link instantly."
-readme = "README.md"
+readme = "PYPI_DEV_README.md"
 # This license applies to the CLI package (cli/ directory) only.
 # The server code in this repo is licensed separately — see LICENSE.
 license = {text = "MIT"}
