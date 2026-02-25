@@ -212,21 +212,23 @@
 </div>
 
 <!-- Save button and results -->
-<div style="max-width:700px;margin:1.5rem auto 0;padding:0 1rem;text-align:center">
-  <button class="btn" id="saveBtn">save & get link</button>
-  <p id="errorMsg" class="error hidden"></p>
+<div class="ad-middle-wrapper" style="margin-top:1.5rem">
+  <div style="text-align:center">
+    <button class="btn" id="saveBtn">save & get link</button>
+    <p id="errorMsg" class="error hidden"></p>
 
-  <div id="resultBox" class="result-box hidden">
-    <span class="muted">your link:</span>
-    <a id="resultUrl" href="#" target="_blank"></a>
-    <button class="btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('resultUrl').href); showToast('copied!')">copy</button>
+    <div id="resultBox" class="result-box hidden">
+      <span class="muted">your link:</span>
+      <a id="resultUrl" href="#" target="_blank"></a>
+      <button class="btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('resultUrl').href); showToast('copied!')">copy</button>
+    </div>
+
+    {% if not user.is_authenticated %}
+    <p id="anonNudge" class="anon-nudge hidden">
+      Drop expires in 7 days. <a href="/auth/register/">Sign up free</a> to claim it and extend to 30 days.
+    </p>
+    {% endif %}
   </div>
-
-  {% if not user.is_authenticated %}
-  <p id="anonNudge" class="anon-nudge hidden">
-    Drop expires in 7 days. <a href="/auth/register/">Sign up free</a> to claim it and extend to 30 days.
-  </p>
-  {% endif %}
 </div>
 
 <!-- Public drops feed -->
