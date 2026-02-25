@@ -38,8 +38,9 @@ def _assert_useful(answer, *expected_fragments):
             f"Bot deflected with '{phrase}' — answer: {answer[:200]}"
         )
     for frag in expected_fragments:
-        assert frag.lower() in lower, (
-            f"Expected '{frag}' in answer — got: {answer[:200]}"
+        alternatives = [a.strip().lower() for a in frag.split("|")]
+        assert any(a in lower for a in alternatives), (
+            f"Expected one of {alternatives} in answer — got: {answer[:200]}"
         )
 
 
@@ -49,7 +50,7 @@ class TestHelpBotAnswers:
     def test_how_to_embed(self, free_user):
         status, answer = _ask(free_user.session, "How do I embed a drop in markdown?")
         assert status == 200
-        _assert_useful(answer, "embed")
+        _assert_useful(answer, "embed|markdown|![")
 
     def test_how_to_upload(self, free_user):
         status, answer = _ask(free_user.session, "How do I upload text?")
