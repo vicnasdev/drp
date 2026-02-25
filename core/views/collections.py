@@ -19,6 +19,18 @@ Auth rules:
   - Creating/editing collections requires login + paid plan.
   - Free users can view collections shared with them but cannot create.
   - Anyone can POST to a public_inbox collection (text only for safety).
+
+Plan downgrade policy:
+  When a user downgrades (e.g. Starter→Free or Pro→Starter):
+  - Data is NEVER deleted — all collections and memberships are preserved.
+  - Owner LOSES access to collections that exceed their new plan quota.
+    · Free (quota=0): owner loses access to ALL collections.
+    · Starter (quota=10): owner keeps access to the 10 oldest, loses the rest.
+  - Public/anonymous viewers can ALWAYS see any collection (read-only).
+  - Blocked actions for the owner on over-quota collections:
+    · View (as owner), add drops, remove drops, rename, toggle inbox.
+  - DELETE is always allowed — users must be able to clean up.
+  - Re-upgrading immediately restores access to all collections.
 """
 
 import json
@@ -80,10 +92,15 @@ def collection_view(request, username, slug, collection=None):
     if is_own:
         allowed, reason = can_user_access_collection(request.user, collection)
         if not allowed:
-            return JsonResponse(
-                {"error": reason or "You no longer have access to this collection."},
-                status=403,
-            )
+            if 'application/json' in request.headers.get('Accept', ''):
+                return JsonResponse(
+                    {"error": reason or "You no longer have access to this collection."},
+                    status=403,
+                )
+            return render(request, "error.html", {
+                "code": "Plan limit reached",
+                "message": reason or "You no longer have access to this collection.",
+            }, status=403)
 
     # ── Inbox POST (anyone can drop into public_inbox collections) ──
     if request.method == "POST":
@@ -314,6 +331,11 @@ def rename_collection(request, collection_id):
     if not collection.can_edit(request.user):
         return JsonResponse({"error": "Only the owner can rename this collection."}, status=403)
 
+    # Plan downgrade check
+    allowed, reason = can_user_access_collection(request.user, collection)
+    if not allowed:
+        return JsonResponse({"error": reason or "You no longer have access to this collection."}, status=403)
+
     try:
         data = json.loads(request.body)
     except (json.JSONDecodeError, UnicodeDecodeError):
@@ -365,6 +387,12 @@ def toggle_inbox(request, collection_id):
     collection = get_object_or_404(Collection, pk=collection_id)
     if not collection.can_edit(request.user):
         return JsonResponse({"error": "Only the owner can change inbox settings."}, status=403)
+
+    # Plan downgrade check
+    allowed, reason = can_user_access_collection(request.user, collection)
+    if not allowed:
+        return JsonResponse({"error": reason or "You no longer have access to this collection."}, status=403)
+
     collection.public_inbox = not collection.public_inbox
     collection.save(update_fields=["public_inbox"])
     return JsonResponse({

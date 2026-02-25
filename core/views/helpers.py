@@ -158,15 +158,15 @@ def can_user_access_collection(user, collection):
         return True, None
     
     # User is over quota — deny access to collections beyond the limit
-    # Get the limit-th collection in creation order
-    oldest_accessible = (
+    # Get the cut-off date: the created_at of the max_allowed-th oldest collection
+    accessible_ids = list(
         collection.owner.collections
         .filter(parent=None)
-        .order_by('created_at')[:max_allowed]
-        .last()
+        .order_by('created_at')
+        .values_list('pk', flat=True)[:max_allowed]
     )
     
-    if oldest_accessible and collection.created_at <= oldest_accessible.created_at:
+    if collection.pk in accessible_ids:
         return True, None
     
     return (

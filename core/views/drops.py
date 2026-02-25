@@ -964,7 +964,9 @@ def download_drop(request, key):
     drop.touch()
     try:
         url = drop.download_url(expires_in=3600)
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.error(f"Error in download view for drop {key}: {e}")
         raise Http404
     return redirect(url)
 

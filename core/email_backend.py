@@ -35,4 +35,6 @@ class ResendEmailBackend(BaseEmailBackend):
             except Exception as e:
                 if not self.fail_silently:
                     raise
+                import logging
+                logging.getLogger(__name__).error(f"ResendEmailBackend failed to send messages silently: {e}")
         return sent

@@ -563,9 +563,15 @@ class TestSubCollectionViews(TestCase):
 
 class TestPlanDowngradeCollections(TestCase):
     """
-    When a user's plan goes from paid → free, existing collections should
-    remain visible but the user should not be able to create new ones.
-    This tests the "soft downgrade" approach: data is preserved, actions blocked.
+    When a user's plan goes from paid → free, existing collections remain in
+    the database but the owner LOSES access.  Public viewers can still see
+    them.  The owner can still DELETE (to clean up) but cannot view, add,
+    remove, or rename.  Re-upgrading restores full access.
+
+    Policy (see collections.py docstring):
+      Free  (quota=0):  owner loses access to ALL collections.
+      Starter (quota=10): owner keeps access to the 10 oldest.
+      Pro (unlimited):   no restriction.
     """
 
     def setUp(self):
@@ -578,45 +584,66 @@ class TestPlanDowngradeCollections(TestCase):
         UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
         self.user.profile.refresh_from_db()
 
-    def test_existing_collections_still_visible(self):
-        """Collections created before downgrade should still be publicly visible."""
+    def test_existing_collections_still_visible_publicly(self):
+        """Collections created before downgrade are still publicly visible."""
         self.client.logout()
         res = self.client.get("/@downgrade_user/")
         self.assertEqual(res.status_code, 200)
         for i in range(3):
             self.assertContains(res, f"col {i}")
 
-    def test_existing_collection_page_still_loads(self):
+    def test_owner_cannot_view_collection_after_downgrade(self):
+        """Owner gets 403 when viewing their own collection after downgrade."""
         res = self.client.get("/@downgrade_user/col-0/")
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 403)
 
     def test_cannot_create_new_collection_after_downgrade(self):
         res = _create(self.client, "new after downgrade")
         self.assertEqual(res.status_code, 403)
 
-    def test_can_still_add_drop_to_existing_collection(self):
-        """Even after downgrade, user can still manage existing collections."""
+    def test_cannot_add_drop_after_downgrade(self):
+        """Owner cannot add drops to collections after downgrade."""
         col = Collection.objects.filter(owner=self.user).first()
         drop = _make_drop(self.user, key="still-add")
         res = _add(self.client, col.pk, "c", "still-add")
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 403)
 
-    def test_can_still_remove_drop_from_existing_collection(self):
+    def test_cannot_remove_drop_after_downgrade(self):
+        """Owner cannot remove drops from collections after downgrade."""
         col = Collection.objects.filter(owner=self.user).first()
-        drop = _make_drop(self.user, key="still-rm")
-        _add(self.client, col.pk, "c", "still-rm")
-        res = _remove(self.client, col.pk, "c", "still-rm")
-        self.assertEqual(res.status_code, 200)
+        res = _remove(self.client, col.pk, "c", "anything")
+        self.assertEqual(res.status_code, 403)
+
+    def test_cannot_rename_after_downgrade(self):
+        """Owner cannot rename collections after downgrade."""
+        col = Collection.objects.filter(owner=self.user).first()
+        res = _rename(self.client, col.pk, "renamed after downgrade")
+        self.assertEqual(res.status_code, 403)
 
     def test_can_still_delete_existing_collection(self):
-        """User can still delete their own collections after downgrade."""
+        """User can still delete their own collections after downgrade (cleanup)."""
         col = Collection.objects.filter(owner=self.user).first()
         res = _delete(self.client, col.pk)
         self.assertEqual(res.status_code, 200)
 
-    def test_can_still_rename_existing_collection(self):
-        col = Collection.objects.filter(owner=self.user).first()
-        res = _rename(self.client, col.pk, "renamed after downgrade")
+    def test_data_preserved_in_database(self):
+        """Collections are not deleted, just inaccessible to the owner."""
+        self.assertEqual(
+            Collection.objects.filter(owner=self.user).count(),
+            3,
+        )
+
+    def test_public_viewer_can_still_see_collection(self):
+        """Non-owner can still view the collection after owner downgrade."""
+        other = _make_user("viewer_user")
+        self.client.force_login(other)
+        res = self.client.get("/@downgrade_user/col-0/")
+        self.assertEqual(res.status_code, 200)
+
+    def test_anonymous_can_still_see_collection(self):
+        """Anonymous visitor can still view the collection after owner downgrade."""
+        self.client.logout()
+        res = self.client.get("/@downgrade_user/col-0/")
         self.assertEqual(res.status_code, 200)
 
 
@@ -657,7 +684,11 @@ class TestPlanDowngradeReUpgrade(TestCase):
 
 
 class TestPlanDowngradeSubCollections(TestCase):
-    """Sub-collections should follow the same downgrade rules as root collections."""
+    """Sub-collections follow the same downgrade rules as root collections.
+    
+    When the parent root collection is over quota, all its sub-collections
+    are also inaccessible to the owner.  Delete is always allowed.
+    """
 
     def setUp(self):
         self.user = _make_user("sub_dg_user", Plan.PRO)
@@ -675,7 +706,14 @@ class TestPlanDowngradeSubCollections(TestCase):
         UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
         self.user.profile.refresh_from_db()
 
-    def test_subcollection_page_still_loads(self):
+    def test_owner_cannot_view_subcollection_after_downgrade(self):
+        """Owner gets 403 when viewing sub-collection after downgrade."""
+        res = self.client.get("/@sub_dg_user/root/child/")
+        self.assertEqual(res.status_code, 403)
+
+    def test_public_can_view_subcollection_after_downgrade(self):
+        """Public viewers can still see the sub-collection."""
+        self.client.logout()
         res = self.client.get("/@sub_dg_user/root/child/")
         self.assertEqual(res.status_code, 200)
 
@@ -800,3 +838,251 @@ class TestCollectionAccessAfterDowngrade(TestCase):
         # All should be inaccessible now (free = 0)
         res = self.client.get(f"/@{self.user.username}/col-1/")
         self.assertEqual(res.status_code, 403)
+
+
+# ── Pro → Starter partial-quota downgrade ─────────────────────────────────────
+
+class TestProToStarterDowngrade(TestCase):
+    """
+    Pro user with >10 collections downgrades to Starter (quota=10).
+    The 10 oldest root collections remain accessible; the rest are blocked.
+    Sub-collections inherit quota from their root parent.
+    """
+
+    def setUp(self):
+        self.user = _make_user("pro_to_starter", Plan.PRO)
+        self.client.force_login(self.user)
+        # Create 12 root collections as Pro
+        self.cols = []
+        for i in range(12):
+            res = _create(self.client, f"col {i}", slug=f"col-{i}")
+            self.assertEqual(res.status_code, 201)
+            self.cols.append(res.json()["id"])
+        # Downgrade to Starter (quota=10)
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.STARTER)
+        self.user.profile.refresh_from_db()
+
+    def test_oldest_10_accessible(self):
+        """Owner can still view the 10 oldest collections."""
+        oldest = Collection.objects.filter(
+            owner=self.user, parent=None
+        ).order_by('created_at')[:10]
+        for col in oldest:
+            res = self.client.get(
+                f"/@{self.user.username}/{col.slug}/",
+                HTTP_ACCEPT="application/json",
+            )
+            self.assertEqual(res.status_code, 200, f"Should access {col.slug}")
+
+    def test_excess_collections_blocked(self):
+        """Owner cannot view collections beyond the quota."""
+        excess = Collection.objects.filter(
+            owner=self.user, parent=None
+        ).order_by('created_at')[10:]
+        for col in excess:
+            res = self.client.get(
+                f"/@{self.user.username}/{col.slug}/",
+                HTTP_ACCEPT="application/json",
+            )
+            self.assertEqual(res.status_code, 403, f"Should block {col.slug}")
+
+    def test_cannot_add_to_excess_collection(self):
+        """Cannot add drops to an over-quota collection."""
+        excess_col = Collection.objects.filter(
+            owner=self.user, parent=None
+        ).order_by('created_at')[10:].first()
+        drop = _make_drop(self.user, key="blocked-add")
+        res = _add(self.client, excess_col.pk, "c", "blocked-add")
+        self.assertEqual(res.status_code, 403)
+
+    def test_can_add_to_within_quota_collection(self):
+        """Can still add drops to a within-quota collection."""
+        ok_col = Collection.objects.filter(
+            owner=self.user, parent=None
+        ).order_by('created_at').first()
+        drop = _make_drop(self.user, key="ok-add")
+        res = _add(self.client, ok_col.pk, "c", "ok-add")
+        self.assertEqual(res.status_code, 200)
+
+    def test_can_delete_excess_collection(self):
+        """Delete always works, even on over-quota collections."""
+        excess_col = Collection.objects.filter(
+            owner=self.user, parent=None
+        ).order_by('created_at')[10:].first()
+        res = _delete(self.client, excess_col.pk)
+        self.assertEqual(res.status_code, 200)
+
+    def test_deleting_excess_restores_access_to_next(self):
+        """After deleting an over-quota collection, the next one becomes accessible
+        because the user is now within quota again (or closer to it)."""
+        # Currently 12, quota 10.  Delete 2 excess → back to 10 → all accessible.
+        excess = list(
+            Collection.objects.filter(owner=self.user, parent=None)
+            .order_by('created_at')[10:]
+        )
+        for col in excess:
+            _delete(self.client, col.pk)
+        # Now exactly 10 — all should be accessible
+        remaining = Collection.objects.filter(owner=self.user, parent=None)
+        self.assertEqual(remaining.count(), 10)
+        for col in remaining:
+            res = self.client.get(
+                f"/@{self.user.username}/{col.slug}/",
+                HTTP_ACCEPT="application/json",
+            )
+            self.assertEqual(res.status_code, 200, f"Should access {col.slug}")
+
+    def test_public_can_view_all_collections(self):
+        """Public viewers see everything regardless of owner quota."""
+        self.client.logout()
+        all_cols = Collection.objects.filter(owner=self.user, parent=None)
+        for col in all_cols:
+            res = self.client.get(f"/@{self.user.username}/{col.slug}/")
+            self.assertEqual(res.status_code, 200, f"Public should see {col.slug}")
+
+    def test_cannot_create_while_over_quota(self):
+        """With 12 collections and a quota of 10, creation is blocked."""
+        res = _create(self.client, "thirteenth", slug="thirteenth")
+        self.assertEqual(res.status_code, 403)
+
+
+# ── Full lifecycle: create → downgrade → re-upgrade ──────────────────────────
+
+class TestDowngradeReUpgradeCycle(TestCase):
+    """
+    Full lifecycle test: user creates collections on Starter, downgrades to
+    Free (all blocked), re-upgrades to Starter (all restored), then upgrades
+    to Pro (unlimited).
+    """
+
+    def setUp(self):
+        self.user = _make_user("cycle_user", Plan.STARTER)
+        self.client.force_login(self.user)
+        # Create 3 collections
+        for i in range(3):
+            _create(self.client, f"cycle-col-{i}", slug=f"cycle-{i}")
+        self.cols = list(
+            Collection.objects.filter(owner=self.user).order_by('created_at')
+        )
+
+    def test_full_cycle(self):
+        # Phase 1: Starter — full access
+        res = self.client.get(f"/@{self.user.username}/{self.cols[0].slug}/",
+                              HTTP_ACCEPT="application/json")
+        self.assertEqual(res.status_code, 200)
+
+        drop = _make_drop(self.user, key="cycle-drop")
+        res = _add(self.client, self.cols[0].pk, "c", "cycle-drop")
+        self.assertEqual(res.status_code, 200)
+
+        # Phase 2: Downgrade to Free — all blocked for owner
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
+        self.user.profile.refresh_from_db()
+
+        for col in self.cols:
+            res = self.client.get(f"/@{self.user.username}/{col.slug}/",
+                                  HTTP_ACCEPT="application/json")
+            self.assertEqual(res.status_code, 403, f"{col.slug} should be blocked")
+
+        res = _add(self.client, self.cols[0].pk, "c", "cycle-drop")
+        self.assertEqual(res.status_code, 403)
+
+        res = _rename(self.client, self.cols[0].pk, "new name")
+        self.assertEqual(res.status_code, 403)
+
+        # Phase 3: Re-upgrade to Starter — access restored
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.STARTER)
+        self.user.profile.refresh_from_db()
+
+        for col in self.cols:
+            res = self.client.get(f"/@{self.user.username}/{col.slug}/",
+                                  HTTP_ACCEPT="application/json")
+            self.assertEqual(res.status_code, 200, f"{col.slug} should be accessible")
+
+        new_drop = _make_drop(self.user, key="restored-drop")
+        res = _add(self.client, self.cols[0].pk, "c", "restored-drop")
+        self.assertEqual(res.status_code, 200)
+
+        # Phase 4: Upgrade to Pro — still accessible plus unlimited creation
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.PRO)
+        self.user.profile.refresh_from_db()
+
+        for col in self.cols:
+            res = self.client.get(f"/@{self.user.username}/{col.slug}/",
+                                  HTTP_ACCEPT="application/json")
+            self.assertEqual(res.status_code, 200)
+
+        # Can create more
+        res = _create(self.client, "pro-new", slug="pro-new")
+        self.assertEqual(res.status_code, 201)
+
+    def test_data_preserved_through_all_phases(self):
+        """Collection count stays constant through downgrade/re-upgrade."""
+        initial_count = Collection.objects.filter(owner=self.user).count()
+
+        # Downgrade
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
+        self.assertEqual(
+            Collection.objects.filter(owner=self.user).count(), initial_count
+        )
+
+        # Re-upgrade
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.STARTER)
+        self.assertEqual(
+            Collection.objects.filter(owner=self.user).count(), initial_count
+        )
+
+
+# ── Toggle inbox blocked after downgrade ──────────────────────────────────────
+
+class TestToggleInboxAfterDowngrade(TestCase):
+    """Toggle inbox should be blocked when owner has lost collection access."""
+
+    def setUp(self):
+        self.user = _make_user("inbox_dg_user", Plan.STARTER)
+        self.client.force_login(self.user)
+        res = _create(self.client, "inbox-col", slug="inbox-col")
+        self.col_id = res.json()["id"]
+        # Downgrade to Free
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
+        self.user.profile.refresh_from_db()
+
+    def test_toggle_inbox_blocked_after_downgrade(self):
+        res = self.client.post(f"/collections/{self.col_id}/toggle-inbox/")
+        self.assertEqual(res.status_code, 403)
+
+    def test_toggle_inbox_works_after_reupgrade(self):
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.STARTER)
+        self.user.profile.refresh_from_db()
+        res = self.client.post(f"/collections/{self.col_id}/toggle-inbox/")
+        self.assertEqual(res.status_code, 200)
+
+
+# ── JSON endpoint returns proper error ────────────────────────────────────────
+
+class TestCollectionJsonEndpointDowngrade(TestCase):
+    """JSON API endpoint returns proper 403 error payload after downgrade."""
+
+    def setUp(self):
+        self.user = _make_user("json_dg_user", Plan.STARTER)
+        self.client.force_login(self.user)
+        res = _create(self.client, "json-col", slug="json-col")
+        self.col_id = res.json()["id"]
+        UserProfile.objects.filter(user=self.user).update(plan=Plan.FREE)
+        self.user.profile.refresh_from_db()
+
+    def test_json_view_returns_403_with_error_message(self):
+        res = self.client.get(
+            f"/@{self.user.username}/json-col/",
+            HTTP_ACCEPT="application/json",
+        )
+        self.assertEqual(res.status_code, 403)
+        data = res.json()
+        self.assertIn("error", data)
+        self.assertIn("paid feature", data["error"].lower())
+
+    def test_add_returns_403_json(self):
+        drop = _make_drop(self.user, key="json-drop")
+        res = _add(self.client, self.col_id, "c", "json-drop")
+        self.assertEqual(res.status_code, 403)
+        self.assertIn("error", res.json())
