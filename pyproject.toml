@@ -30,7 +30,7 @@ dependencies = ["requests>=2.28"]
 authors = [{name = "Vic Nas"}]
 keywords = ["cli", "file-sharing", "pastebin", "drops"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",

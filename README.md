@@ -1,5 +1,7 @@
 # [drp](https://drp.fyi) ![version](https://img.shields.io/github/v/tag/vicnasdev/drp)
 
+> **⚠️ Development Version** — This is the development build of `drp-cli`. It is unstable and less secure than production releases. Use at your own risk. For the stable service, visit [drp.fyi](https://drp.fyi).
+
 Drop files or paste text, get a link instantly.
 
 ```bash
