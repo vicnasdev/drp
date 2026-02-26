@@ -9,7 +9,7 @@ Share text, code snippets, and files from your terminal in seconds. Get a link, 
 **[drp.fyi](https://drp.fyi)** — try it now, no account needed.
 
 ```bash
-pipx install drp-dev
+pipx install drp
 drp setup
 drp up "hello world"        # → https://drp.fyi/a1b2c3/
 ```
