@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save, pre_delete, post_delete
@@ -987,6 +988,51 @@ class DropLike(models.Model):
 
     def __str__(self):
         return f"{self.user.username} liked {self.drop}"
+
+
+# ── Help Bot History ──────────────────────────────────────────────────────────
+
+class EmailTemplate(models.Model):
+    """
+    Admin-editable email templates stored in DB.
+    Each template is identified by a unique slug (e.g. 'verify_email').
+    The subject/body support Python .format() placeholders.
+    """
+    slug        = models.SlugField(max_length=80, unique=True, help_text="Unique identifier, e.g. verify_email")
+    description = models.CharField(max_length=200, blank=True, help_text="Admin note about where this template is used")
+    subject     = models.CharField(max_length=200)
+    body_text   = models.TextField(help_text="Plain text body. Use {placeholder} for variables.")
+    body_html   = models.TextField(blank=True, help_text="Optional HTML body. Leave blank for plain-text-only emails.")
+    from_email  = models.EmailField(blank=True, help_text="Override from address. Blank = DEFAULT_FROM_EMAIL.")
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['slug']
+
+    def __str__(self):
+        return self.slug
+
+    @classmethod
+    def get(cls, slug):
+        """Return the template for *slug*, or None if not in DB yet."""
+        try:
+            return cls.objects.get(slug=slug)
+        except cls.DoesNotExist:
+            return None
+
+    def render_subject(self, **kwargs):
+        return self.subject.format(**kwargs)
+
+    def render_text(self, **kwargs):
+        return self.body_text.format(**kwargs)
+
+    def render_html(self, **kwargs):
+        if not self.body_html:
+            return ''
+        return self.body_html.format(**kwargs)
+
+    def get_from_email(self):
+        return self.from_email or settings.DEFAULT_FROM_EMAIL
 
 
 # ── Help Bot History ──────────────────────────────────────────────────────────

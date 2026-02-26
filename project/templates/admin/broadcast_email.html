@@ -36,11 +36,26 @@
 
   <div class="form-row">
     <label><strong>Recipient group</strong></label>
-    <select name="group" style="width:100%;padding:.4rem;margin-top:.3rem">
+    <select name="group" id="group-select" style="width:100%;padding:.4rem;margin-top:.3rem"
+            onchange="document.getElementById('specific-wrap').style.display = this.value ? '' : 'none'">
       {% for key, label in groups %}
         <option value="{{ key }}" {% if key == group_key %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
+  </div>
+
+  <div class="form-row" style="margin-top:.8rem" id="specific-wrap">
+    <label><strong>Or send to a specific user</strong> <span style="color:#999;font-weight:normal">(overrides group)</span></label>
+    <input type="email" name="specific_email" value="{{ specific_email }}"
+           placeholder="user@example.com"
+           style="width:100%;padding:.4rem;margin-top:.3rem"/>
+  </div>
+
+  <div class="form-row" style="margin-top:1rem">
+    <label><strong>From address</strong></label>
+    <input type="email" name="from_email" value="{{ from_email }}"
+           placeholder="{{ default_from }}"
+           style="width:100%;padding:.4rem;margin-top:.3rem"/>
   </div>
 
   <div class="form-row" style="margin-top:1rem">

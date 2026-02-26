@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+{% block title %}drp — manage{% endblock %}
+{% load static %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/auth.css' %}"/>{% endblock %}
+{% block content %}
+<div class="account-page">
+
+  <div class="account-header">
+    <h1>manage</h1>
+    <p class="muted" style="font-size:.85rem">
+      @{{ user.username }} ·
+      <a href="/auth/account/">account</a> ·
+      <a href="/@{{ user.username }}/">collections</a>
+    </p>
+  </div>
+
+  <!-- Bulk action bar -->
+  <div id="bulk-bar" class="bulk-bar" style="display:none">
+    <span id="bulk-count">0</span> selected
+    <button class="btn-sm danger" onclick="bulkDelete()">delete</button>
+    {% if profile.is_paid %}
+    <button class="btn-sm" onclick="bulkRenew()">renew</button>
+    {% endif %}
+    {% if collections %}
+    <select id="bulk-collection" style="font-size:.82rem;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:.2rem .5rem">
+      <option value="">add to collection…</option>
+      {% for col in collections %}
+      <option value="{{ col.id }}">{{ col.name }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn-sm" onclick="bulkAddToCollection()">add</button>
+    {% endif %}
+  </div>
+
+  <!-- Drops table -->
+  <div class="account-section">
+    <h2>your drops <span class="muted" style="font-weight:400;font-size:.75rem">({{ drops|length }})</span></h2>
+    {% if drops %}
+    <table class="drops-table" id="drops-table">
+      <thead>
+        <tr>
+          <th style="width:2rem"><input type="checkbox" id="select-all" onchange="toggleAll(this)" title="Select all"/></th>
+          <th>key</th>
+          <th>type</th>
+          <th>expires</th>
+          {% if profile.is_paid %}<th>pw</th>{% endif %}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for drop in drops %}
+        <tr data-ns="{{ drop.ns }}" data-key="{{ drop.key }}">
+          <td><input type="checkbox" class="drop-check" onchange="updateBulkBar()"/></td>
+          <td>
+            <a href="{% if drop.ns == 'f' %}/f/{{ drop.key }}/{% else %}/{{ drop.key }}/{% endif %}" class="mono">
+              {% if drop.ns == 'f' %}f/{% endif %}{{ drop.key }}
+            </a>
+          </td>
+          <td class="muted">
+            {% if drop.kind == 'file' %}📎 {{ drop.filename|truncatechars:20 }}
+            {% else %}📋 {{ drop.content|truncatechars:20 }}{% endif %}
+          </td>
+          <td class="muted">
+            {% if drop.expires_at %}{{ drop.expires_at|date:"M j, Y" }}
+            {% else %}<span title="idle-based">—</span>{% endif %}
+          </td>
+          {% if profile.is_paid %}
+          <td class="muted" style="font-size:1rem">
+            {% if drop.is_password_protected %}🔑{% else %}—{% endif %}
+          </td>
+          {% endif %}
+          <td><a href="{% if drop.ns == 'f' %}/f/{{ drop.key }}/{% else %}/{{ drop.key }}/{% endif %}" class="btn-sm">view →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="muted empty">no drops yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Saved drops -->
+  {% if saved %}
+  <div class="account-section">
+    <h2>saved drops <span class="muted" style="font-weight:400;font-size:.75rem">({{ saved|length }})</span></h2>
+    <table class="drops-table">
+      <thead>
+        <tr>
+          <th>key</th>
+          <th>saved</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in saved %}
+        <tr id="saved-row-{{ forloop.counter }}">
+          <td>
+            <a href="{{ s.url_path }}" class="mono">
+              {% if s.ns == 'f' %}f/{% endif %}{{ s.key }}
+            </a>
+          </td>
+          <td class="muted">{{ s.saved_at|date:"M j, Y" }}</td>
+          <td>
+            <button class="btn-sm danger"
+                    onclick="unsave('{{ s.ns }}', '{{ s.key }}', 'saved-row-{{ forloop.counter }}')">
+              unsave
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Collections quick-manage -->
+  {% if collections %}
+  <div class="account-section">
+    <h2>collections <span class="muted" style="font-weight:400;font-size:.75rem">({{ collections|length }})</span></h2>
+    <table class="drops-table">
+      <thead>
+        <tr>
+          <th>name</th>
+          <th>drops</th>
+          <th>inbox</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for col in collections %}
+        <tr>
+          <td><a href="/@{{ user.username }}/{{ col.full_path }}/" class="mono">{{ col.name }}</a></td>
+          <td class="muted">{{ col.drop_count }}</td>
+          <td class="muted">{% if col.public_inbox %}✓{% else %}—{% endif %}</td>
+          <td>
+            <a href="/@{{ user.username }}/{{ col.full_path }}/" class="btn-sm">open →</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+function toggleAll(master) {
+  document.querySelectorAll('.drop-check').forEach(function(cb) { cb.checked = master.checked; });
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  var checked = document.querySelectorAll('.drop-check:checked');
+  var bar = document.getElementById('bulk-bar');
+  var count = document.getElementById('bulk-count');
+  if (checked.length > 0) {
+    bar.style.display = '';
+    count.textContent = checked.length;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function getSelected() {
+  var rows = [];
+  document.querySelectorAll('.drop-check:checked').forEach(function(cb) {
+    var tr = cb.closest('tr');
+    rows.push({ ns: tr.dataset.ns, key: tr.dataset.key, row: tr });
+  });
+  return rows;
+}
+
+async function bulkDelete() {
+  var items = getSelected();
+  if (!items.length) return;
+  if (!confirm('Delete ' + items.length + ' drop(s)? This cannot be undone.')) return;
+
+  var ok = 0, fail = 0;
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var url = item.ns === 'f' ? '/f/' + item.key + '/delete/' : '/' + item.key + '/delete/';
+    try {
+      var res = await fetch(url, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+      });
+      if (res.ok) { item.row.remove(); ok++; } else { fail++; }
+    } catch (e) { fail++; }
+  }
+  document.getElementById('select-all').checked = false;
+  updateBulkBar();
+  showToast(ok + ' deleted' + (fail ? ', ' + fail + ' failed' : ''));
+}
+
+async function bulkRenew() {
+  var items = getSelected();
+  if (!items.length) return;
+
+  var ok = 0, fail = 0;
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var url = item.ns === 'f' ? '/f/' + item.key + '/renew/' : '/' + item.key + '/renew/';
+    try {
+      var res = await fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+      });
+      if (res.ok) { ok++; } else { fail++; }
+    } catch (e) { fail++; }
+  }
+  updateBulkBar();
+  showToast(ok + ' renewed' + (fail ? ', ' + fail + ' failed' : ''));
+  if (ok > 0) setTimeout(function() { location.reload(); }, 800);
+}
+
+async function bulkAddToCollection() {
+  var sel = document.getElementById('bulk-collection');
+  if (!sel) return;
+  var colId = sel.value;
+  if (!colId) { showToast('Select a collection first.'); return; }
+
+  var items = getSelected();
+  if (!items.length) return;
+
+  var ok = 0, fail = 0;
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    try {
+      var res = await fetch('/collections/' + colId + '/add/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify({ ns: item.ns, key: item.key }),
+      });
+      if (res.ok) { ok++; } else { fail++; }
+    } catch (e) { fail++; }
+  }
+  sel.value = '';
+  updateBulkBar();
+  showToast(ok + ' added to collection' + (fail ? ', ' + fail + ' failed' : ''));
+}
+
+async function unsave(ns, key, rowId) {
+  var action = ns === 'f' ? '/f/' + key + '/unsave/' : '/' + key + '/unsave/';
+  var res = await fetch(action, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+  });
+  if (res.ok) {
+    document.getElementById(rowId)?.remove();
+    showToast('removed from saved.');
+  }
+}
+</script>
+{% endblock %}

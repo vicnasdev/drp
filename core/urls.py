@@ -38,6 +38,7 @@ urlpatterns = [
     path("auth/login/",         views.login_view,       name="login"),
     path("auth/logout/",        views.logout_view,      name="logout"),
     path("auth/account/",       views.account_view,     name="account"),
+    path("auth/manage/",        views.manage_view,      name="manage"),
     path("auth/account/export/", views.export_drops,    name="export_drops"),
     path("auth/account/import/", views.import_drops,    name="import_drops"),
     path("auth/account/settings/", views.update_account_settings, name="account_settings"),

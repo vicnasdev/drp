@@ -28,22 +28,35 @@ from core.models import EmailVerification
 
 def _send_verification_email(user):
     """Create (or replace) a verification token and send the email."""
+    from core.models import EmailTemplate
+
     token = secrets.token_urlsafe(48)
     EmailVerification.objects.filter(user=user).delete()
     EmailVerification.objects.create(user=user, token=token)
 
     verify_url = f'{settings.SITE_URL}/auth/verify/{token}/'
-    send_mail(
-        subject='Verify your drp email address',
-        message=(
+
+    tpl = EmailTemplate.get('verify_email')
+    if tpl:
+        subject = tpl.render_subject(verify_url=verify_url)
+        message = tpl.render_text(verify_url=verify_url)
+        from_email = tpl.get_from_email()
+    else:
+        subject = 'Verify your drp email address'
+        message = (
             f'Hi,\n\n'
             f'Click the link below to verify your drp email address.\n'
             f'The link expires in 24 hours.\n\n'
             f'{verify_url}\n\n'
             f'If you did not create a drp account, ignore this email.\n\n'
             f'— drp'
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        )
+        from_email = settings.DEFAULT_FROM_EMAIL
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=from_email,
         recipient_list=[user.email],
         fail_silently=False,
     )

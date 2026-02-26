@@ -1,12 +1,14 @@
 """
 tests/unit/test_auth.py
 
-Unit tests for registration and username validation.
+Unit tests for registration, username validation, manage page, and account page.
 """
 
+import json
 from django.contrib.auth.models import User
 from django.test import TestCase
 
+from core.models import Drop, Plan, UserProfile, Collection, EmailTemplate
 from core.views.helpers import validate_username
 
 
@@ -161,3 +163,142 @@ class TestAtKeyRestriction(TestCase):
         data = res.json()
         self.assertFalse(data['available'])
         self.assertTrue(data.get('reserved'))
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _make_user(username='testuser', plan=Plan.FREE, password='pw12345678'):
+    u = User.objects.create_user(username, email=f'{username}@test.com', password=password)
+    UserProfile.objects.filter(user=u).update(plan=plan, email_verified=True)
+    u.refresh_from_db()
+    return u
+
+
+# ── Manage page ───────────────────────────────────────────────────────────────
+
+class TestManagePage(TestCase):
+    def setUp(self):
+        self.user = _make_user()
+        self.client.login(username='testuser', password='pw12345678')
+
+    def test_manage_page_loads(self):
+        res = self.client.get('/auth/manage/')
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'manage')
+
+    def test_manage_page_requires_login(self):
+        self.client.logout()
+        res = self.client.get('/auth/manage/')
+        self.assertEqual(res.status_code, 302)
+        self.assertIn('/auth/login/', res.url)
+
+    def test_manage_shows_drops(self):
+        Drop.objects.create(ns='c', key='testdrop', kind='text', content='hello', owner=self.user)
+        res = self.client.get('/auth/manage/')
+        self.assertContains(res, 'testdrop')
+
+    def test_manage_shows_select_all_checkbox(self):
+        Drop.objects.create(ns='c', key='testdrop', kind='text', content='hi', owner=self.user)
+        res = self.client.get('/auth/manage/')
+        self.assertContains(res, 'select-all')
+
+    def test_manage_shows_collections(self):
+        Collection.objects.create(name='mybox', slug='mybox', owner=self.user)
+        res = self.client.get('/auth/manage/')
+        self.assertContains(res, 'mybox')
+
+    def test_manage_bulk_delete_button_present(self):
+        Drop.objects.create(ns='c', key='td1', kind='text', content='x', owner=self.user)
+        res = self.client.get('/auth/manage/')
+        self.assertContains(res, 'bulkDelete')
+
+
+# ── Account page (cleaned) ───────────────────────────────────────────────────
+
+class TestAccountPageCleaned(TestCase):
+    def setUp(self):
+        self.user = _make_user()
+        self.client.login(username='testuser', password='pw12345678')
+
+    def test_account_no_drops_table(self):
+        """Account page should not list individual drops anymore."""
+        Drop.objects.create(ns='c', key='mydrop', kind='text', content='x', owner=self.user)
+        res = self.client.get('/auth/account/')
+        self.assertNotContains(res, 'drops-table')
+
+    def test_account_has_manage_link(self):
+        res = self.client.get('/auth/account/')
+        self.assertContains(res, '/auth/manage/')
+
+    def test_account_has_ad_slot(self):
+        res = self.client.get('/auth/account/')
+        # The ads/middle.html include should render (even without adsense_client)
+        self.assertContains(res, 'koho')  # Koho fallback always present
+
+    def test_account_still_has_notifications(self):
+        res = self.client.get('/auth/account/')
+        self.assertContains(res, 'notifications')
+
+    def test_account_still_has_plan_section(self):
+        res = self.client.get('/auth/account/')
+        self.assertContains(res, 'plan')
+
+
+# ── EmailTemplate model ──────────────────────────────────────────────────────
+
+class TestEmailTemplate(TestCase):
+    def test_create_and_get(self):
+        EmailTemplate.objects.create(
+            slug='test_tpl',
+            subject='Hello {name}',
+            body_text='Hi {name}, welcome.',
+        )
+        tpl = EmailTemplate.get('test_tpl')
+        self.assertIsNotNone(tpl)
+        self.assertEqual(tpl.slug, 'test_tpl')
+
+    def test_get_nonexistent_returns_none(self):
+        self.assertIsNone(EmailTemplate.get('no_such_template'))
+
+    def test_render_subject(self):
+        tpl = EmailTemplate.objects.create(
+            slug='sub_test', subject='Hi {user}', body_text='body',
+        )
+        self.assertEqual(tpl.render_subject(user='alice'), 'Hi alice')
+
+    def test_render_text(self):
+        tpl = EmailTemplate.objects.create(
+            slug='txt_test', subject='s', body_text='Hello {name}!',
+        )
+        self.assertEqual(tpl.render_text(name='Bob'), 'Hello Bob!')
+
+    def test_render_html_empty(self):
+        tpl = EmailTemplate.objects.create(
+            slug='no_html', subject='s', body_text='body',
+        )
+        self.assertEqual(tpl.render_html(), '')
+
+    def test_render_html(self):
+        tpl = EmailTemplate.objects.create(
+            slug='html_test', subject='s', body_text='t',
+            body_html='<b>{msg}</b>',
+        )
+        self.assertEqual(tpl.render_html(msg='hi'), '<b>hi</b>')
+
+    def test_get_from_email_default(self):
+        from django.conf import settings
+        tpl = EmailTemplate.objects.create(slug='def_from', subject='s', body_text='b')
+        self.assertEqual(tpl.get_from_email(), settings.DEFAULT_FROM_EMAIL)
+
+    def test_get_from_email_override(self):
+        tpl = EmailTemplate.objects.create(
+            slug='cust_from', subject='s', body_text='b',
+            from_email='custom@example.com',
+        )
+        self.assertEqual(tpl.get_from_email(), 'custom@example.com')
+
+    def test_slug_unique(self):
+        EmailTemplate.objects.create(slug='unique1', subject='s', body_text='b')
+        from django.db import IntegrityError
+        with self.assertRaises(IntegrityError):
+            EmailTemplate.objects.create(slug='unique1', subject='s2', body_text='b2')

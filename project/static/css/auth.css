@@ -24,11 +24,14 @@
 .account-section h2 { font-size: .82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: .8rem; }
 .plan-status { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 
-/* ── Drops table (account page) ── */
+/* ── Drops table (account/manage page) ── */
 .drops-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
 .drops-table th { text-align: left; color: var(--muted); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; padding: .4rem .6rem; border-bottom: 1px solid var(--border); }
 .drops-table td { padding: .5rem .6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .drops-table tr:last-child td { border-bottom: none; }
+
+/* ── Bulk action bar (manage page) ── */
+.bulk-bar { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .5rem .8rem; margin-bottom: 1rem; font-size: .85rem; position: sticky; top: 3.5rem; z-index: 10; }
 
 /* ── Plan cards (account upgrade section) ── */
 .plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }

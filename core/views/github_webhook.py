@@ -81,27 +81,43 @@ def _send_fix_notification(report: BugReport, issue_url: str, issue_title: str) 
     if len(report.description) > 120:
         short_desc += '…'
 
+    from core.models import EmailTemplate
+    tpl = EmailTemplate.get('bug_fix_notification')
     from_email = _build_from_email()
-    subject = f'Your bug report has been resolved 🎉'
-
-    # Plain-text version
-    text_body = (
-        f'Hi,\n\n'
-        f'Good news — the issue you reported has been marked as resolved.\n\n'
-        f'Category : {category_display}\n'
-        f'Report   : {short_desc}\n'
-        f'Issue    : {issue_url}\n\n'
-        f'Thanks for helping make drp better.\n\n'
-        f'— the drp team\n\n'
-        f'---\n'
-        f'To stop receiving these notifications, visit your account settings\n'
-        f'and turn off "Bug fix notifications".\n'
-        f'{settings.SITE_URL}/auth/account/\n'
-    )
-
-    # HTML version
     account_url = f'{settings.SITE_URL}/auth/account/'
-    html_body = f"""<!DOCTYPE html>
+
+    if tpl:
+        ctx = dict(
+            category_display=category_display,
+            short_desc=short_desc,
+            issue_url=issue_url,
+            account_url=account_url,
+            site_url=settings.SITE_URL,
+        )
+        subject = tpl.render_subject(**ctx)
+        text_body = tpl.render_text(**ctx)
+        html_body = tpl.render_html(**ctx)
+        from_email = tpl.get_from_email() or from_email
+    else:
+        subject = f'Your bug report has been resolved 🎉'
+
+        # Plain-text version
+        text_body = (
+            f'Hi,\n\n'
+            f'Good news — the issue you reported has been marked as resolved.\n\n'
+            f'Category : {category_display}\n'
+            f'Report   : {short_desc}\n'
+            f'Issue    : {issue_url}\n\n'
+            f'Thanks for helping make drp better.\n\n'
+            f'— the drp team\n\n'
+            f'---\n'
+            f'To stop receiving these notifications, visit your account settings\n'
+            f'and turn off "Bug fix notifications".\n'
+            f'{settings.SITE_URL}/auth/account/\n'
+        )
+
+        # HTML version
+        html_body = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -249,7 +265,8 @@ def _send_fix_notification(report: BugReport, issue_url: str, issue_title: str) 
             from_email=from_email,
             to=[user.email],
         )
-        msg.attach_alternative(html_body, 'text/html')
+        if html_body:
+            msg.attach_alternative(html_body, 'text/html')
         msg.send()
         logger.info('Bug fix notification sent to %s for BugReport #%d', user.email, report.pk)
     except Exception:

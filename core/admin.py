@@ -13,6 +13,7 @@ from .models import (
     Group, GroupMembership, GroupInviteToken,
     APIToken, Alias, DropTemplate,
     FeatureProposal, FeatureVote, DropLike,
+    EmailTemplate,
 )
 
 
@@ -65,6 +66,12 @@ class UserAdmin(BaseUserAdmin):
         """Admin page to compose and send a broadcast email."""
         from django.contrib.auth.models import User
 
+        # Build domain for default from_email
+        domain = getattr(settings, 'DOMAIN', 'localhost')
+        if domain.startswith('http'):
+            domain = domain.split('//')[1].rstrip('/')
+        default_from = f'admin@{domain}'
+
         groups = {
             'all': ('All users', User.objects.filter(is_active=True)),
             'free': ('Free accounts', User.objects.filter(is_active=True, profile__plan='free')),
@@ -77,19 +84,27 @@ class UserAdmin(BaseUserAdmin):
             group_key = request.POST.get('group', 'all')
             subject = request.POST.get('subject', '').strip()
             body_text = request.POST.get('body', '').strip()
+            from_email = request.POST.get('from_email', '').strip() or default_from
+            specific_email = request.POST.get('specific_email', '').strip()
             preview = request.POST.get('preview')
 
-            _, qs = groups.get(group_key, groups['all'])
-            recipients = list(qs.values_list('email', flat=True))
+            # Determine recipients: specific user overrides group
+            if specific_email:
+                recipients = [specific_email]
+            else:
+                _, qs = groups.get(group_key, groups['all'])
+                recipients = list(qs.values_list('email', flat=True))
 
             if preview:
-                # Show preview without sending
                 return render(request, 'admin/broadcast_email.html', {
                     'title': 'Broadcast Email',
                     'groups': [(k, v[0]) for k, v in groups.items()],
                     'group_key': group_key,
                     'subject': subject,
                     'body': body_text,
+                    'from_email': from_email,
+                    'default_from': default_from,
+                    'specific_email': specific_email,
                     'preview_recipients': recipients,
                     'preview_count': len(recipients),
                     'opts': self.model._meta,
@@ -100,7 +115,6 @@ class UserAdmin(BaseUserAdmin):
             elif not recipients:
                 messages.warning(request, 'No recipients in that group.')
             else:
-                # Send individually so each TO shows only their own address
                 sent = 0
                 failed = 0
                 for email in recipients:
@@ -108,7 +122,7 @@ class UserAdmin(BaseUserAdmin):
                         send_mail(
                             subject=subject,
                             message=body_text,
-                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            from_email=from_email,
                             recipient_list=[email],
                             fail_silently=False,
                         )
@@ -128,6 +142,9 @@ class UserAdmin(BaseUserAdmin):
             'group_key': 'all',
             'subject': '',
             'body': '',
+            'from_email': default_from,
+            'default_from': default_from,
+            'specific_email': '',
             'opts': self.model._meta,
         })
 
@@ -321,54 +338,34 @@ class DropTemplateAdmin(admin.ModelAdmin):
 
 
 # ── FeatureProposal + FeatureVote admin ─────────────────────────────────────────
-
-class FeatureVoteInline(admin.TabularInline):
-    model = FeatureVote
-    extra = 0
-    fields = ('user', 'weight', 'created_at')
-    readonly_fields = ('created_at',)
-    raw_id_fields = ('user',)
-
+# (Simplified — voting board is user-facing, admin just for moderation)
 
 @admin.register(FeatureProposal)
 class FeatureProposalAdmin(admin.ModelAdmin):
-    list_display = ('title', 'proposed_by', 'total_weight', 'staff_pick', 'closed', 'created_at')
+    list_display = ('title', 'staff_pick', 'closed', 'created_at')
     list_filter = ('closed', 'staff_pick')
     list_editable = ('staff_pick',)
-    search_fields = ('title', 'description')
+    search_fields = ('title',)
     readonly_fields = ('created_at',)
-    raw_id_fields = ('proposed_by',)
-    inlines = (FeatureVoteInline,)
-    actions = ['promote_to_github', 'close_proposals']
+    actions = ['close_proposals']
 
-    @admin.action(description="Promote selected to GitHub issue & delete")
-    def promote_to_github(self, request, queryset):
-        from core.management.commands.promote_feature import (
-            _ensure_label, _create_issue,
-        )
-        _ensure_label()
-        ok, fail = 0, 0
-        for proposal in queryset.filter(closed=False):
-            score = proposal.total_weight()
-            url = _create_issue(proposal, score)
-            if url:
-                proposal.delete()
-                ok += 1
-            else:
-                fail += 1
-        if ok:
-            messages.success(request, f"{ok} proposal(s) promoted to GitHub.")
-        if fail:
-            messages.warning(request, f"{fail} proposal(s) failed (check GITHUB_ISSUES_TOKEN).")
-
-    @admin.action(description="Close selected proposals (no issue)")
+    @admin.action(description="Close selected proposals")
     def close_proposals(self, request, queryset):
         updated = queryset.update(closed=True)
         messages.success(request, f"{updated} proposal(s) closed.")
 
 
-@admin.register(DropLike)
-class DropLikeAdmin(admin.ModelAdmin):
-    list_display = ('drop', 'user', 'created_at')
-    raw_id_fields = ('drop', 'user')
-    readonly_fields = ('created_at',)
+# ── EmailTemplate admin ────────────────────────────────────────────────────────
+
+@admin.register(EmailTemplate)
+class EmailTemplateAdmin(admin.ModelAdmin):
+    list_display = ('slug', 'subject', 'from_email', 'description', 'updated_at')
+    search_fields = ('slug', 'subject', 'description')
+    readonly_fields = ('updated_at',)
+    fieldsets = (
+        (None, {'fields': ('slug', 'description', 'subject', 'body_text', 'body_html', 'from_email')}),
+        ('Meta', {'fields': ('updated_at',)}),
+    )
+
+
+# DropLike — not registered in admin (no need to monitor individual likes)

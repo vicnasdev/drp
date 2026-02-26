@@ -56,17 +56,29 @@ class Command(BaseCommand):
             drop_url = f"{settings.DOMAIN}/{prefix}{drop.key}/"
             expires_str = drop.expires_at.strftime("%b %d, %Y at %H:%M UTC")
 
+            from core.models import EmailTemplate
+            tpl = EmailTemplate.get('expiry_notification')
+            if tpl:
+                ctx = dict(prefix=prefix, key=drop.key, drop_url=drop_url, expires_str=expires_str)
+                subject = tpl.render_subject(**ctx)
+                message = tpl.render_text(**ctx)
+                from_email = tpl.get_from_email()
+            else:
+                subject = f"drp: your drop /{prefix}{drop.key}/ expires soon"
+                message = (
+                    f"Your drop is expiring on {expires_str}.\n\n"
+                    f"  {drop_url}\n\n"
+                    f"You can renew it from the drop page or via:\n"
+                    f"  drp renew {drop.key}\n\n"
+                    f"— drp"
+                )
+                from_email = settings.DEFAULT_FROM_EMAIL
+
             try:
                 send_mail(
-                    subject=f"drp: your drop /{prefix}{drop.key}/ expires soon",
-                    message=(
-                        f"Your drop is expiring on {expires_str}.\n\n"
-                        f"  {drop_url}\n\n"
-                        f"You can renew it from the drop page or via:\n"
-                        f"  drp renew {drop.key}\n\n"
-                        f"— drp"
-                    ),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    subject=subject,
+                    message=message,
+                    from_email=from_email,
                     recipient_list=[drop.owner.email],
                     fail_silently=True,
                 )

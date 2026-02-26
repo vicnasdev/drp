@@ -8,6 +8,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.db import models
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_POST
@@ -162,6 +163,32 @@ def account_view(request):
         'saved': saved,
         'plan_limits': plan_limits,
         'Plan': Plan,
+    })
+
+
+@login_required
+def manage_view(request):
+    """Manage page — bulk actions on drops, saved drops, collections."""
+    from core.models import Collection
+
+    profile = request.user.profile
+    profile.recalc_storage()
+
+    for d in Drop.objects.filter(owner=request.user):
+        if d.is_expired():
+            d.hard_delete()
+
+    drops = Drop.objects.filter(owner=request.user).order_by('-created_at')
+    saved = SavedDrop.objects.filter(user=request.user).order_by('-saved_at')
+    collections = request.user.collections.annotate(
+        drop_count=models.Count('memberships')
+    ).order_by('-created_at')
+
+    return render(request, 'auth/manage.html', {
+        'profile': profile,
+        'drops': drops,
+        'saved': saved,
+        'collections': collections,
     })
 
 
