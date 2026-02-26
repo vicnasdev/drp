@@ -105,6 +105,15 @@
       </div>
     </div>
     <div id="renderPane" class="render-pane" style="display:none"></div>
+    {% if can_edit %}
+    <div id="fileEditWrap" style="display:none;margin-top:.6rem">
+      <textarea id="fileEditArea" rows="14" style="width:100%;font-family:monospace;font-size:.85rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:.8rem;resize:vertical"></textarea>
+      <div style="display:flex;gap:.5rem;margin-top:.5rem">
+        <button class="btn" id="fileEditSave" onclick="saveFileEdit()">save</button>
+        <button class="btn-sm" onclick="cancelFileEdit()">cancel</button>
+      </div>
+    </div>
+    {% endif %}
     <div class="clip-actions">
       {% load drop_tags %}
       {% include "partials/bookmark_btn.html" with drop=drop ns=drop.ns key=drop.key %}
@@ -471,6 +480,10 @@ async function toggleRender() {
     pane.style.display = 'none';
     btn.textContent = 'render';
     _rendered = false;
+    // Hide edit button and cancel any active edit
+    const editBtn = document.getElementById('fileEditBtn');
+    if (editBtn) editBtn.style.display = 'none';
+    if (_fileEditing) cancelFileEdit();
     return;
   }
 
@@ -526,11 +539,91 @@ async function toggleRender() {
     pane.style.display = 'block';
     btn.textContent = 'source';
     _rendered = true;
+
+    // Show edit button when rendered (owner only)
+    if (CAN_EDIT) {
+      let editBtn = document.getElementById('fileEditBtn');
+      if (!editBtn) {
+        editBtn = document.createElement('button');
+        editBtn.id = 'fileEditBtn';
+        editBtn.className = 'btn-sm';
+        editBtn.textContent = 'edit';
+        editBtn.onclick = startFileEdit;
+        btn.parentNode.insertBefore(editBtn, btn.nextSibling);
+      } else {
+        editBtn.style.display = '';
+      }
+    }
   } catch (e) {
     showToast('Could not fetch file content.');
     btn.textContent = 'render';
   } finally {
     btn.disabled = false;
+  }
+}
+
+// ── File content editing ──────────────────────────────────────────────────────
+let _fileEditing = false;
+
+function startFileEdit() {
+  if (!_renderContent) return;
+  const pane = document.getElementById('renderPane');
+  const wrap = document.getElementById('fileEditWrap');
+  const area = document.getElementById('fileEditArea');
+  if (!wrap || !area) return;
+  area.value = _renderContent;
+  pane.style.display = 'none';
+  wrap.style.display = 'block';
+  area.focus();
+  _fileEditing = true;
+  const editBtn = document.getElementById('fileEditBtn');
+  if (editBtn) editBtn.style.display = 'none';
+}
+
+function cancelFileEdit() {
+  const pane = document.getElementById('renderPane');
+  const wrap = document.getElementById('fileEditWrap');
+  if (wrap) wrap.style.display = 'none';
+  if (pane && _rendered) pane.style.display = 'block';
+  _fileEditing = false;
+  const editBtn = document.getElementById('fileEditBtn');
+  if (editBtn) editBtn.style.display = '';
+}
+
+async function saveFileEdit() {
+  const area = document.getElementById('fileEditArea');
+  const saveBtn = document.getElementById('fileEditSave');
+  if (!area) return;
+  const newContent = area.value;
+  const filename = document.querySelector('.fname')?.textContent?.trim() || KEY;
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'saving…';
+
+  try {
+    const blob = new Blob([newContent], { type: 'text/plain' });
+    const file = new File([blob], filename);
+    const fd = new FormData();
+    fd.append('key', KEY);
+    fd.append('file', file);
+    fd.append('csrfmiddlewaretoken', getCookie('csrftoken'));
+    const res = await fetch('/save/', { method: 'POST', body: fd });
+    if (res.ok) {
+      _renderContent = newContent;
+      showToast('file saved!');
+      cancelFileEdit();
+      // Re-render with new content
+      _rendered = false;
+      toggleRender();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      showToast(data.error || 'Save failed.');
+    }
+  } catch (e) {
+    showToast('Save failed.');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'save';
   }
 }
 </script>
