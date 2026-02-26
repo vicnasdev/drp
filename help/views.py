@@ -213,7 +213,7 @@ DOCS:
 
 
 _FEATURE_REFERENCE = """\
-Upload: `drp up <file-or-text>` or `echo text | drp up`.
+Upload: `drp up <file-or-text>` or `echo text | drp up`. File uploads default to the filename as the key (e.g. `drp up report.pdf` → key `report-pdf`). If that key is taken, a numeric suffix is appended automatically (report-pdf-2, report-pdf-3, etc.). Use `-k myname` to override. Upload multiple files: `drp up file1.txt file2.pdf file3.png` — each gets its own drop keyed to its filename. For batch uploads of an entire directory, use `drp serve ./folder/`.
 Get: `drp get <key>` or visit `drp.fyi/<key>/`.
 Smart get: `drp get <key> --parse` auto-detects content format (JSON, CSV, XML, YAML) and prints parsed output with syntax coloring (colored keys/values for JSON/YAML, box-drawing tables for CSV). If the content is code (Python, Bash, etc.), pygments highlights it with language detection. For file drops: `drp get -f <key> --parse` decodes the file as text, detects the language from the filename, and highlights it. If the file is binary, it tells the user. `drp get <key> --field a.b` extracts a nested value. Shorthand: `drp get key.field`.
 URL fetch (paid): `drp get https://api.example.com/data` fetches an external URL once. Use `--parse` or `--field` to extract data. Requires Starter or Pro plan.
@@ -225,7 +225,7 @@ Raw URL: `drp.fyi/raw/<key>/` (plain text for curl/scripts).
 Serve: `drp serve ./dist/` uploads an entire directory (or glob pattern) and prints a URL table. Supports `--expires` for expiry. Great for sharing build artifacts, log bundles, or project files in one command.
 Collections (paid plans): `drp collection ls` lists collections. `drp collection new "my notes"` creates one. `drp collection add <slug> <key>` adds a drop. `drp collection rm <slug> <key>` removes. `drp collection open <slug>` prints URL.
 Sub-collections: `drp collection new "work" --parent notes` creates a sub-collection under "notes". Nested paths work everywhere: `drp collection add notes/work <key>`, `drp collection open notes/work`. URL: `drp.fyi/@user/notes/work/`.
-Shell navigation: `drp shell` → `cd notes` → `cd work` (or `cd notes/work`). `cd ..` goes up. `pwd` shows path. `ls` lists drops + sub-collections.
+Shell navigation: `drp shell` → `cd notes` → `cd work` (or `cd notes/work`). `cd ..` goes up. `pwd` shows path. `ls` lists drops + sub-collections. The shell is context-aware: when you `cd` into a collection, uploads (`up`, `serve`) are automatically added to that collection. You can also type `drp up` instead of just `up` — the `drp` prefix is stripped automatically. Example: `cd notes` → `up "my todo"` → the drop is created AND added to the "notes" collection in one step.
 Manage drops: `drp rm <key>` deletes a drop (`-f` for files). `drp mv <key> <new-key>` renames. `drp renew <key>` extends expiry (paid). `drp cp <key> <new-key>` duplicates. `drp edit <key>` opens in $EDITOR and re-uploads.
 Flags (only list if user asks): --burn (one-view self-destruct), --password (prompt for password), --expiry 1h/7d/30d, --public.
 Lock/password (paid): `drp lock <key>` sets a password on an existing drop (prompts). `drp lock -f <key>` for files. `drp lock <key> --password pw` sets directly. `drp lock <key> --remove` removes the password. Also available on the web drop page as "set password" button.

@@ -255,9 +255,36 @@ def validate_username(username: str) -> str | None:
 
 # ── Key generation ────────────────────────────────────────────────────────────
 
+# Characters that are unsafe in URLs or get stripped by browsers
+_UNSAFE_KEY_CHARS = set('#?%&+/\\:;@!=<>[]{}()|^~`"\' ')
+
+
 def is_valid_drop_key(key: str) -> bool:
-    """Drop keys must not start with @ (reserved for user namespaces)."""
-    return bool(key) and not key.startswith('@')
+    """
+    Drop keys must:
+    - not be empty
+    - not start with @ (reserved for user namespaces)
+    - not contain URL-unsafe characters (#, ?, %, &, +, etc.)
+    """
+    if not key or key.startswith('@'):
+        return False
+    bad = _UNSAFE_KEY_CHARS.intersection(key)
+    if bad:
+        return False
+    return True
+
+
+def invalid_key_message(key: str) -> str | None:
+    """Return an error message if the key is invalid, or None."""
+    if not key:
+        return 'Key cannot be empty.'
+    if key.startswith('@'):
+        return 'Keys cannot start with "@".'
+    bad = _UNSAFE_KEY_CHARS.intersection(key)
+    if bad:
+        chars = ' '.join(sorted(bad))
+        return f'Key contains forbidden characters: {chars}'
+    return None
 
 
 def gen_key(ns):

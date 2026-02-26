@@ -535,3 +535,113 @@ class TestDropLikes(TestCase):
         data = res.json()
         pub = next(d for d in data['drops'] if d['key'] == 'pub-like')
         self.assertTrue(pub['liked'])
+
+
+# ── Key validation — unsafe characters rejected ──────────────────────────────
+
+class TestKeyValidationOnSave(TestCase):
+    """Unsafe key characters are rejected by save_drop."""
+
+    def test_hash_key_rejected(self):
+        res = _post_text(self.client, '#', 'hello')
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('forbidden', res.json()['error'].lower())
+
+    def test_question_mark_key_rejected(self):
+        res = _post_text(self.client, 'key?q=1', 'hello')
+        self.assertEqual(res.status_code, 400)
+
+    def test_space_key_rejected(self):
+        res = _post_text(self.client, 'hello world', 'data')
+        self.assertEqual(res.status_code, 400)
+
+    def test_ampersand_key_rejected(self):
+        res = _post_text(self.client, 'a&b', 'data')
+        self.assertEqual(res.status_code, 400)
+
+    def test_at_prefix_rejected(self):
+        res = _post_text(self.client, '@user', 'data')
+        self.assertEqual(res.status_code, 400)
+
+    def test_valid_key_accepted(self):
+        res = _post_text(self.client, 'valid-key-123', 'hello')
+        self.assertEqual(res.status_code, 200)
+
+
+# ── Key collision auto-resolve on upload_prepare ──────────────────────────────
+
+class TestUploadPrepareCollision(TestCase):
+    """When a key is taken by another user, upload_prepare auto-resolves with numeric suffix."""
+
+    def setUp(self):
+        self.alice = _make_user('alice_col', Plan.FREE)
+        self.bob   = _make_user('bob_col',   Plan.FREE)
+
+    @patch('core.views.drops.presigned_put', return_value='https://b2.example.com/upload')
+    def test_collision_appends_numeric_suffix(self, mock_b2):
+        # Alice owns 'report'
+        Drop.objects.create(
+            ns=Drop.NS_FILE, key='report', kind=Drop.FILE,
+            owner=self.alice, filename='report.pdf', filesize=100,
+        )
+        # Bob tries to upload 'report' — should get 'report-2'
+        self.client.force_login(self.bob)
+        res = self.client.post(
+            '/upload/prepare/',
+            json.dumps({'key': 'report', 'ns': 'f', 'content_type': 'application/pdf', 'size': 100}),
+            content_type='application/json',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()['key'], 'report-2')
+
+    @patch('core.views.drops.presigned_put', return_value='https://b2.example.com/upload')
+    def test_collision_skips_to_3_when_2_taken(self, mock_b2):
+        # Alice owns 'report' and 'report-2'
+        Drop.objects.create(
+            ns=Drop.NS_FILE, key='report', kind=Drop.FILE,
+            owner=self.alice, filename='r.pdf', filesize=100,
+        )
+        Drop.objects.create(
+            ns=Drop.NS_FILE, key='report-2', kind=Drop.FILE,
+            owner=self.alice, filename='r2.pdf', filesize=100,
+        )
+        # Bob gets 'report-3'
+        self.client.force_login(self.bob)
+        res = self.client.post(
+            '/upload/prepare/',
+            json.dumps({'key': 'report', 'ns': 'f', 'content_type': 'application/pdf', 'size': 100}),
+            content_type='application/json',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()['key'], 'report-3')
+
+    @patch('core.views.drops.presigned_put', return_value='https://b2.example.com/upload')
+    def test_own_key_not_collided(self, mock_b2):
+        """Owner re-uploading to their own key should NOT trigger collision logic."""
+        Drop.objects.create(
+            ns=Drop.NS_FILE, key='myfile', kind=Drop.FILE,
+            owner=self.alice, filename='myfile.pdf', filesize=100,
+        )
+        self.client.force_login(self.alice)
+        res = self.client.post(
+            '/upload/prepare/',
+            json.dumps({'key': 'myfile', 'ns': 'f', 'content_type': 'application/pdf', 'size': 100}),
+            content_type='application/json',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()['key'], 'myfile')
+
+    @patch('core.views.drops.presigned_put', return_value='https://b2.example.com/upload')
+    def test_unsafe_key_rejected_on_prepare(self, mock_b2):
+        self.client.force_login(self.alice)
+        res = self.client.post(
+            '/upload/prepare/',
+            json.dumps({'key': 'bad#key', 'ns': 'f', 'content_type': 'application/pdf', 'size': 100}),
+            content_type='application/json',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('forbidden', res.json()['error'].lower())

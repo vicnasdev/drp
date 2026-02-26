@@ -31,6 +31,7 @@ from core.models import Drop, Plan, SavedDrop
 from .helpers import (
     user_plan, max_file_bytes, max_text_bytes, storage_ok,
     is_paid_user, max_lifetime_secs, gen_key, is_valid_drop_key,
+    invalid_key_message,
     upload_to_b2, delete_from_b2, add_storage, check_password_attempt_rate,
     validate_webhook_url,
 )
@@ -251,7 +252,8 @@ def check_key(request):
     if not key:
         return JsonResponse({"error": "Key required."}, status=400)
     if not is_valid_drop_key(key):
-        return JsonResponse({"available": False, "reserved": True, "ns": ns, "key": key})
+        return JsonResponse({"available": False, "reserved": True, "ns": ns, "key": key,
+                             "error": invalid_key_message(key)})
     if key in _get_reserved_keys():
         return JsonResponse({"available": False, "reserved": True, "ns": ns, "key": key})
     taken = Drop.objects.filter(ns=ns, key=key).exists()
@@ -272,7 +274,7 @@ def save_drop(request):
         return JsonResponse({"error": f'"{key}" is a reserved key.'}, status=400)
 
     if not is_valid_drop_key(key):
-        return JsonResponse({"error": 'Keys cannot start with "@".'}, status=400)
+        return JsonResponse({"error": invalid_key_message(key)}, status=400)
 
     existing = Drop.objects.filter(ns=ns, key=key).first()
     if existing and existing.is_expired():
@@ -500,7 +502,7 @@ def upload_prepare(request):
         return JsonResponse({"error": f'"{key}" is a reserved key.'}, status=400)
 
     if not is_valid_drop_key(key):
-        return JsonResponse({"error": 'Keys cannot start with "@".'}, status=400)
+        return JsonResponse({"error": invalid_key_message(key)}, status=400)
 
     if size > max_file_bytes(request.user):
         limit = Plan.get(user_plan(request.user), "max_file_mb")
@@ -515,11 +517,22 @@ def upload_prepare(request):
         existing = None
 
     if existing and not existing.can_edit(request.user):
-        if existing.is_creation_locked():
-            return JsonResponse({
-                "error": "This drop is protected for 24 hours after creation."
-            }, status=403)
-        return JsonResponse({"error": "This drop is locked to its owner."}, status=403)
+        # Auto-resolve collision by appending numeric suffix
+        base_key = key
+        for i in range(2, 100):
+            candidate = f'{base_key}-{i}'
+            if candidate in _get_reserved_keys():
+                continue
+            ex = Drop.objects.filter(ns=ns, key=candidate).first()
+            if ex and ex.is_expired():
+                ex.hard_delete()
+                ex = None
+            if not ex:
+                key = candidate
+                existing = None
+                break
+        else:
+            return JsonResponse({"error": "Could not find an available key."}, status=409)
 
     from core.views.b2 import presigned_put
     EXPIRES_IN = 3600
@@ -726,7 +739,7 @@ def upload_from_url(request):
         return JsonResponse({"error": f'"{key}" is a reserved key.'}, status=400)
 
     if not is_valid_drop_key(key):
-        return JsonResponse({"error": 'Keys cannot start with "@".'}, status=400)
+        return JsonResponse({"error": invalid_key_message(key)}, status=400)
 
     # ── Fetch the remote URL ──────────────────────────────────────────────
     import requests as _req, io, os.path, mimetypes

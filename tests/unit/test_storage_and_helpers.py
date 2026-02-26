@@ -1,7 +1,8 @@
 """
 tests/unit/test_storage_and_helpers.py
 
-Unit tests for storage accounting, plan helper functions, and anon drop claiming.
+Unit tests for storage accounting, plan helper functions, anon drop claiming,
+and key validation.
 """
 
 from unittest.mock import MagicMock
@@ -13,6 +14,7 @@ from core.models import Drop, Plan, UserProfile
 from core.views.helpers import (
     user_plan, max_file_bytes, max_text_bytes, storage_ok,
     is_paid_user, max_lifetime_secs, claim_anon_drops,
+    is_valid_drop_key, invalid_key_message,
 )
 
 
@@ -214,3 +216,76 @@ class TestStorageSignal(TestCase):
             drop.hard_delete()
         self.user.profile.refresh_from_db()
         self.assertGreaterEqual(self.user.profile.storage_used_bytes, 0)
+
+
+# ── is_valid_drop_key / invalid_key_message ───────────────────────────────────
+
+class TestIsValidDropKey(TestCase):
+    """Key validation: rejects empty, @-prefixed, and URL-unsafe characters."""
+
+    def test_normal_key_valid(self):
+        self.assertTrue(is_valid_drop_key('my-report'))
+
+    def test_alphanumeric_with_hyphens_valid(self):
+        self.assertTrue(is_valid_drop_key('hello-world-2'))
+
+    def test_empty_key_invalid(self):
+        self.assertFalse(is_valid_drop_key(''))
+
+    def test_at_prefix_invalid(self):
+        self.assertFalse(is_valid_drop_key('@user'))
+
+    def test_hash_invalid(self):
+        self.assertFalse(is_valid_drop_key('my#key'))
+
+    def test_question_mark_invalid(self):
+        self.assertFalse(is_valid_drop_key('key?value'))
+
+    def test_percent_invalid(self):
+        self.assertFalse(is_valid_drop_key('100%done'))
+
+    def test_ampersand_invalid(self):
+        self.assertFalse(is_valid_drop_key('a&b'))
+
+    def test_space_invalid(self):
+        self.assertFalse(is_valid_drop_key('my key'))
+
+    def test_slash_invalid(self):
+        self.assertFalse(is_valid_drop_key('path/to'))
+
+    def test_backslash_invalid(self):
+        self.assertFalse(is_valid_drop_key('path\\to'))
+
+    def test_colon_invalid(self):
+        self.assertFalse(is_valid_drop_key('file:name'))
+
+    def test_brackets_invalid(self):
+        self.assertFalse(is_valid_drop_key('arr[0]'))
+
+    def test_bare_hash_invalid(self):
+        self.assertFalse(is_valid_drop_key('#'))
+
+    def test_dots_and_underscores_valid(self):
+        self.assertTrue(is_valid_drop_key('my_file.v2'))
+
+    def test_unicode_valid(self):
+        self.assertTrue(is_valid_drop_key('café'))
+
+
+class TestInvalidKeyMessage(TestCase):
+    def test_valid_key_returns_none(self):
+        self.assertIsNone(invalid_key_message('good-key'))
+
+    def test_empty_key_message(self):
+        msg = invalid_key_message('')
+        self.assertIn('empty', msg.lower())
+
+    def test_at_prefix_message(self):
+        msg = invalid_key_message('@user')
+        self.assertIn('@', msg)
+
+    def test_forbidden_chars_message(self):
+        msg = invalid_key_message('a#b?c')
+        self.assertIn('#', msg)
+        self.assertIn('?', msg)
+        self.assertIn('forbidden', msg.lower())

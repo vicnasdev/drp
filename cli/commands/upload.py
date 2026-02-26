@@ -257,6 +257,10 @@ def _upload_file(host, session, path, key, cfg, args, password='',
     expiry_days = _parse_expires(getattr(args, 'expires', None))
     _test_mode = os.environ.get('DRP_TEST_MODE') == '1'
 
+    # Default key to slugified filename when not explicitly provided
+    if not key:
+        key = api.slug(os.path.basename(path))
+
     result_key = api.upload_file(host, session, path, key=key,
                                  expiry_days=expiry_days, password=password or None,
                                  is_test=_test_mode, schedule=schedule,

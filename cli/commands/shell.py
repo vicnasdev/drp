@@ -184,6 +184,10 @@ def cmd_shell(args):
             if not tokens:
                 continue
 
+            # Strip leading 'drp' prefix — users may type "drp up" instead of "up"
+            if tokens[0].lower() == 'drp' and len(tokens) > 1:
+                tokens = tokens[1:]
+
             cmd = tokens[0].lower()
 
             # ── cd is special — it mutates cwd ────────────────────────────────
@@ -263,7 +267,8 @@ def cmd_shell(args):
             # _dispatch returns _NOT_HANDLED for unknown native commands;
             # delegate them to the top-level CLI parser/handlers.
             if output_lines is _NOT_HANDLED:
-                _delegate_to_cli(cmd, rest)
+                _delegate_to_cli(cmd, rest, cwd=cwd, host=host,
+                                 session=session, username=username)
                 continue
 
             if pipe_filter:
@@ -293,7 +298,7 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
             return _ls_collection_drops(host, session, cfg, username, cwd)
 
         # Otherwise delegate to the real CLI handler (supports -l, --col, etc.)
-        _delegate_to_cli(cmd, rest)
+        _delegate_to_cli(cmd, rest, cwd=cwd, host=host, session=session, username=username)
         return None
 
     # ── cat ───────────────────────────────────────────────────────────────────
@@ -328,17 +333,17 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
 
     # ── rm — delegate to CLI handler ────────────────────────────────────────
     if cmd == 'rm':
-        _delegate_to_cli(cmd, rest)
+        _delegate_to_cli(cmd, rest, cwd=cwd, host=host, session=session, username=username)
         return None
 
     # ── cp — delegate to CLI handler ────────────────────────────────────────
     if cmd == 'cp':
-        _delegate_to_cli(cmd, rest)
+        _delegate_to_cli(cmd, rest, cwd=cwd, host=host, session=session, username=username)
         return None
 
     # ── mv — delegate to CLI handler ────────────────────────────────────────
     if cmd == 'mv':
-        _delegate_to_cli(cmd, rest)
+        _delegate_to_cli(cmd, rest, cwd=cwd, host=host, session=session, username=username)
         return None
 
     # ── add (to current collection) ───────────────────────────────────────────
@@ -364,16 +369,34 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
 
     # ── status — delegate to CLI handler ─────────────────────────────────────
     if cmd == 'status':
-        _delegate_to_cli(cmd, rest)
+        _delegate_to_cli(cmd, rest, cwd=cwd, host=host, session=session, username=username)
         return None
+
+    # ── collection — inject cwd slug when inside a collection ────────────────
+    if cmd == 'collection' and cwd and rest:
+        sub = rest[0].lower()
+        # collection add <key> → collection add <cwd_slug> <key>
+        # collection rm <key>  → collection rm  <cwd_slug> <key>
+        # collection open      → collection open <cwd_slug>
+        if sub in ('add', 'rm') and len(rest) >= 2:
+            # Check if first arg after sub looks like a key (not a slug path)
+            # If user gave only 1 positional, inject cwd as slug
+            flags = [r for r in rest[1:] if r.startswith('-')]
+            positional = [r for r in rest[1:] if not r.startswith('-')]
+            if len(positional) == 1:
+                # Only key given, inject cwd as slug
+                rest = [sub, cwd] + flags + positional
+        elif sub == 'open' and len(rest) == 1:
+            rest = [sub, cwd]
 
     # ── Delegate to top-level CLI handler if recognized ─────────────────────
     return _NOT_HANDLED
 
 
-def _delegate_to_cli(cmd, rest):
+def _delegate_to_cli(cmd, rest, *, cwd=None, host=None, session=None, username=None):
     """
     Run a drp CLI command by reusing the top-level parser and handler.
+    When *cwd* (collection path) is set, uploads are auto-added to that collection.
     Returns True if the command was handled, False if not a valid drp command.
     """
     from cli.drp import build_parser, _HANDLERS
@@ -382,6 +405,12 @@ def _delegate_to_cli(cmd, rest):
         from cli.format import red
         print(f'  {red("✗")} unknown command: {cmd}  (type help)')
         return False
+
+    # Snapshot local drop list before the command runs
+    drops_before = None
+    if cwd and cmd in ('up', 'serve'):
+        from cli.config import load_local_drops
+        drops_before = {d['key'] for d in load_local_drops()}
 
     try:
         parser = build_parser()
@@ -392,6 +421,19 @@ def _delegate_to_cli(cmd, rest):
     except Exception as e:
         from cli.format import red
         print(f'  {red("✗")} {e}')
+        return True
+
+    # Auto-add newly created drops to the current collection
+    if drops_before is not None and host and session and username:
+        from cli.config import load_local_drops
+        from cli.format import dim, magenta
+        new_drops = [d for d in load_local_drops() if d['key'] not in drops_before]
+        for d in new_drops:
+            ns = d.get('ns', 'c')
+            result = _collection_add(host, session, username, cwd, ns, d['key'])
+            for ln in result:
+                print(ln)
+
     return True
 
 
@@ -546,4 +588,7 @@ def _print_shell_help():
     print(f'  {dim("pipe subset:")}  grep · sort · head · tail')
     print(f'  {dim("example:")}      ls | grep notes')
     print(f'  {dim("tab:")}          press tab to autocomplete commands and keys')
+    print()
+    print(f'  {dim("context:")}      inside a collection, up/serve auto-add drops to it')
+    print(f'  {dim("prefix:")}       you can type \"drp up\" or just \"up\" — both work')
     print()

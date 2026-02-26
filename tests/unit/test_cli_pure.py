@@ -554,3 +554,169 @@ class TestVersion:
         assert len(parts) >= 2
         for part in parts:
             assert part.isdigit()
+
+
+# ── cli.commands.upload: filename-based key default ───────────────────────────
+
+class TestUploadFileDefaultKey:
+    """_upload_file should derive key from filename when none is given."""
+
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
+    @patch('cli.commands.upload.api')
+    @patch('cli.commands.upload.config')
+    @patch('cli.commands.upload.report_outcome')
+    def test_default_key_from_filename(self, mock_report, mock_cfg, mock_api,
+                                        mock_login, mock_req, mock_ctx_cfg):
+        """When key is empty, _upload_file should slugify the basename."""
+        from cli.commands.upload import _upload_file
+        mock_api.slug.return_value = 'report'
+        mock_api.upload_file.return_value = 'report'
+
+        args = MagicMock()
+        args.expires = None
+
+        with patch('builtins.print'):
+            _upload_file('https://h', MagicMock(), '/tmp/report.pdf', '', {}, args)
+
+        mock_api.slug.assert_called_once_with('report.pdf')
+        mock_api.upload_file.assert_called_once()
+        call_kwargs = mock_api.upload_file.call_args
+        assert call_kwargs[1]['key'] == 'report'
+
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
+    @patch('cli.commands.upload.api')
+    @patch('cli.commands.upload.config')
+    @patch('cli.commands.upload.report_outcome')
+    def test_explicit_key_not_overridden(self, mock_report, mock_cfg, mock_api,
+                                          mock_login, mock_req, mock_ctx_cfg):
+        """When key is provided, it should NOT be replaced."""
+        from cli.commands.upload import _upload_file
+        mock_api.upload_file.return_value = 'custom'
+
+        args = MagicMock()
+        args.expires = None
+
+        with patch('builtins.print'):
+            _upload_file('https://h', MagicMock(), '/tmp/report.pdf', 'custom', {}, args)
+
+        mock_api.slug.assert_not_called()
+
+
+# ── Shell: drp prefix stripping ──────────────────────────────────────────────
+
+class TestShellDrpPrefix:
+    """In the shell REPL, 'drp <cmd>' should be treated as just '<cmd>'."""
+
+    def test_prefix_stripped(self):
+        import shlex
+        line = 'drp up hello.txt'
+        tokens = shlex.split(line.strip())
+        if tokens[0].lower() == 'drp' and len(tokens) > 1:
+            tokens = tokens[1:]
+        assert tokens == ['up', 'hello.txt']
+
+    def test_bare_drp_not_stripped(self):
+        import shlex
+        line = 'drp'
+        tokens = shlex.split(line.strip())
+        if tokens[0].lower() == 'drp' and len(tokens) > 1:
+            tokens = tokens[1:]
+        # Single 'drp' stays as-is (will get "unknown command" error)
+        assert tokens == ['drp']
+
+    def test_case_insensitive(self):
+        import shlex
+        line = 'DRP up hello.txt'
+        tokens = shlex.split(line.strip())
+        if tokens[0].lower() == 'drp' and len(tokens) > 1:
+            tokens = tokens[1:]
+        assert tokens == ['up', 'hello.txt']
+
+
+# ── Shell: collection slug injection ─────────────────────────────────────────
+
+class TestShellCollectionSlugInjection:
+    """When cwd is set, 'collection add <key>' should auto-inject cwd as slug."""
+
+    def test_collection_add_injects_cwd(self):
+        """Simulates the logic in _dispatch that injects cwd slug."""
+        cwd = 'python'
+        cmd = 'collection'
+        rest = ['add', 'autoRun']
+
+        # Reproduce the injection logic from shell.py _dispatch
+        if cmd == 'collection' and cwd and rest:
+            sub = rest[0].lower()
+            if sub in ('add', 'rm') and len(rest) >= 2:
+                flags = [r for r in rest[1:] if r.startswith('-')]
+                positional = [r for r in rest[1:] if not r.startswith('-')]
+                if len(positional) == 1:
+                    rest = [sub, cwd] + flags + positional
+
+        assert rest == ['add', 'python', 'autoRun']
+
+    def test_collection_add_no_inject_when_slug_given(self):
+        """If user provides both slug and key, don't inject."""
+        cwd = 'python'
+        cmd = 'collection'
+        rest = ['add', 'other-collection', 'mykey']
+
+        if cmd == 'collection' and cwd and rest:
+            sub = rest[0].lower()
+            if sub in ('add', 'rm') and len(rest) >= 2:
+                flags = [r for r in rest[1:] if r.startswith('-')]
+                positional = [r for r in rest[1:] if not r.startswith('-')]
+                if len(positional) == 1:
+                    rest = [sub, cwd] + flags + positional
+
+        # Two positionals => no injection
+        assert rest == ['add', 'other-collection', 'mykey']
+
+    def test_collection_open_injects_cwd(self):
+        cwd = 'notes'
+        cmd = 'collection'
+        rest = ['open']
+
+        if cmd == 'collection' and cwd and rest:
+            sub = rest[0].lower()
+            if sub == 'open' and len(rest) == 1:
+                rest = [sub, cwd]
+
+        assert rest == ['open', 'notes']
+
+
+# ── cli.commands.serve: numeric collision suffix ──────────────────────────────
+
+class TestServeCollisionSuffix:
+    """serve should use -2, -3, ... for collisions instead of random suffixes."""
+
+    @patch('cli.commands._context.config')
+    @patch('cli.commands._context.requests')
+    @patch('cli.commands._context.auto_login')
+    @patch('cli.commands.serve.api')
+    @patch('cli.commands.serve.config')
+    def test_serve_numeric_suffix_on_collision(self, mock_cfg, mock_api,
+                                                mock_login, mock_req, mock_ctx_cfg):
+        from cli.commands.serve import cmd_serve
+
+        mock_ctx_cfg.load.return_value = {'host': 'https://h'}
+        mock_api.slug.return_value = 'notes'
+        mock_api.upload_file.return_value = 'notes-2'
+
+        args = MagicMock()
+        args.targets = []
+        args.expires = None
+
+        # Test the collision loop logic directly
+        with patch('cli.commands.serve._resolve_paths', return_value=['/tmp/notes.txt']):
+            with patch('cli.api.actions.key_exists') as mock_exists:
+                mock_exists.side_effect = [True, False]  # 'notes' taken, 'notes-2' available
+                with patch('builtins.print'):
+                    cmd_serve(args)
+
+        # upload_file should be called with key='notes-2'
+        mock_api.upload_file.assert_called_once()

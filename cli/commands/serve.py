@@ -45,9 +45,10 @@ def cmd_serve(args):
         key = api.slug(filename)
 
         from cli.api.actions import key_exists
-        import secrets
-        if key_exists(host, session, key, ns='f'):
-            key = f'{key}-{secrets.token_urlsafe(4)}'
+        for i in range(2, 100):
+            if not key_exists(host, session, key, ns='f'):
+                break
+            key = f'{api.slug(filename)}-{i}'
 
         try:
             result_key = api.upload_file(
