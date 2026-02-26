@@ -918,6 +918,7 @@ class TestAsk:
         mock_ctx.return_value = ({}, 'https://test.drp.fyi', mock_session)
         from cli.commands.ask import cmd_ask
         args = MagicMock()
+        args.history = False
         args.clear = True
         cmd_ask(args)
         out = capsys.readouterr().out
