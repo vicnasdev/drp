@@ -29,6 +29,7 @@ from core.models import EmailVerification
 def _send_verification_email(user):
     """Create (or replace) a verification token and send the email."""
     from core.models import EmailTemplate
+    from django.core.mail import EmailMultiAlternatives
 
     token = secrets.token_urlsafe(48)
     EmailVerification.objects.filter(user=user).delete()
@@ -39,11 +40,12 @@ def _send_verification_email(user):
     tpl = EmailTemplate.get('verify_email')
     if tpl:
         subject = tpl.render_subject(verify_url=verify_url)
-        message = tpl.render_text(verify_url=verify_url)
+        text_body = tpl.render_text(verify_url=verify_url)
+        html_body = tpl.render_html(verify_url=verify_url)
         from_email = tpl.get_from_email()
     else:
         subject = 'Verify your drp email address'
-        message = (
+        text_body = (
             f'Hi,\n\n'
             f'Click the link below to verify your drp email address.\n'
             f'The link expires in 24 hours.\n\n'
@@ -51,15 +53,18 @@ def _send_verification_email(user):
             f'If you did not create a drp account, ignore this email.\n\n'
             f'— drp'
         )
+        html_body = ''
         from_email = settings.DEFAULT_FROM_EMAIL
 
-    send_mail(
+    msg = EmailMultiAlternatives(
         subject=subject,
-        message=message,
+        body=text_body,
         from_email=from_email,
-        recipient_list=[user.email],
-        fail_silently=False,
+        to=[user.email],
     )
+    if html_body:
+        msg.attach_alternative(html_body, 'text/html')
+    msg.send()
 
 
 def verify_email_view(request, token):

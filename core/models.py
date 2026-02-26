@@ -1001,8 +1001,8 @@ class EmailTemplate(models.Model):
     slug        = models.SlugField(max_length=80, unique=True, help_text="Unique identifier, e.g. verify_email")
     description = models.CharField(max_length=200, blank=True, help_text="Admin note about where this template is used")
     subject     = models.CharField(max_length=200)
-    body_text   = models.TextField(help_text="Plain text body. Use {placeholder} for variables.")
-    body_html   = models.TextField(blank=True, help_text="Optional HTML body. Leave blank for plain-text-only emails.")
+    body_html   = models.TextField(help_text="HTML body. Use {placeholder} for variables.")
+    body_text   = models.TextField(blank=True, help_text="Plain-text override. Leave blank to auto-generate from HTML.")
     from_email  = models.EmailField(blank=True, help_text="Override from address. Blank = DEFAULT_FROM_EMAIL.")
     updated_at  = models.DateTimeField(auto_now=True)
 
@@ -1024,7 +1024,16 @@ class EmailTemplate(models.Model):
         return self.subject.format(**kwargs)
 
     def render_text(self, **kwargs):
-        return self.body_text.format(**kwargs)
+        if self.body_text:
+            return self.body_text.format(**kwargs)
+        # Auto-generate plain text from HTML
+        from django.utils.html import strip_tags
+        import re
+        txt = strip_tags(self.body_html.format(**kwargs))
+        # Collapse whitespace runs but keep paragraph breaks
+        txt = re.sub(r'[ \t]+', ' ', txt)
+        txt = re.sub(r'\n{3,}', '\n\n', txt)
+        return txt.strip()
 
     def render_html(self, **kwargs):
         if not self.body_html:

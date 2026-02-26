@@ -8,8 +8,7 @@ from django.urls import path
 from django.utils.html import format_html
 
 from .models import (
-    UserProfile, Drop, BugReport,
-    Collection, CollectionMembership, PlanLimit,
+    UserProfile, PlanLimit,
     Group, GroupMembership,
     EmailTemplate,
 )
@@ -161,17 +160,6 @@ admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
 
 
-# ── Drop admin ────────────────────────────────────────────────────────────────
-
-@admin.register(Drop)
-class DropAdmin(admin.ModelAdmin):
-    list_display = ('key', 'kind', 'owner', 'owner_group', 'locked', 'is_public', 'filesize', 'created_at', 'expires_at', 'visible_from')
-    list_filter = ('kind', 'locked', 'is_public', 'burn')
-    search_fields = ('key', 'owner__email', 'filename')
-    readonly_fields = ('created_at', 'last_accessed_at', 'renewal_count', 'view_count', 'last_viewed_at')
-    raw_id_fields = ('owner', 'owner_group')
-
-
 # ── UserProfile admin ─────────────────────────────────────────────────────────
 
 @admin.register(UserProfile)
@@ -203,49 +191,6 @@ class UserProfileAdmin(admin.ModelAdmin):
     def downgrade_to_free(self, request, queryset):
         from .models import Plan
         queryset.update(plan=Plan.FREE, plan_since=None)
-
-# ── BugReport admin ───────────────────────────────────────────────────────────
-
-@admin.register(BugReport)
-class BugReportAdmin(admin.ModelAdmin):
-    list_display  = ('created_at', 'category', 'user', 'hide_identity', 'short_desc', 'github_link')
-    list_filter   = ('category', 'hide_identity')
-    search_fields = ('description', 'user__email')
-    readonly_fields = ('created_at', 'github_issue_url', 'user', 'category',
-                       'description', 'hide_identity')
-
-    @admin.display(description='description')
-    def short_desc(self, obj):
-        return obj.description[:60] + ('…' if len(obj.description) > 60 else '')
-
-    @admin.display(description='issue')
-    def github_link(self, obj):
-        if obj.github_issue_url:
-            return format_html('<a href="{}" target="_blank">view →</a>', obj.github_issue_url)
-        return '—'
-
-
-# ── Collection admin ──────────────────────────────────────────────────────────
-
-class CollectionMembershipInline(admin.TabularInline):
-    model = CollectionMembership
-    extra = 0
-    fields = ('ns', 'key', 'added_at')
-    readonly_fields = ('added_at',)
-
-
-@admin.register(Collection)
-class CollectionAdmin(admin.ModelAdmin):
-    list_display  = ('__str__', 'owner', 'parent', 'owner_group', 'slug', 'public_inbox', 'member_count', 'created_at')
-    list_filter   = ('owner__profile__plan', 'public_inbox')
-    search_fields = ('slug', 'name', 'owner__username', 'owner__email')
-    readonly_fields = ('created_at',)
-    raw_id_fields = ('owner', 'owner_group', 'parent')
-    inlines = (CollectionMembershipInline,)
-
-    @admin.display(description='drops')
-    def member_count(self, obj):
-        return obj.memberships.count()
 
 @admin.register(PlanLimit)
 class PlanLimitAdmin(admin.ModelAdmin):
@@ -297,7 +242,9 @@ class EmailTemplateAdmin(admin.ModelAdmin):
     search_fields = ('slug', 'subject', 'description')
     readonly_fields = ('updated_at',)
     fieldsets = (
-        (None, {'fields': ('slug', 'description', 'subject', 'body_text', 'body_html', 'from_email')}),
+        (None, {'fields': ('slug', 'description', 'subject', 'body_html', 'from_email')}),
+        ('Plain-text override', {'classes': ('collapse',), 'fields': ('body_text',),
+                                  'description': 'Leave blank to auto-generate from HTML.'}),
         ('Meta', {'fields': ('updated_at',)}),
     )
 
