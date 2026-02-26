@@ -19,7 +19,7 @@ done
 
 # Ensure the configured model is present
 # (no-op if already baked into the image)
-MODEL="${OLLAMA_MODEL:-qwen2.5:0.5b}"
+MODEL="${OLLAMA_MODEL:-gemma3:1b}"
 echo "Pulling model: $MODEL"
 ollama pull "$MODEL"
 

@@ -1,53 +1,68 @@
-# [drp](https://drp.fyi) ![version](https://img.shields.io/github/v/tag/vicnasdev/drp)
+# [drp](https://drp.fyi) — instant clipboard & file sharing
 
-Drop files or paste text, get a link instantly.
+![version](https://img.shields.io/github/v/tag/vicnasdev/drp)
+![license](https://img.shields.io/badge/CLI-MIT-green)
+![python](https://img.shields.io/badge/python-3.10+-blue)
+
+Share text, code snippets, and files from your terminal in seconds. Get a link, share it anywhere.
+
+**[drp.fyi](https://drp.fyi)** — try it now, no account needed.
 
 ```bash
 pipx install drp-cli
-drp setup && drp up "hello world"
+drp setup
+drp up "hello world"        # → https://drp.fyi/a1b2c3/
 ```
 
-## Deploy
+## What can drp do?
 
-> ⚠️ Self-hosting for personal or internal use only — see [LICENSE](https://github.com/vicnasdev/drp/blob/main/LICENSE).
+```bash
+drp up notes.md              # upload a file → get a link
+echo "secret" | drp up --burn # burn after first view
+drp up photo.png -k avatar   # custom key → drp.fyi/f/avatar/
+drp get mykey                 # fetch text back
+drp get -f report             # download a file
+drp ls                        # list your drops
+drp lock mykey                # password-protect (paid)
+drp shell                     # interactive REPL
+```
+
+**Embed anywhere** — images, iframes, raw text:
+```
+https://drp.fyi/embed/mykey/    ← embeddable viewer
+https://drp.fyi/raw/mykey/      ← plain text (curl-friendly)
+![img](https://drp.fyi/raw/avatar/)  ← markdown image
+```
+
+**Collections** — organize drops into folders with sub-collections, shareable URLs, and shell navigation.
+
+**Plans** — anonymous drops work instantly. [Sign up free](https://drp.fyi/auth/register/) for longer expiry, or go [Starter/Pro](https://drp.fyi/help/plans/) for collections, passwords, API tokens, and more.
+
+## Links
+
+- **Website:** [drp.fyi](https://drp.fyi)
+- **Help & docs:** [drp.fyi/help](https://drp.fyi/help/)
+- **Plans & pricing:** [drp.fyi/help/plans](https://drp.fyi/help/plans/)
+- **CLI reference:** [drp.fyi/help/cli](https://drp.fyi/help/cli/)
+- **PyPI (stable):** [pypi.org/project/drp](https://pypi.org/project/drp/)
+- **PyPI (dev):** [pypi.org/project/drp-cli](https://pypi.org/project/drp-cli/)
+
+## Self-hosting
+
+> Source-available for personal/internal use — see [LICENSE](LICENSE).
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.com?referralCode=ZIdvo-)
 
-1. Fork → Railway → connect repo → add PostgreSQL
-2. Set env vars (see below)
-3. Start command: `python manage.py collectstatic --noinput && python manage.py migrate && gunicorn project.wsgi --bind 0.0.0.0:$PORT`
-4. Create superuser via Railway shell: `python manage.py createsuperuser`
-
-### Environment variables
-
-| Variable | Required | Description |
-|---|---|---|
-| `SECRET_KEY` | ✓ | Django secret key |
-| `DOMAIN` | ✓ | e.g. `hello.me` |
-| `DB_URL` | ✓ | PostgreSQL connection string |
-| `B2_KEY_ID` | ✓ | Backblaze B2 key ID |
-| `B2_APP_KEY` | ✓ | Backblaze B2 key secret |
-| `B2_BUCKET_NAME` | ✓ | e.g. `drp-files` |
-| `B2_ENDPOINT_URL` | ✓ | e.g. `https://s3.us-east-005.backblazeb2.com` |
-| `RESEND_API_KEY` | — | Transactional email |
-| `LEMONSQUEEZY_API_KEY` | — | Billing |
-| `LEMONSQUEEZY_SIGNING_SECRET` | — | Webhook verification |
-| `LEMONSQUEEZY_STORE_ID` | — | Store ID |
-| `LEMONSQUEEZY_STARTER_VARIANT_ID` | — | Starter plan variant |
-| `LEMONSQUEEZY_PRO_VARIANT_ID` | — | Pro plan variant |
-| `CLEANUP_INTERVAL_SECS` | — | Cleanup interval in seconds (default `3600`) |
-| `LLM_BASE_URL` | — | Ollama endpoint (e.g. `http://ollama.railway.internal:11434/v1`) |
-| `LLM_MODEL` | `qwen2.5:0.5b` | Model name |
-| `DEBUG` | — | `True` for local dev only |
-
-## License
-
-Server: source-available, personal/internal use only — see [LICENSE](https://github.com/vicnasdev/drp/blob/main/LICENSE).  
-CLI (`cli/`): MIT.
+See [drp.fyi/help](https://drp.fyi/help/) for setup instructions and environment variables.
 
 ### Commercial License
 
-Want to deploy drp for your organization? A **Commercial Self-Hosted License** is available — includes full source access, modification rights, and security updates.
+Want to deploy drp for your organization? A **Commercial Self-Hosted License** is available.
 
-[Purchase & generate your license PDF →](https://drp.fyi/billing/licensing/)  
-See [COMMERCIAL.md](https://github.com/vicnasdev/drp/blob/dev/COMMERCIAL.md) for full terms.
+[Purchase & generate your license PDF →](https://drp.fyi/billing/licensing/)
+See [COMMERCIAL.md](COMMERCIAL.md) for full terms.
+
+## License
+
+Server: source-available, personal/internal use only — see [LICENSE](LICENSE).
+CLI (`cli/`): MIT.

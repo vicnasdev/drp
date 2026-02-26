@@ -1,10 +1,8 @@
 import json
 import logging
-import re
 import threading
 import traceback as tb
 from functools import cache
-from html.parser import HTMLParser
 from pathlib import Path
 
 import markdown
@@ -210,29 +208,6 @@ DOCS:
 {docs}"""
 
 
-class _TagStripper(HTMLParser):
-    """Strip HTML tags, keep text content."""
-
-    def __init__(self):
-        super().__init__()
-        self._parts: list[str] = []
-
-    def handle_data(self, d: str) -> None:
-        self._parts.append(d)
-
-    def get_text(self) -> str:
-        from html import unescape
-        return unescape("".join(self._parts))
-
-
-def _strip_html(text: str) -> str:
-    text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.S)
-    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.S)
-    s = _TagStripper()
-    s.feed(text)
-    return s.get_text()
-
-
 _FEATURE_REFERENCE = """\
 Upload: `drp up <file-or-text>` or `echo text | drp up`.
 Get: `drp get <key>` or visit `drp.fyi/<key>/`.
@@ -254,25 +229,6 @@ TOKEN TYPES (three separate systems — do NOT confuse them):
 Likes: logged-in users can like public drops (toggle). Explore page (/explore/) supports ?sort=likes to sort by most liked (default: most recent). Like counts appear in the JSON API and the explore UI.
 Plans: anon, free, starter, pro → drp.fyi/help/plans/
 """
-
-
-def _cli_docs_as_text() -> str:
-    """Render CLI parser info as plain-text docs for the bot context."""
-    info = _get_parser_info()
-    lines = [f"# CLI reference\n\n{info['description']}\n"]
-    for cmd in info["commands"]:
-        lines.append(f"## drp {cmd['name']}")
-        lines.append(cmd["help"])
-        for arg in cmd["args"]:
-            label = arg["flags"] if not arg["positional"] else arg["metavar"].lower()
-            req = "" if arg.get("required") else " (optional)"
-            lines.append(f"  - `{label}`{req}: {arg['help']}")
-        if cmd["epilog"]:
-            lines.append(f"  Example: {cmd['epilog']}")
-        lines.append("")
-    if info.get("epilog"):
-        lines.append(f"## examples\n{info['epilog']}")
-    return "\n".join(lines)
 
 
 @cache
@@ -330,7 +286,7 @@ def ask(request):
 
     docs = _get_docs_context()
 
-    model = getattr(settings, "LLM_MODEL", "qwen2.5:0.5b")
+    model = getattr(settings, "LLM_MODEL", "gemma3:1b")
     url = f"{base_url.rstrip('/')}/chat/completions"
 
     try:

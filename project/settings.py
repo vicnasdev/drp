@@ -15,7 +15,7 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
 DOMAIN = os.environ.get("DOMAIN")
 if not DOMAIN:
     # Sensible defaults per environment
-    DOMAIN = {"prod": "drp.fyi", "dev": "drp.vicnas.me"}.get(ENVIRONMENT)
+    DOMAIN = {"prod": "drp.fyi", "dev": "dev.drp.fyi"}.get(ENVIRONMENT)
 if DOMAIN:
     ALLOWED_HOSTS       = [DOMAIN]
     CSRF_TRUSTED_ORIGINS = [f"https://{DOMAIN}", f"http://{DOMAIN}"]
@@ -172,7 +172,7 @@ GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_WEBHOOK_SECRET', '')# Hardcoded p
 GITHUB_WEBHOOK_URL = f"https://{DOMAIN}/api/github-webhook/" if DOMAIN else ""
 # ── Help bot (LLM — OpenAI-compatible, e.g. Ollama) ──────────────────────────
 LLM_BASE_URL = os.environ.get('LLM_BASE_URL', '')   # e.g. http://ollama.railway.internal:11434/v1
-LLM_MODEL    = os.environ.get('LLM_MODEL', 'qwen2.5:1.5b')
+LLM_MODEL    = os.environ.get('LLM_MODEL', 'gemma3:1b')
 
 # ── Bug reports ───────────────────────────────────────────────────────────────
 BUG_REPORT_DAILY_LIMIT = 3   # max reports per user per day
