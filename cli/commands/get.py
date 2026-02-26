@@ -113,7 +113,16 @@ def _get_clipboard(args, host, session, t, password='', parse=False, field=''):
         print(f'  Tip: download directly with  curl -Lo file "{url}"')
         print(f'       or re-upload with        drp up "{url}" --remote')
         return
-
+    if kind == 'live_error':
+        # Live reference exists but the source URL couldn't be fetched
+        data = content
+        url  = data.get('source_url', '?')
+        err_msg = data.get('fetch_error', 'unknown error')
+        t.print()
+        print(f'  \u2717 Live reference fetch failed', file=sys.stderr)
+        print(f'    URL:   {url}', file=sys.stderr)
+        print(f'    Error: {err_msg}', file=sys.stderr)
+        sys.exit(1)
     if kind == 'text':
         t.print()
         # Smart parse / field extraction

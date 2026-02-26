@@ -967,3 +967,109 @@ class TestAskHistory:
         args.clear = True
         cmd_ask(args)
         assert 'cleared' in capsys.readouterr().out
+
+
+# ── Live reference edge cases ─────────────────────────────────────────────────
+
+class TestLiveRefGetClipboard:
+    """get_clipboard handling of live reference responses."""
+
+    def test_live_error_returned(self):
+        from cli.api.text import get_clipboard
+        mock_session = MagicMock()
+        mock_resp = MagicMock(ok=True, status_code=200)
+        mock_resp.json.return_value = {
+            'kind': 'text',
+            'source_url': 'https://api.example.com/status',
+            'content': 'https://api.example.com/status',
+            'fetch_error': '404 Client Error: Not Found',
+        }
+        mock_session.get.return_value = mock_resp
+        kind, data = get_clipboard('https://h', mock_session, 'status')
+        assert kind == 'live_error'
+        assert data['fetch_error'] == '404 Client Error: Not Found'
+        assert data['source_url'] == 'https://api.example.com/status'
+
+    def test_binary_ref_returned(self):
+        from cli.api.text import get_clipboard
+        mock_session = MagicMock()
+        mock_resp = MagicMock(ok=True, status_code=200)
+        mock_resp.json.return_value = {
+            'kind': 'text',
+            'source_url': 'https://example.com/file.zip',
+            'content': 'https://example.com/file.zip',
+            'binary': True,
+            'content_type': 'application/zip',
+        }
+        mock_session.get.return_value = mock_resp
+        kind, data = get_clipboard('https://h', mock_session, 'zkey')
+        assert kind == 'binary_ref'
+        assert data['content_type'] == 'application/zip'
+
+    def test_successful_live_ref(self):
+        from cli.api.text import get_clipboard
+        mock_session = MagicMock()
+        mock_resp = MagicMock(ok=True, status_code=200)
+        mock_resp.json.return_value = {
+            'kind': 'text',
+            'source_url': 'https://api.example.com/data',
+            'content': '{"status": "ok"}',
+        }
+        mock_session.get.return_value = mock_resp
+        kind, content = get_clipboard('https://h', mock_session, 'api')
+        assert kind == 'text'
+        assert content == '{"status": "ok"}'
+
+
+class TestLiveRefGetCommand:
+    """_get_clipboard handling of live_error and binary_ref."""
+
+    @patch('cli.commands.get.api')
+    @patch('cli.commands.get.load_context')
+    def test_live_error_shows_message(self, mock_ctx, mock_api, capsys):
+        mock_ctx.return_value = ({}, 'https://h', MagicMock())
+        mock_api.get_clipboard.return_value = ('live_error', {
+            'source_url': 'https://api.example.com/broken',
+            'fetch_error': '503 Server Error',
+        })
+        args = MagicMock()
+        args.key = 'broken'
+        args.file = False
+        args.clip = False
+        args.timing = False
+        args.url = False
+        args.password = None
+        args.parse = False
+        args.field = None
+        with pytest.raises(SystemExit):
+            from cli.commands.get import cmd_get
+            cmd_get(args)
+        err = capsys.readouterr().err
+        assert 'fetch failed' in err
+        assert 'api.example.com/broken' in err
+        assert '503' in err
+
+    @patch('cli.commands.get.api')
+    @patch('cli.commands.get.load_context')
+    def test_binary_ref_shows_tip(self, mock_ctx, mock_api, capsys):
+        mock_ctx.return_value = ({}, 'https://h', MagicMock())
+        mock_api.get_clipboard.return_value = ('binary_ref', {
+            'source_url': 'https://example.com/data.zip',
+            'content_type': 'application/zip',
+            'content_length': 5000,
+        })
+        args = MagicMock()
+        args.key = 'zippy'
+        args.file = False
+        args.clip = False
+        args.timing = False
+        args.url = False
+        args.password = None
+        args.parse = False
+        args.field = None
+        from cli.commands.get import cmd_get
+        cmd_get(args)
+        out = capsys.readouterr().out
+        assert 'binary content' in out
+        assert 'application/zip' in out
+        assert '5,000' in out

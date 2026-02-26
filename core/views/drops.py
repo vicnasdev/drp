@@ -1029,6 +1029,7 @@ def _drop_response(request, drop):
                         live_content = r.text
                 except Exception as exc:
                     data["source_url"] = drop.source_url
+                    data["content"] = drop.content  # fall back to stored URL
                     data["fetch_error"] = str(exc)
                     live_content = None
                 if live_content is not None:

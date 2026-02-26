@@ -67,9 +67,11 @@ def get_clipboard(host, session, key, timer=None, password=''):
     Fetch a clipboard drop.
 
     Returns:
-      ('text', content_str)       — success
-      ('password_required', None) — drop is password-protected, no/wrong password
-      (None, None)                — not found, expired, or other error
+      ('text', content_str)        — success
+      ('live_error', data_dict)    — live reference fetch failed
+      ('binary_ref', data_dict)    — live reference to binary content
+      ('password_required', None)  — drop is password-protected, no/wrong password
+      (None, None)                 — not found, expired, or other error
     """
     headers = {'Accept': 'application/json'}
     if password:
@@ -96,6 +98,9 @@ def get_clipboard(host, session, key, timer=None, password=''):
                 # Guard: server flagged this as binary live reference
                 if data.get('binary'):
                     return 'binary_ref', data
+                # Guard: live reference fetch failed on server
+                if data.get('fetch_error'):
+                    return 'live_error', data
                 return 'text', data.get('content', '')
             return None, None
 
