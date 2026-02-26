@@ -52,7 +52,8 @@
   <div class="plan-col plan-col--paid">
     <div class="plan-col-head">
       <span class="plan-name">Starter</span>
-      <span class="plan-price">${{ lim.price_monthly }} <small>/mo</small></span>
+      <span class="plan-price">CA${{ lim.price_monthly }} <small>/mo</small></span>
+      <span class="plan-price-usd">~US$3.50/mo</span>
     </div>
     <ul class="plan-features">
       <li>Text up to <strong>{% widthratio lim.max_text_kb 1024 1 %} MB</strong></li>
@@ -71,7 +72,8 @@
   <div class="plan-col plan-col--paid plan-col--highlight">
     <div class="plan-col-head">
       <span class="plan-name">Pro</span>
-      <span class="plan-price">${{ lim.price_monthly }} <small>/mo</small></span>
+      <span class="plan-price">CA${{ lim.price_monthly }} <small>/mo</small></span>
+      <span class="plan-price-usd">~US$7/mo</span>
     </div>
     <ul class="plan-features">
       <li>Text up to <strong>{% widthratio lim.max_text_kb 1024 1 %} MB</strong></li>

@@ -64,7 +64,7 @@ class Plan:
         },
         STARTER: {
             "label":                      "Starter",
-            "price_monthly":              3,
+            "price_monthly":              5,
             "max_file_mb":                1024,
             "max_text_kb":                2048,
             "max_expiry_days":            365,
@@ -86,7 +86,7 @@ class Plan:
         },
         PRO: {
             "label":                      "Pro",
-            "price_monthly":              8,
+            "price_monthly":              10,
             "max_file_mb":                5120,
             "max_text_kb":                10240,
             "max_expiry_days":            365 * 3,
@@ -223,8 +223,8 @@ class PlanLimit(models.Model):
 class UserProfile(models.Model):
     PLAN_CHOICES = [
         (Plan.FREE,    "Free"),
-        (Plan.STARTER, "Starter ($3/mo)"),
-        (Plan.PRO,     "Pro ($8/mo)"),
+        (Plan.STARTER, "Starter (CA$5/mo)"),
+        (Plan.PRO,     "Pro (CA$10/mo)"),
     ]
 
     user               = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")

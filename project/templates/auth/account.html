@@ -129,7 +129,7 @@
     <div class="plan-status" style="margin-bottom:1rem">
       <span class="plan-badge plan-badge--{{ profile.plan }}">{{ profile.plan|capfirst }}</span>
       <span class="muted" style="font-size:.85rem">
-        ${{ plan_limits.price_monthly }}/mo ·
+        CA${{ plan_limits.price_monthly }}/mo ·
         {{ plan_limits.max_file_mb }}MB per file ·
         up to {{ plan_limits.max_expiry_days }} day expiry ·
         {{ plan_limits.storage_gb }}GB storage
@@ -167,7 +167,8 @@
     <div class="plan-grid">
       <div class="plan-card">
         <div class="plan-name">Starter</div>
-        <div class="plan-price">$3<span>/mo</span></div>
+        <div class="plan-price">CA$5<span>/mo</span></div>
+        <div class="plan-price-usd">~US$3.50/mo</div>
         <ul>
           <li>1 GB per file</li>
           <li>5 GB total storage</li>
@@ -182,7 +183,8 @@
       </div>
       <div class="plan-card plan-card--pro">
         <div class="plan-name">Pro</div>
-        <div class="plan-price">$8<span>/mo</span></div>
+        <div class="plan-price">CA$10<span>/mo</span></div>
+        <div class="plan-price-usd">~US$7/mo</div>
         <ul>
           <li>5 GB per file</li>
           <li>20 GB total storage</li>

@@ -37,6 +37,7 @@
 .plan-name { font-weight: 700; font-size: .9rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: .3rem; }
 .plan-price { font-size: 1.6rem; font-weight: 800; letter-spacing: -1px; margin-bottom: .6rem; }
 .plan-price span { font-size: .85rem; font-weight: 400; color: var(--muted); }
+.plan-price-usd { font-size: .75rem; color: var(--muted); margin-top: -.3rem; margin-bottom: .6rem; }
 .plan-card ul { list-style: none; display: flex; flex-direction: column; gap: .25rem; }
 .plan-card ul li { font-size: .82rem; color: var(--muted); }
 .plan-card ul li::before { content: '✓ '; color: #5bc87a; }
