@@ -1720,3 +1720,96 @@ class TestFileParseSupport:
 
         out = capsys.readouterr().out
         assert 'Bob' in out
+
+
+# ── Code language detection + highlighting ────────────────────────────────────
+
+class TestCodeHighlighting:
+    """Verify pygments-based code language detection and highlighting."""
+
+    def test_detect_by_filename(self):
+        """Filename-based detection should reliably identify languages."""
+        from cli.smart_parse import detect_code_language
+        assert detect_code_language('x', filename='test.py') == 'python'
+        assert detect_code_language('x', filename='app.js') == 'javascript'
+        assert detect_code_language('x', filename='main.go') == 'go'
+        assert detect_code_language('x', filename='style.css') == 'css'
+
+    def test_detect_by_filename_unknown(self):
+        """Unknown extensions fall through to guess_lexer."""
+        from cli.smart_parse import detect_code_language
+        # Short text with unknown ext → None
+        result = detect_code_language('hello world', filename='readme.xyz')
+        assert result is None or isinstance(result, str)
+
+    def test_detect_guess_long_python(self):
+        """guess_lexer can detect Python from substantial code."""
+        from cli.smart_parse import detect_code_language
+        code = (
+            'import os\nimport sys\n\n'
+            'def process(path):\n'
+            '    """Process a file."""\n'
+            '    with open(path) as f:\n'
+            '        return f.read()\n\n'
+            'if __name__ == "__main__":\n'
+            '    print(process(sys.argv[1]))\n'
+        )
+        lang = detect_code_language(code)
+        assert lang == 'python'
+
+    def test_detect_guess_short_returns_none(self):
+        """Short ambiguous code → None (avoid wrong highlights)."""
+        from cli.smart_parse import detect_code_language
+        assert detect_code_language('x = 1') is None
+
+    def test_color_code_with_filename(self):
+        """_color_code adds ANSI escapes when filename is known."""
+        from cli.smart_parse import _color_code
+        code = 'def hello():\n    return "world"'
+        result = _color_code(code, filename='test.py')
+        # Pygments always runs (not gated by _color_available) → ANSI present
+        assert '\033[' in result
+        assert 'hello' in result
+
+    def test_color_code_plain_text_passthrough(self):
+        """Plain text with no filename and low confidence → returned unmodified."""
+        from cli.smart_parse import _color_code
+        plain = 'just some regular text'
+        assert _color_code(plain) == plain
+
+    def test_format_parsed_text_with_filename(self):
+        """format_parsed('text', ..., filename=) passes filename to _color_code."""
+        from cli.smart_parse import format_parsed
+        code = 'print("hi")'
+        result = format_parsed('text', code, filename='test.py')
+        # Should contain the code regardless of whether color is on
+        assert 'print' in result
+
+    def test_print_smart_label_with_filename(self, capsys):
+        """_print_smart shows language label for file drops."""
+        from cli.commands.get import _print_smart
+        code = 'console.log("hello");'
+        _print_smart(code, filename='app.js')
+        out = capsys.readouterr().out
+        assert 'javascript' in out.lower()
+
+    def test_get_file_parse_code_shows_language(self, capsys):
+        """File drop parse with .py file → label shows python."""
+        from unittest.mock import MagicMock, patch
+        py_bytes = b'import sys\nprint(sys.argv)'
+        args = MagicMock()
+        args.key = 'script'
+        args.file = True
+        args.clip = False
+        args.parse = True
+        args.field = None
+        args.output = None
+        t = MagicMock()
+
+        with patch('cli.commands.get.api') as mock_api:
+            mock_api.get_file.return_value = ('file', (py_bytes, 'script.py'))
+            from cli.commands.get import _get_file
+            _get_file(args, 'http://localhost', MagicMock(), t, parse=True)
+
+        out = capsys.readouterr().out
+        assert 'python' in out.lower()

@@ -222,11 +222,64 @@ function toggleQr() {
   document.getElementById('qrToggle').textContent = isHidden ? 'QR' : 'hide QR';
 }
 
-// ── Syntax highlighting ───────────────────────────────────────────────────────
+// ── CSV helpers ──────────────────────────────────────────────────────────────────────────
+function _detectCSVSep(text) {
+  const lines = text.trim().split('\n').slice(0, 10);
+  if (lines.length < 2) return null;
+  for (const sep of [',', '\t', ';', '|']) {
+    const counts = lines.map(l => l.split(sep).length);
+    if (counts[0] > 1 && counts.every(c => c === counts[0])) return sep;
+  }
+  return null;
+}
+function _parseCSVRows(text, sep) {
+  return text.trim().split('\n').map(l => l.split(sep).map(c => c.trim().replace(/^"|"$/g, '')));
+}
+function _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function _csvTableHTML(rows) {
+  let h = '<div class="csv-table-wrap"><table class="csv-table"><thead><tr>';
+  rows[0].forEach(c => h += `<th>${_esc(c)}</th>`);
+  h += '</tr></thead><tbody>';
+  rows.slice(1).forEach(r => { h += '<tr>'; r.forEach(c => h += `<td>${_esc(c)}</td>`); h += '</tr>'; });
+  return h + '</tbody></table></div>';
+}
+
+// ── Syntax highlighting + CSV table ─────────────────────────────────────────────────
 {% if drop.kind == 'text' %}
+let _csvTableVisible = false;
 document.addEventListener('DOMContentLoaded', () => {
   const block = document.getElementById('clipContent');
-  if (block && typeof hljs !== 'undefined') hljs.highlightElement(block);
+  if (!block) return;
+
+  // Syntax highlight
+  if (typeof hljs !== 'undefined') hljs.highlightElement(block);
+
+  // CSV table toggle
+  const text = block.textContent;
+  const sep = _detectCSVSep(text);
+  if (sep) {
+    const rows = _parseCSVRows(text, sep);
+    if (rows.length >= 2 && rows[0].length > 1) {
+      const actions = document.querySelector('.clip-actions');
+      const btn = document.createElement('button');
+      btn.className = 'btn-sm';
+      btn.textContent = '📊 table';
+      btn.onclick = () => {
+        _csvTableVisible = !_csvTableVisible;
+        let pane = document.getElementById('csvTablePane');
+        if (!pane) {
+          pane = document.createElement('div');
+          pane.id = 'csvTablePane';
+          pane.innerHTML = _csvTableHTML(rows);
+          document.getElementById('clipPre').after(pane);
+        }
+        pane.style.display = _csvTableVisible ? 'block' : 'none';
+        document.getElementById('clipPre').style.display = _csvTableVisible ? 'none' : '';
+        btn.textContent = _csvTableVisible ? 'raw' : '📊 table';
+      };
+      actions.prepend(btn);
+    }
+  }
 });
 {% endif %}
 
@@ -437,6 +490,24 @@ async function toggleRender() {
     if (MD_EXT.test(filename) && typeof marked !== 'undefined') {
       pane.innerHTML = marked.parse(_renderContent);
       pane.className = 'render-pane render-pane--md';
+    } else if (/\.csv$/i.test(filename)) {
+      // CSV: render as table
+      const sep = _detectCSVSep(_renderContent);
+      if (sep) {
+        const rows = _parseCSVRows(_renderContent, sep);
+        pane.innerHTML = _csvTableHTML(rows);
+        pane.className = 'render-pane render-pane--csv';
+      } else {
+        // Fallback to code view
+        const pre = document.createElement('pre');
+        const code = document.createElement('code');
+        code.textContent = _renderContent;
+        code.className = 'language-csv';
+        pre.appendChild(code);
+        pane.appendChild(pre);
+        pane.className = 'render-pane render-pane--code';
+        if (typeof hljs !== 'undefined') hljs.highlightElement(code);
+      }
     } else {
       // Code: wrap in <pre><code> and highlight
       const pre  = document.createElement('pre');

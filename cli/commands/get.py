@@ -186,7 +186,7 @@ def _get_file(args, host, session, t, password='', parse=False, field=''):
             print('  ✗ File is binary — --parse only works on text-based files.', file=sys.stderr)
             sys.exit(1)
         t.print()
-        _print_smart(text, field)
+        _print_smart(text, field, filename=filename or '')
         return
 
     output_name = getattr(args, 'output', None) or filename or args.key
@@ -207,7 +207,7 @@ def _get_file(args, host, session, t, password='', parse=False, field=''):
 
 # ── Smart parse / field extraction ────────────────────────────────────────────
 
-def _print_smart(content: str, field: str = ''):
+def _print_smart(content: str, field: str = '', filename: str = ''):
     """Parse content, optionally extract a field, and print."""
     from cli.smart_parse import smart_parse, dot_access, format_parsed
 
@@ -232,8 +232,14 @@ def _print_smart(content: str, field: str = ''):
         return
 
     # No field — print full parsed output with format label
-    print(f'  [{fmt}]')
-    print(format_parsed(fmt, parsed))
+    label = fmt
+    if fmt == 'text':
+        from cli.smart_parse import detect_code_language
+        lang = detect_code_language(content, filename)
+        if lang:
+            label = lang
+    print(f'  [{label}]')
+    print(format_parsed(fmt, parsed, filename=filename))
 
 
 # ── URL fetch ─────────────────────────────────────────────────────────────────

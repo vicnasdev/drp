@@ -44,10 +44,13 @@ def detect_format(text: str) -> str:
     if len(lines) >= 2:
         try:
             dialect = csv.Sniffer().sniff(stripped[:4096])
-            reader = csv.reader(io.StringIO(stripped), dialect)
-            rows = list(reader)
-            if len(rows) >= 2 and all(len(r) == len(rows[0]) for r in rows[:10]):
-                return 'csv'
+            # Only accept common delimiters — reject letters/digits the
+            # sniffer sometimes picks (e.g. 's' in "import sys").
+            if dialect.delimiter in (',', '\t', ';', '|'):
+                reader = csv.reader(io.StringIO(stripped), dialect)
+                rows = list(reader)
+                if len(rows) >= 2 and all(len(r) == len(rows[0]) for r in rows[:10]):
+                    return 'csv'
         except csv.Error:
             pass
 
@@ -263,7 +266,56 @@ def _color_csv(rows: list) -> str:
     return '\n'.join(lines)
 
 
-def format_parsed(fmt: str, value, indent: int = 2) -> str:
+def detect_code_language(text: str, filename: str = ''):
+    """
+    Detect programming language using pygments.
+    Returns lowercase language name (e.g. 'python') or None.
+    Uses filename when available (reliable), falls back to guess_lexer.
+    """
+    try:
+        from pygments.lexers import guess_lexer, get_lexer_for_filename, TextLexer
+        if filename:
+            try:
+                lex = get_lexer_for_filename(filename)
+                return lex.name.lower()
+            except Exception:
+                pass
+        lex = guess_lexer(text)
+        if isinstance(lex, TextLexer):
+            return None
+        # Require reasonable confidence to avoid false positives
+        if lex.analyse_text(text) < 0.5:
+            return None
+        return lex.name.lower()
+    except Exception:
+        return None
+
+
+def _color_code(text: str, filename: str = '') -> str:
+    """Syntax-highlight code with pygments ANSI output (if available)."""
+    try:
+        from pygments import highlight as _hl
+        from pygments.lexers import guess_lexer, get_lexer_for_filename, TextLexer
+        from pygments.formatters import Terminal256Formatter
+        lexer = None
+        if filename:
+            try:
+                lexer = get_lexer_for_filename(filename)
+            except Exception:
+                pass
+        if not lexer:
+            lexer = guess_lexer(text)
+            if isinstance(lexer, TextLexer):
+                return text
+            # Require reasonable confidence to avoid false positives
+            if lexer.analyse_text(text) < 0.5:
+                return text
+        return _hl(text, lexer, Terminal256Formatter(style='monokai')).rstrip()
+    except Exception:
+        return text
+
+
+def format_parsed(fmt: str, value, indent: int = 2, filename: str = '') -> str:
     """Format a parsed value for human-readable display."""
     color = _color_available()
 
@@ -293,4 +345,7 @@ def format_parsed(fmt: str, value, indent: int = 2) -> str:
     if fmt == 'xml':
         text = json.dumps(value, indent=indent, ensure_ascii=False)
         return _color_json(text) if color else text
+    # Plain text — try pygments code highlighting
+    if color:
+        return _color_code(str(value), filename)
     return str(value)

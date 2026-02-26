@@ -211,7 +211,7 @@ DOCS:
 _FEATURE_REFERENCE = """\
 Upload: `drp up <file-or-text>` or `echo text | drp up`.
 Get: `drp get <key>` or visit `drp.fyi/<key>/`.
-Smart get: `drp get <key> --parse` auto-detects content format (JSON, CSV, XML, YAML) and prints parsed output. `drp get <key> --field a.b` extracts a nested value. Shorthand: `drp get key.field`. Works on both clipboard AND file drops — `drp get -f <key> --parse` downloads the file, decodes it as text, and parses it. If the file is binary, it tells the user.
+Smart get: `drp get <key> --parse` auto-detects content format (JSON, CSV, XML, YAML) and prints parsed output with syntax coloring (colored keys/values for JSON/YAML, box-drawing tables for CSV). If the content is code (Python, Bash, etc.), pygments highlights it with language detection. For file drops: `drp get -f <key> --parse` decodes the file as text, detects the language from the filename, and highlights it. If the file is binary, it tells the user. `drp get <key> --field a.b` extracts a nested value. Shorthand: `drp get key.field`.
 URL fetch (paid): `drp get https://api.example.com/data` fetches an external URL once. Use `--parse` or `--field` to extract data. Requires Starter or Pro plan.
 Live API reference (paid): `drp up https://api.example.com/data -k myapi` stores the URL. Every `drp get myapi` fetches fresh data from the API. Use `--parse`/`--field` to extract fields. The drop acts as a persistent, shareable endpoint.
 Web API: Add `?parse=1` to any drop JSON request to get `content_format` and `parsed` fields. Add `&field=a.b` to extract a specific value. Live references return fresh content + `source_url`.

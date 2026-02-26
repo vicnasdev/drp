@@ -140,6 +140,37 @@
 .render-pane--md td, .render-pane--md th { border: 1px solid var(--border); padding: .35rem .6rem; }
 .render-pane--code pre { margin: 0; }
 
+/* ── CSV table view ── */
+.csv-table-wrap {
+  max-height: 60vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-top: .6rem;
+}
+.csv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .85rem;
+  font-family: var(--mono, monospace);
+}
+.csv-table th,
+.csv-table td {
+  padding: .4rem .7rem;
+  border: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+.csv-table th {
+  background: var(--surface);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+.csv-table tbody tr:hover {
+  background: var(--surface);
+}
+
 /* ── Web diff output ── */
 #diffOutput {
   margin-top: .5rem;
