@@ -1570,3 +1570,86 @@ class TestParserSendClaim:
         args = parser.parse_args(['claim', 'some-token-value'])
         assert args.token == 'some-token-value'
         assert args.command == 'claim'
+
+
+# ── Parser: switch ───────────────────────────────────────────────────────────
+
+class TestParserSwitch:
+    """Verify drp switch parser args."""
+
+    def test_switch_basic(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['switch', 'mykey'])
+        assert args.key == 'mykey'
+        assert args.command == 'switch'
+
+    def test_switch_file_flag(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['switch', '-f', 'myfile'])
+        assert args.file is True
+        assert args.key == 'myfile'
+
+    def test_switch_filename(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['switch', 'mykey', '--filename', 'data.csv'])
+        assert args.filename == 'data.csv'
+
+    def test_switch_filename_short(self):
+        from cli.drp import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['switch', 'mykey', '-n', 'out.json'])
+        assert args.filename == 'out.json'
+
+
+# ── Colored format output ────────────────────────────────────────────────────
+
+class TestColoredFormatOutput:
+    """Test format_parsed with color on and off."""
+
+    def test_format_json_no_color(self):
+        from cli.smart_parse import format_parsed
+        with patch('cli.smart_parse._color_available', return_value=False):
+            result = format_parsed('json', {'a': 1})
+        assert '"a": 1' in result
+
+    def test_format_csv_no_color(self):
+        from cli.smart_parse import format_parsed
+        rows = [['name', 'age'], ['Alice', '30']]
+        with patch('cli.smart_parse._color_available', return_value=False):
+            result = format_parsed('csv', rows)
+        assert 'name' in result
+        assert 'Alice' in result
+
+    def test_format_json_with_color(self):
+        from cli.smart_parse import format_parsed
+        with patch('cli.smart_parse._color_available', return_value=True):
+            result = format_parsed('json', {'a': 1})
+        assert '\033[' in result  # ANSI escape present
+
+    def test_format_csv_with_color_box_drawing(self):
+        from cli.smart_parse import format_parsed
+        rows = [['name', 'age'], ['Alice', '30']]
+        with patch('cli.smart_parse._color_available', return_value=True):
+            result = format_parsed('csv', rows)
+        # Box-drawing characters
+        assert '┌' in result
+        assert '│' in result
+        assert '└' in result
+
+    def test_color_csv_empty(self):
+        from cli.smart_parse import _color_csv
+        assert _color_csv([]) == ''
+
+    def test_color_json_highlights(self):
+        from cli.smart_parse import _color_json
+        result = _color_json('{"key": "value", "num": 42, "flag": true}')
+        assert '\033[' in result  # has ANSI codes
+        assert 'key' in result
+        assert 'value' in result
+
+    def test_format_text_passthrough(self):
+        from cli.smart_parse import format_parsed
+        assert format_parsed('text', 'hello world') == 'hello world'

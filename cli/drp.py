@@ -23,6 +23,7 @@ from cli.commands.ask import cmd_ask
 from cli.commands.lock import cmd_lock
 from cli.commands.cache import cmd_cache, cmd_rmcache
 from cli.commands.send import cmd_send, cmd_claim
+from cli.commands.switch import cmd_switch
 
 COMMANDS = [
     ('setup',      cmd_setup,       'Configure host and log in'),
@@ -47,6 +48,7 @@ COMMANDS = [
     ('ask',        cmd_ask,         'Ask the help bot a question about drp'),
     ('send',       cmd_send,        'Transfer drop ownership via one-time token'),
     ('claim',      cmd_claim,       'Claim a drop sent to you'),
+    ('switch',     cmd_switch,      'Convert text ↔ file (same key)'),
     ('cache',      cmd_cache,       'View the local drop cache'),
     ('rmcache',    cmd_rmcache,     'Remove entries from the local drop cache'),
     ('shell',      cmd_shell,       'Interactive shell with ls, rm, cp, cd and more'),
@@ -58,7 +60,7 @@ COMMANDS = [
 
 COMMAND_GROUPS = [
     ('upload / download',  ['up', 'get', 'edit', 'serve']),
-    ('manage',             ['rm', 'mv', 'cp', 'renew', 'lock', 'send', 'claim']),
+    ('manage',             ['rm', 'mv', 'cp', 'renew', 'lock', 'switch', 'send', 'claim']),
     ('account',            ['save', 'ls', 'load', 'collection', 'token']),
     ('info',               ['status', 'ping']),
     ('help',               ['ask']),
@@ -114,6 +116,8 @@ EXAMPLES = [
     ('drp ask',     '--clear',                          'clear help bot history'),
     ('drp lock',    'mykey',                            'set password on existing drop'),
     ('drp lock',    '-f myfile --remove',               'remove password from file drop'),
+    ('drp switch',  'notes',                            'convert clipboard text → file'),
+    ('drp switch',  '-f report',                        'convert file → clipboard text'),
     ('drp token',   'create --expires 90d',            'create an API key'),
     ('',            'DRP_API_KEY=xxx drp up file.py',  'upload with API key (no login)'),]
 
@@ -274,13 +278,21 @@ def _configure_subparsers(sub):
     p_renew.add_argument('-c', '--clip', action='store_true')
     _attach(p_renew.add_argument('key'), 'key')
 
+    p_switch = sub._name_parser_map['switch']
+    p_switch.add_argument('-f', '--file', action='store_true',
+                          help='Target a file drop')
+    p_switch.add_argument('-c', '--clip', action='store_true')
+    _attach(p_switch.add_argument('key', help='Drop key to switch'), 'key')
+    p_switch.add_argument('--filename', '-n', default=None,
+                          help='Filename for text→file (auto-detected if omitted)')
+
     p_save = sub._name_parser_map['save']
     p_save.add_argument('-f', '--file', action='store_true')
     p_save.add_argument('-c', '--clip', action='store_true')
     _attach(p_save.add_argument('key'), 'key')
 
     p_status = sub._name_parser_map['status']
-    p_status.add_argument('key', nargs='?', default=None)
+    _attach(p_status.add_argument('key', nargs='?', default=None), 'key')
     p_status.add_argument('-f', '--file', action='store_true')
     p_status.add_argument('-c', '--clip', action='store_true')
 

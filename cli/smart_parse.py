@@ -187,11 +187,92 @@ def dot_access(data, path: str):
 
 # ── Pretty format for shell display ──────────────────────────────────────────
 
+def _color_available() -> bool:
+    """Check if ANSI color is available (uses same logic as cli.format)."""
+    try:
+        from cli.format import _ansi_on
+        return _ansi_on()
+    except Exception:
+        return False
+
+
+def _c(code: str, text: str) -> str:
+    return f'\033[{code}m{text}\033[0m'
+
+
+def _color_json(text: str) -> str:
+    """Syntax-highlight JSON string with ANSI colors."""
+    import re
+    # Color keys (cyan), strings (green), numbers (yellow), bools/null (magenta)
+    def _replacer(m):
+        tok = m.group(0)
+        if tok.startswith('"') and m.end() <= len(text):
+            # Check if this is a key (followed by colon) or value
+            rest = text[m.end():].lstrip()
+            if rest.startswith(':'):
+                return _c('1;36', tok)   # cyan key
+            return _c('0;32', tok)       # green string value
+        if tok in ('true', 'false'):
+            return _c('1;35', tok)       # magenta bool
+        if tok == 'null':
+            return _c('2', tok)          # dim null
+        # number
+        try:
+            float(tok)
+            return _c('1;33', tok)       # yellow number
+        except ValueError:
+            return tok
+    return re.sub(r'"(?:[^"\\]|\\.)*"|true|false|null|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?', _replacer, text)
+
+
+def _color_csv(rows: list) -> str:
+    """Format CSV as an aligned table with box-drawing chars and colored header."""
+    if not rows:
+        return ''
+    # Compute column widths
+    col_count = max(len(r) for r in rows)
+    widths = [0] * col_count
+    for row in rows:
+        for i, cell in enumerate(row):
+            if i < col_count:
+                widths[i] = max(widths[i], len(str(cell)))
+
+    def _pad_row(row):
+        cells = []
+        for i in range(col_count):
+            val = str(row[i]) if i < len(row) else ''
+            cells.append(val.ljust(widths[i]))
+        return cells
+
+    lines = []
+    horiz = '─'
+    top    = '┌' + '┬'.join(horiz * (w + 2) for w in widths) + '┐'
+    mid    = '├' + '┼'.join(horiz * (w + 2) for w in widths) + '┤'
+    bottom = '└' + '┴'.join(horiz * (w + 2) for w in widths) + '┘'
+
+    lines.append(top)
+    # Header row (bold)
+    hdr = _pad_row(rows[0])
+    lines.append('│ ' + ' │ '.join(_c('1', c) for c in hdr) + ' │')
+    lines.append(mid)
+    # Data rows
+    for row in rows[1:]:
+        cells = _pad_row(row)
+        lines.append('│ ' + ' │ '.join(cells) + ' │')
+    lines.append(bottom)
+    return '\n'.join(lines)
+
+
 def format_parsed(fmt: str, value, indent: int = 2) -> str:
     """Format a parsed value for human-readable display."""
+    color = _color_available()
+
     if fmt == 'json':
-        return json.dumps(value, indent=indent, ensure_ascii=False)
+        text = json.dumps(value, indent=indent, ensure_ascii=False)
+        return _color_json(text) if color else text
     if fmt == 'csv':
+        if color:
+            return _color_csv(value)
         lines = []
         for row in value:
             lines.append(' | '.join(str(c) for c in row))
@@ -199,9 +280,17 @@ def format_parsed(fmt: str, value, indent: int = 2) -> str:
     if fmt == 'yaml':
         try:
             import yaml
-            return yaml.dump(value, default_flow_style=False).rstrip()
+            text = yaml.dump(value, default_flow_style=False).rstrip()
+            if color:
+                import re
+                # Color keys (cyan), string values (green)
+                text = re.sub(r'^(\s*)([\w.-]+)(:)',
+                              lambda m: m.group(1) + _c('1;36', m.group(2)) + m.group(3),
+                              text, flags=re.MULTILINE)
+            return text
         except ImportError:
             return str(value)
     if fmt == 'xml':
-        return json.dumps(value, indent=indent, ensure_ascii=False)
+        text = json.dumps(value, indent=indent, ensure_ascii=False)
+        return _color_json(text) if color else text
     return str(value)

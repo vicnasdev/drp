@@ -119,7 +119,15 @@ def _drop_status(args, key):
     sep = dim('─' * (len(key) + len(prefix) + 3))
     print(f'  {bold("/" + prefix + key + "/")}')
     print(f'  {sep}')
-    print(f'  {dim("kind")}        {data.get("kind", "?")}')
+
+    kind_str = data.get("kind", "?")
+    # For text drops, detect content format on the fly
+    if kind_str == 'text' and data.get('content'):
+        from cli.smart_parse import detect_format
+        fmt = detect_format(data['content'])
+        if fmt != 'text':
+            kind_str = f'text ({fmt})'
+    print(f'  {dim("kind")}        {kind_str}')
     if data.get("filename"):
         print(f'  {dim("file")}        {data["filename"]}')
     print(f'  {dim("views")}       {green(str(views)) if views else dim("0")}')
