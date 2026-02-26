@@ -70,10 +70,11 @@ def cmd_get(args):
     elif password is None:
         password = ''
 
+    parse = getattr(args, 'parse', False)
     if getattr(args, 'file', False) and not getattr(args, 'clip', False):
-        _get_file(args, host, session, t, password)
+        _get_file(args, host, session, t, password, parse=parse, field=field)
     else:
-        _get_clipboard(args, host, session, t, password, parse=getattr(args, 'parse', False), field=field)
+        _get_clipboard(args, host, session, t, password, parse=parse, field=field)
 
 
 # ── Clipboard ─────────────────────────────────────────────────────────────────
@@ -155,7 +156,7 @@ def _get_clipboard(args, host, session, t, password='', parse=False, field=''):
 
 # ── File ──────────────────────────────────────────────────────────────────────
 
-def _get_file(args, host, session, t, password=''):
+def _get_file(args, host, session, t, password='', parse=False, field=''):
     kind, result = api.get_file(host, session, args.key, password=password)
 
     if kind == 'password_required':
@@ -175,6 +176,19 @@ def _get_file(args, host, session, t, password=''):
         sys.exit(1)
 
     content, filename = result
+
+    # --parse / --field: try to decode as text and smart-parse
+    if parse or field:
+        try:
+            text = content.decode('utf-8')
+        except (UnicodeDecodeError, AttributeError):
+            t.print()
+            print('  ✗ File is binary — --parse only works on text-based files.', file=sys.stderr)
+            sys.exit(1)
+        t.print()
+        _print_smart(text, field)
+        return
+
     output_name = getattr(args, 'output', None) or filename or args.key
 
     t.checkpoint('download complete')

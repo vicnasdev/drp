@@ -88,6 +88,7 @@ EXAMPLES = [
     ('drp get',     'https://example.com/f -o out.pdf', 'save URL content with custom name'),
     ('drp get',     'hello --url',                    'print URL without fetching'),
     ('drp get',     '-f q3 -o my-report.pdf',         'download file with custom name'),
+    ('drp get',     '-f q3 --parse',                  'parse text-based file (JSON, CSV, …)'),
     ('drp get',     'secret --password mypass',       'supply password for protected drop'),
     ('drp edit',    'notes',                          'open in $EDITOR, re-upload on save'),
     ('drp cp',      'notes notes-backup',             'duplicate clipboard drop'),

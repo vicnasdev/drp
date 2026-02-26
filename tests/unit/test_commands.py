@@ -1653,3 +1653,70 @@ class TestColoredFormatOutput:
     def test_format_text_passthrough(self):
         from cli.smart_parse import format_parsed
         assert format_parsed('text', 'hello world') == 'hello world'
+
+
+# ── File parse (--parse on file drops) ───────────────────────────────────────
+
+class TestFileParseSupport:
+    """Verify _get_file handles --parse for text and binary files."""
+
+    def test_get_file_parse_text(self, capsys):
+        """Text-based file + --parse → printed parsed output, no file saved."""
+        from unittest.mock import MagicMock, patch
+        json_bytes = b'{"name": "Alice", "age": 30}'
+        args = MagicMock()
+        args.key = 'data'
+        args.file = True
+        args.clip = False
+        args.parse = True
+        args.field = None
+        args.output = None
+        t = MagicMock()
+
+        with patch('cli.commands.get.api') as mock_api:
+            mock_api.get_file.return_value = ('file', (json_bytes, 'data.json'))
+            from cli.commands.get import _get_file
+            _get_file(args, 'http://localhost', MagicMock(), t, parse=True)
+
+        out = capsys.readouterr().out
+        assert 'json' in out.lower() or 'Alice' in out
+
+    def test_get_file_parse_binary_fails(self):
+        """Binary file + --parse → error, exits."""
+        from unittest.mock import MagicMock, patch
+        binary_bytes = b'\x00\x01\x02\xff\xfe\xfd'
+        args = MagicMock()
+        args.key = 'img'
+        args.file = True
+        args.clip = False
+        args.parse = True
+        args.field = None
+        t = MagicMock()
+
+        with patch('cli.commands.get.api') as mock_api:
+            mock_api.get_file.return_value = ('file', (binary_bytes, 'img.png'))
+            from cli.commands.get import _get_file
+            import pytest
+            with pytest.raises(SystemExit):
+                _get_file(args, 'http://localhost', MagicMock(), t, parse=True)
+
+    def test_get_file_parse_with_field(self, capsys):
+        """Text file + --field → extracts value."""
+        from unittest.mock import MagicMock, patch
+        json_bytes = b'{"data": {"name": "Bob"}}'
+        args = MagicMock()
+        args.key = 'info'
+        args.file = True
+        args.clip = False
+        args.parse = False
+        args.field = 'data.name'
+        args.output = None
+        t = MagicMock()
+
+        with patch('cli.commands.get.api') as mock_api:
+            mock_api.get_file.return_value = ('file', (json_bytes, 'info.json'))
+            from cli.commands.get import _get_file
+            _get_file(args, 'http://localhost', MagicMock(), t, field='data.name')
+
+        out = capsys.readouterr().out
+        assert 'Bob' in out

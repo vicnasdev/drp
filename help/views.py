@@ -211,23 +211,30 @@ DOCS:
 _FEATURE_REFERENCE = """\
 Upload: `drp up <file-or-text>` or `echo text | drp up`.
 Get: `drp get <key>` or visit `drp.fyi/<key>/`.
-Smart get: `drp get <key> --parse` auto-detects content format (JSON, CSV, XML, YAML) and prints parsed output. `drp get <key> --field a.b` extracts a nested value. Shorthand: `drp get key.field`.
+Smart get: `drp get <key> --parse` auto-detects content format (JSON, CSV, XML, YAML) and prints parsed output. `drp get <key> --field a.b` extracts a nested value. Shorthand: `drp get key.field`. Works on both clipboard AND file drops — `drp get -f <key> --parse` downloads the file, decodes it as text, and parses it. If the file is binary, it tells the user.
 URL fetch (paid): `drp get https://api.example.com/data` fetches an external URL once. Use `--parse` or `--field` to extract data. Requires Starter or Pro plan.
-Live API reference (paid): `drp up https://api.example.com/data -k myapi` stores the URL. Every `drp get myapi` fetches fresh data from the API. Use `--parse`/`--field` to extract fields. The drop acts as a persistent, shareable endpoint.\nWeb API: Add `?parse=1` to any drop JSON request to get `content_format` and `parsed` fields. Add `&field=a.b` to extract a specific value. Live references return fresh content + `source_url`.
+Live API reference (paid): `drp up https://api.example.com/data -k myapi` stores the URL. Every `drp get myapi` fetches fresh data from the API. Use `--parse`/`--field` to extract fields. The drop acts as a persistent, shareable endpoint.
+Web API: Add `?parse=1` to any drop JSON request to get `content_format` and `parsed` fields. Add `&field=a.b` to extract a specific value. Live references return fresh content + `source_url`.
 Embed URL: `drp.fyi/embed/<key>/` (use in iframes, markdown, etc). Embed HTML: `<iframe src="https://drp.fyi/embed/<key>/"></iframe>`
 Custom key: `drp up file.png -k myname` → `drp.fyi/embed/myname/` (predictable URL).
 Raw URL: `drp.fyi/raw/<key>/` (plain text for curl/scripts).
+Serve: `drp serve ./dist/` uploads an entire directory (or glob pattern) and prints a URL table. Supports `--expires` for expiry. Great for sharing build artifacts, log bundles, or project files in one command.
 Collections (paid plans): `drp collection ls` lists collections. `drp collection new "my notes"` creates one. `drp collection add <slug> <key>` adds a drop. `drp collection rm <slug> <key>` removes. `drp collection open <slug>` prints URL.
 Sub-collections: `drp collection new "work" --parent notes` creates a sub-collection under "notes". Nested paths work everywhere: `drp collection add notes/work <key>`, `drp collection open notes/work`. URL: `drp.fyi/@user/notes/work/`.
 Shell navigation: `drp shell` → `cd notes` → `cd work` (or `cd notes/work`). `cd ..` goes up. `pwd` shows path. `ls` lists drops + sub-collections.
-Flags (only add if user asks): --burn (one-view self-destruct), --password (prompt for password), --expiry 1h/7d/30d, --public.Lock/password (paid): `drp lock <key>` sets a password on an existing drop (prompts). `drp lock -f <key>` for files. `drp lock <key> --password pw` sets directly. `drp lock <key> --remove` removes the password. Also available on the web drop page as "set password" button.Burn-after-reading: `drp up "secret" --burn` — drop is DELETED after ONE view. Not time-based.
-CLI install: `pipx install drp && drp setup`. Commands: up get ls cp edit diff save load status ask shell collection token send claim cache rmcache.
+Manage drops: `drp rm <key>` deletes a drop (`-f` for files). `drp mv <key> <new-key>` renames. `drp renew <key>` extends expiry (paid). `drp cp <key> <new-key>` duplicates. `drp edit <key>` opens in $EDITOR and re-uploads.
+Flags (only list if user asks): --burn (one-view self-destruct), --password (prompt for password), --expiry 1h/7d/30d, --public.
+Lock/password (paid): `drp lock <key>` sets a password on an existing drop (prompts). `drp lock -f <key>` for files. `drp lock <key> --password pw` sets directly. `drp lock <key> --remove` removes the password. Also available on the web drop page as "set password" button.
+Burn-after-reading: `drp up "secret" --burn` — drop is DELETED after ONE view. Not time-based.
+Switch: `drp switch <key>` converts a clipboard text drop into a file drop or vice-versa. Text→file auto-detects format for the filename extension (e.g. CSV→.csv, JSON→.json). File→text only works for text-based files. Use `-f` to target a file drop, `--filename name.ext` to override the auto-detected filename. Requires login and ownership.
+Status: `drp status <key>` shows view count, last seen, kind, and auto-detected content format (e.g. `kind: text (csv)`). Tab-completes stored keys.
+Transfer: `drp send <key>` generates a one-time transfer token (24h expiry). `drp claim <token>` claims the drop. Completely separate from API tokens.
+CLI install: `pipx install drp && drp setup`. Commands: up get ls rm mv cp edit renew serve save load status switch lock ask shell collection token send claim cache rmcache.
 TOKEN TYPES (three separate systems — do NOT confuse them):
   1. API tokens (login tokens): persistent keys for CI/scripts/headless auth. Paid accounts only. Created with `drp token create [--expires 90d] [--label mykey]`. Listed with `drp token list`. Revoked with `drp token revoke <id>`. Login with `drp login --token <key>` or set `DRP_API_KEY=<key>`. Revoking an API token invalidates it — any device using that token will lose access and need to re-authenticate. It does NOT delete your account.
   2. Transfer tokens: one-time codes to transfer drop ownership. Generated by `drp send <key>` (24h expiry). Claimed by `drp claim <token>`. Completely separate from API tokens. Not listed in `drp token list`.
   3. Group invite tokens: one-time or limited-use codes to join a group. Created via group management. Completely separate from API tokens and transfer tokens.
 Helpbot / ask: `drp ask "question"` asks the drp assistant from the CLI. `drp ask --history` shows past conversation. `drp ask --clear` clears chat history. Chat history is synced between the CLI and the web chat widget — messages appear in both places.
-Switch: `drp switch <key>` converts a clipboard text drop into a file drop or vice-versa. Text→file auto-detects format for the filename extension (e.g. CSV→.csv, JSON→.json). File→text only works for text-based files. Use `-f` to target a file drop, `--filename name.ext` to override the auto-detected filename. Requires login and ownership.
 Likes: logged-in users can like public drops (toggle). Explore page (/explore/) supports ?sort=likes to sort by most liked (default: most recent). Like counts appear in the JSON API and the explore UI.
 Plans: anon, free, starter, pro → drp.fyi/help/plans/
 """
