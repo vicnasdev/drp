@@ -278,7 +278,7 @@ def _get_url(args, url, host, session, t):
     try:
         with Spinner('connecting'):
             r = _req.get(url, stream=True, timeout=30,
-                         headers={'User-Agent': 'drp-cli'},
+                         headers={'User-Agent': 'drp'},
                          allow_redirects=True)
             r.raise_for_status()
     except Exception as e:

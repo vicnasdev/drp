@@ -213,7 +213,7 @@ def _argcomplete_available() -> bool:
 def _install_argcomplete() -> bool:
     if os.environ.get('PIPX_HOME') or _pipx_available():
         result = subprocess.run(
-            ['pipx', 'inject', 'drp-cli', 'argcomplete'],
+            ['pipx', 'inject', 'drp-dev', 'argcomplete'],
             capture_output=True,
         )
         if result.returncode == 0:
@@ -285,7 +285,7 @@ def _append_to_profile(profile_path: str, activation: str) -> bool:
 def _print_manual_install_hint():
     print()
     print('  Install argcomplete manually, then re-run drp setup:')
-    print('    pipx inject drp-cli argcomplete')
+    print('    pipx inject drp-dev argcomplete')
     print('    # or: pip install argcomplete')
 
 

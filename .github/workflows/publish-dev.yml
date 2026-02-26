@@ -1,6 +1,6 @@
-name: Publish drp-cli to PyPI
+name: Publish drp-dev to PyPI
 
-# Dev branch → publishes "drp-cli" package.
+# Dev branch → publishes "drp-dev" package.
 # No tags, no GitHub releases — just PyPI.
 
 on:
@@ -125,7 +125,7 @@ jobs:
           drp rm -f "$KEY"
           rm -f ci_test_file.txt ci_downloaded.txt
 
-  # ── Publish drp-cli (no tags, no releases) ────────────────────────────────
+  # ── Publish drp-dev (no tags, no releases) ────────────────────────────────
 
   publish:
     needs: test
@@ -146,7 +146,7 @@ jobs:
         id: version
         run: |
           base=$(cat VERSION | tr -d '[:space:]')
-          pkg="drp-cli"
+          pkg="drp-dev"
           latest=$(curl -sf "https://pypi.org/pypi/${pkg}/json" \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['version'])" 2>/dev/null || echo "")
           if [ -n "$latest" ] && echo "$latest" | grep -q "^${base}\."; then
@@ -162,7 +162,7 @@ jobs:
         run: |
           sed -i "s/__version__ = _resolve_version()/__version__ = '${{ steps.version.outputs.version }}'/" cli/__init__.py
 
-      - name: Build drp-cli
+      - name: Build drp-dev
         run: pip install build && python -m build
 
       - uses: pypa/gh-action-pypi-publish@release/v1

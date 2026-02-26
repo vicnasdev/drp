@@ -4,9 +4,9 @@ Drop, share, and manage text snippets and files from the terminal.
 https://drp.fyi
 """
 
-# VERSION file holds major.minor (e.g. "0.3") — only bumped manually.
+# VERSION file holds major.minor (e.g. "1.0") — only bumped manually.
 # CI queries PyPI for latest published version, bumps patch +1,
-# and seds this line to a literal before building: __version__ = '0.3.42'
+# and seds this line to a literal before building: __version__ = '1.0.42'
 # Nothing committed back — merges between dev↔main stay clean.
 # Fallback: importlib.metadata for installed packages.
 
@@ -17,7 +17,7 @@ def _resolve_version():
         return vf.read_text().strip()
     try:
         from importlib.metadata import version
-        return version('drp-cli')
+        return version('drp-dev')
     except Exception:
         pass
     try:

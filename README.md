@@ -9,7 +9,7 @@ Share text, code snippets, and files from your terminal in seconds. Get a link, 
 **[drp.fyi](https://drp.fyi)** — try it now, no account needed.
 
 ```bash
-pipx install drp-cli
+pipx install drp-dev
 drp setup
 drp up "hello world"        # → https://drp.fyi/a1b2c3/
 ```
@@ -45,7 +45,7 @@ https://drp.fyi/raw/mykey/      ← plain text (curl-friendly)
 - **Plans & pricing:** [drp.fyi/help/plans](https://drp.fyi/help/plans/)
 - **CLI reference:** [drp.fyi/help/cli](https://drp.fyi/help/cli/)
 - **PyPI (stable):** [pypi.org/project/drp](https://pypi.org/project/drp/)
-- **PyPI (dev):** [pypi.org/project/drp-cli](https://pypi.org/project/drp-cli/)
+- **PyPI (dev):** [pypi.org/project/drp-dev](https://pypi.org/project/drp-dev/)
 
 ## Self-hosting
 

@@ -32,15 +32,15 @@ _TIMEOUT = 3  # seconds
 
 
 def _detect_package_name() -> str:
-    """Return the installed package name ('drp-cli' or 'drp')."""
+    """Return the installed package name ('drp-dev' or 'drp')."""
     from importlib.metadata import version
-    for name in ('drp-cli', 'drp'):
+    for name in ('drp-dev', 'drp'):
         try:
             version(name)
             return name
         except Exception:
             continue
-    return 'drp-cli'  # fallback
+    return 'drp-dev'  # fallback
 
 
 PACKAGE_NAME = _detect_package_name()
