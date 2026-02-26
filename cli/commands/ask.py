@@ -3,6 +3,7 @@ drp ask — ask the help bot a question about drp.
 
   drp ask "how do I upload a file?"
   drp ask                          (prompts interactively)
+  drp ask --history                view conversation history
   drp ask --clear                  clear conversation history
 """
 
@@ -16,6 +17,27 @@ from cli.commands._context import load_context
 
 def cmd_ask(args):
     cfg, host, session = load_context(require_login=True)
+
+    # Handle --history (server-side)
+    if getattr(args, 'history', False):
+        try:
+            resp = session.get(f"{host}/help/ask/history/", timeout=15)
+            resp.raise_for_status()
+            messages = resp.json().get('messages', [])
+        except Exception:
+            messages = []
+        if not messages:
+            print('  No conversation history.')
+            return
+        for msg in messages:
+            print(f'  ? {msg["q"]}')
+            text = re.sub(r"<[^>]+>", "", msg["a"])
+            text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+            text = text.replace("&#x27;", "'").replace("&quot;", '"').strip()
+            for line in text.splitlines():
+                print(f'    {line}')
+            print()
+        return
 
     # Handle --clear (server-side)
     if getattr(args, 'clear', False):

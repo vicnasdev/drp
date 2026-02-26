@@ -110,6 +110,7 @@ EXAMPLES = [
     ('drp send',    'mykey',                          'generate transfer token'),
     ('drp claim',   '<token>',                        'claim a drop sent to you'),
     ('drp ask',     '"how do I upload a file?"',        'ask the help bot'),
+    ('drp ask',     '--history',                         'view help bot history'),
     ('drp ask',     '--clear',                          'clear help bot history'),
     ('drp lock',    'mykey',                            'set password on existing drop'),
     ('drp lock',    '-f myfile --remove',               'remove password from file drop'),
@@ -336,6 +337,8 @@ def _configure_subparsers(sub):
     p_ask = sub._name_parser_map['ask']
     p_ask.add_argument('question', nargs='?', default=None,
                        help='Question to ask (prompted if omitted)')
+    p_ask.add_argument('--history', action='store_true',
+                       help='View help bot conversation history')
     p_ask.add_argument('--clear', action='store_true',
                        help='Clear help bot conversation history')
 
