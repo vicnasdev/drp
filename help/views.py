@@ -354,4 +354,32 @@ def ask(request):
 
     answer_html = markdown.markdown(text, extensions=["fenced_code"])
     _cache.set(rl_key, hits + 1, 3600)
+
+    # Save to server-side history
+    from core.models import HelpBotHistory
+    hb, _ = HelpBotHistory.objects.get_or_create(user=request.user)
+    hb.append(question, answer_html)
+
     return JsonResponse({"answer": answer_html})
+
+
+@csrf_exempt
+def ask_history(request):
+    """GET  → return chat history.  DELETE → clear it."""
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Log in first."}, status=403)
+
+    from core.models import HelpBotHistory
+
+    if request.method == "GET":
+        try:
+            hb = HelpBotHistory.objects.get(user=request.user)
+            return JsonResponse({"messages": hb.messages})
+        except HelpBotHistory.DoesNotExist:
+            return JsonResponse({"messages": []})
+
+    if request.method == "DELETE":
+        HelpBotHistory.objects.filter(user=request.user).update(messages=[])
+        return JsonResponse({"ok": True})
+
+    return JsonResponse({"error": "Method not allowed."}, status=405)

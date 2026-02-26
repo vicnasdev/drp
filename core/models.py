@@ -987,3 +987,30 @@ class DropLike(models.Model):
 
     def __str__(self):
         return f"{self.user.username} liked {self.drop}"
+
+
+# ── Help Bot History ──────────────────────────────────────────────────────────
+
+class HelpBotHistory(models.Model):
+    """Server-side storage for help bot conversations, synced across CLI and web."""
+
+    user       = models.OneToOneField(User, on_delete=models.CASCADE, related_name="helpbot_history")
+    messages   = models.JSONField(default=list, help_text="List of {q, a} dicts")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    MAX_MESSAGES = 20
+
+    class Meta:
+        verbose_name_plural = "help bot histories"
+
+    def __str__(self):
+        return f"{self.user.username} helpbot ({len(self.messages)} messages)"
+
+    def append(self, question: str, answer_html: str):
+        self.messages.append({"q": question, "a": answer_html})
+        self.messages = self.messages[-self.MAX_MESSAGES:]
+        self.save(update_fields=["messages", "updated_at"])
+
+    def clear(self):
+        self.messages = []
+        self.save(update_fields=["messages", "updated_at"])

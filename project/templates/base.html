@@ -80,7 +80,6 @@
 
   <script>
   (function () {
-    var KEY = 'drp_hb', MAX = 20;
     var fab = document.getElementById('hb-fab');
     var panel = document.getElementById('hb-panel');
     var closeBtn = document.getElementById('hb-close');
@@ -89,43 +88,43 @@
     var input = document.getElementById('hb-q');
     var log = document.getElementById('hb-log');
 
-    function hist() {
-      try { return JSON.parse(localStorage.getItem(KEY) || '[]'); }
-      catch (e) { return []; }
-    }
-    function save(h) {
-      try { localStorage.setItem(KEY, JSON.stringify(h.slice(-MAX))); }
-      catch (e) {}
-    }
+    var _messages = [];
 
-    function render() {
-      var h = hist();
+    function renderMessages(msgs) {
+      _messages = msgs || [];
       log.innerHTML = '';
-      if (!h.length) {
+      if (!_messages.length) {
         log.innerHTML = '<p class="hb-empty">Ask anything about drp — commands, plans, expiry, etc.</p>';
         clearBtn.style.display = 'none';
         return;
       }
       clearBtn.style.display = '';
-      h.forEach(function (m) {
+      _messages.forEach(function (m) {
         var q = document.createElement('div'); q.className = 'hb-q'; q.textContent = m.q; log.appendChild(q);
         var a = document.createElement('div'); a.className = 'hb-a'; a.innerHTML = m.a; log.appendChild(a);
       });
       log.scrollTop = log.scrollHeight;
     }
 
+    function loadHistory() {
+      fetch('/help/ask/history/')
+        .then(function (r) { return r.json(); })
+        .then(function (d) { renderMessages(d.messages || []); })
+        .catch(function () { renderMessages([]); });
+    }
+
     fab.onclick = function () {
       var open = panel.classList.toggle('open');
       fab.setAttribute('aria-expanded', open);
-      if (open) { render(); input.focus(); }
+      if (open) { loadHistory(); input.focus(); }
     };
     closeBtn.onclick = function () {
       panel.classList.remove('open');
       fab.setAttribute('aria-expanded', 'false');
     };
     clearBtn.onclick = function () {
-      try { localStorage.removeItem(KEY); } catch (e) {}
-      render();
+      fetch('/help/ask/history/', { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+      renderMessages([]);
     };
 
     form.onsubmit = function (e) {
@@ -140,7 +139,7 @@
 
       fetch('/help/ask/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
         body: JSON.stringify({ question: q })
       })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
@@ -149,7 +148,7 @@
         var ad = document.createElement('div'); ad.className = 'hb-a';
         if (res.ok && res.data.answer) {
           ad.innerHTML = res.data.answer;
-          var h = hist(); h.push({ q: q, a: res.data.answer }); save(h);
+          _messages.push({ q: q, a: res.data.answer });
         } else {
           ad.textContent = res.data.error || 'Something went wrong.';
           ad.classList.add('hb-error');

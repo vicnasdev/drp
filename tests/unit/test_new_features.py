@@ -901,59 +901,10 @@ class TestLockCommand:
         assert 'not found' in capsys.readouterr().err
 
 
-# ── drp ask history ───────────────────────────────────────────────────────────
+# ── drp ask ───────────────────────────────────────────────────────────────────
 
-class TestAskHistory:
-    """Tests for ask history file operations and --clear flag."""
-
-    def test_write_and_read(self, tmp_path):
-        from cli.commands import ask
-        orig = ask.HISTORY_FILE
-        try:
-            ask.HISTORY_FILE = tmp_path / 'history.json'
-            ask._write_history([{'q': 'hi', 'a': '<p>hello</p>'}])
-            h = ask._read_history()
-            assert len(h) == 1
-            assert h[0]['q'] == 'hi'
-            assert h[0]['a'] == '<p>hello</p>'
-        finally:
-            ask.HISTORY_FILE = orig
-
-    def test_clear_history(self, tmp_path):
-        from cli.commands import ask
-        orig = ask.HISTORY_FILE
-        try:
-            ask.HISTORY_FILE = tmp_path / 'history.json'
-            ask._write_history([{'q': 'hi', 'a': 'bye'}])
-            assert ask.HISTORY_FILE.exists()
-            ask._clear_history()
-            assert not ask.HISTORY_FILE.exists()
-            assert ask._read_history() == []
-        finally:
-            ask.HISTORY_FILE = orig
-
-    def test_read_missing_file(self, tmp_path):
-        from cli.commands import ask
-        orig = ask.HISTORY_FILE
-        try:
-            ask.HISTORY_FILE = tmp_path / 'nope.json'
-            assert ask._read_history() == []
-        finally:
-            ask.HISTORY_FILE = orig
-
-    def test_max_history_capped(self, tmp_path):
-        from cli.commands import ask
-        orig = ask.HISTORY_FILE
-        try:
-            ask.HISTORY_FILE = tmp_path / 'history.json'
-            big = [{'q': f'q{i}', 'a': f'a{i}'} for i in range(30)]
-            ask._write_history(big)
-            h = ask._read_history()
-            assert len(h) == ask._MAX_HISTORY
-            # Should keep the last 20
-            assert h[0]['q'] == 'q10'
-        finally:
-            ask.HISTORY_FILE = orig
+class TestAsk:
+    """Tests for ask command basics."""
 
     def test_ask_clear_parser_flag(self):
         from cli.drp import build_parser
@@ -961,12 +912,17 @@ class TestAskHistory:
         assert ns.clear is True
         assert ns.question is None
 
-    def test_cmd_ask_clear(self, capsys):
-        from cli.commands.ask import cmd_ask, _clear_history
+    @patch('cli.commands.ask.load_context')
+    def test_cmd_ask_clear(self, mock_ctx, capsys):
+        mock_session = MagicMock()
+        mock_ctx.return_value = ({}, 'https://test.drp.fyi', mock_session)
+        from cli.commands.ask import cmd_ask
         args = MagicMock()
         args.clear = True
         cmd_ask(args)
-        assert 'cleared' in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert 'cleared' in out
+        mock_session.delete.assert_called_once()
 
 
 # ── Live reference edge cases ─────────────────────────────────────────────────

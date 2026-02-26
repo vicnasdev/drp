@@ -6,51 +6,25 @@ drp ask — ask the help bot a question about drp.
   drp ask --clear                  clear conversation history
 """
 
-import json
 import re
 import sys
 
 from cli.commands._context import load_context
-from cli.config import CONFIG_DIR
-
-HISTORY_FILE = CONFIG_DIR / "ask_history.json"
-_MAX_HISTORY = 20
-
-
-# ── History ───────────────────────────────────────────────────────────────────
-
-def _read_history() -> list[dict]:
-    try:
-        return json.loads(HISTORY_FILE.read_text())
-    except Exception:
-        return []
-
-
-def _write_history(history: list[dict]):
-    try:
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        HISTORY_FILE.write_text(json.dumps(history[-_MAX_HISTORY:]))
-    except Exception:
-        pass
-
-
-def _clear_history():
-    try:
-        HISTORY_FILE.unlink(missing_ok=True)
-    except Exception:
-        pass
 
 
 # ── Command ───────────────────────────────────────────────────────────────────
 
 def cmd_ask(args):
-    # Handle --clear
+    cfg, host, session = load_context(require_login=True)
+
+    # Handle --clear (server-side)
     if getattr(args, 'clear', False):
-        _clear_history()
+        try:
+            session.delete(f"{host}/help/ask/history/", timeout=15)
+        except Exception:
+            pass
         print('  ✓ Help bot history cleared.')
         return
-
-    cfg, host, session = load_context(require_login=True)
 
     question = getattr(args, "question", None)
     if not question:
@@ -103,8 +77,3 @@ def cmd_ask(args):
             print(f"  {line}")
     else:
         print("  No answer returned.")
-
-    # Save to history (same format as web: {q, a})
-    history = _read_history()
-    history.append({"q": question, "a": answer_html})
-    _write_history(history)
