@@ -61,8 +61,14 @@
             {% else %}📋 {{ drop.content|truncatechars:20 }}{% endif %}
           </td>
           <td class="muted">
-            {% if drop.expires_at %}{{ drop.expires_at|date:"M j, Y" }}
-            {% else %}<span title="idle-based">—</span>{% endif %}
+            {% if drop.expires_at %}
+              {{ drop.expires_at|timesince }} left
+            {% elif drop.max_lifetime_secs %}
+              {% if drop.last_accessed_at %}last accessed {{ drop.last_accessed_at|timesince }} ago{% else %}not yet accessed{% endif %}
+              · activity-based
+            {% else %}
+              never
+            {% endif %}
           </td>
           {% if profile.is_paid %}
           <td class="muted" style="font-size:1rem">
