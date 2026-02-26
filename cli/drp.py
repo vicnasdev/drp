@@ -357,7 +357,7 @@ def _configure_subparsers(sub):
 
     # lock subcommand
     p_lock = sub._name_parser_map['lock']
-    p_lock.add_argument('key', help='Drop key to lock/unlock')
+    _attach(p_lock.add_argument('key', help='Drop key to lock/unlock'), 'key')
     p_lock.add_argument('-f', '--file', action='store_true',
                         help='Target a file drop instead of clipboard')
     p_lock.add_argument('-c', '--clip', action='store_true')
@@ -369,8 +369,8 @@ def _configure_subparsers(sub):
 
     # rmcache subcommand
     p_rmcache = sub._name_parser_map['rmcache']
-    p_rmcache.add_argument('key', nargs='?', default=None,
-                           help='Drop key to remove from cache')
+    _attach(p_rmcache.add_argument('key', nargs='?', default=None,
+                           help='Drop key to remove from cache'), 'key')
     p_rmcache.add_argument('--all', '-a', action='store_true',
                            help='Clear the entire cache')
 
