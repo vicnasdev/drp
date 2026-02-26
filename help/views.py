@@ -286,7 +286,7 @@ def ask(request):
 
     docs = _get_docs_context()
 
-    model = getattr(settings, "LLM_MODEL", "gemma3:1b")
+    model = getattr(settings, "LLM_MODEL", "qwen2.5:1.5b")
     url = f"{base_url.rstrip('/')}/chat/completions"
 
     try:

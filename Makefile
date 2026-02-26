@@ -31,7 +31,7 @@ install: ## Install drp CLI locally (editable)
 
 # ── Ollama (local) ────────────────────────────────────────────────────────────
 
-OLLAMA_MODEL ?= gemma3:1b
+OLLAMA_MODEL ?= qwen2.5:1.5b
 
 ollama-build: ## Build Ollama Docker image
 	docker build -t drp-ollama --build-arg OLLAMA_MODEL=$(OLLAMA_MODEL) ollama
