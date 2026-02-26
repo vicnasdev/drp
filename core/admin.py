@@ -8,11 +8,9 @@ from django.urls import path
 from django.utils.html import format_html
 
 from .models import (
-    UserProfile, Drop, BugReport, EmailVerification,
+    UserProfile, Drop, BugReport,
     Collection, CollectionMembership, PlanLimit,
-    Group, GroupMembership, GroupInviteToken,
-    APIToken, Alias, DropTemplate,
-    FeatureProposal, FeatureVote, DropLike,
+    Group, GroupMembership,
     EmailTemplate,
 )
 
@@ -227,15 +225,6 @@ class BugReportAdmin(admin.ModelAdmin):
         return '—'
 
 
-# ── EmailVerification admin ───────────────────────────────────────────────────
-
-@admin.register(EmailVerification)
-class EmailVerificationAdmin(admin.ModelAdmin):
-    list_display  = ('user', 'created_at', 'is_expired')
-    search_fields = ('user__email',)
-    readonly_fields = ('user', 'token', 'created_at')
-
-
 # ── Collection admin ──────────────────────────────────────────────────────────
 
 class CollectionMembershipInline(admin.TabularInline):
@@ -287,72 +276,17 @@ class GroupMembershipInline(admin.TabularInline):
     raw_id_fields = ('user',)
 
 
-class GroupInviteTokenInline(admin.TabularInline):
-    model = GroupInviteToken
-    extra = 0
-    fields = ('token', 'role', 'max_uses', 'use_count', 'expires_at', 'created_at')
-    readonly_fields = ('created_at', 'use_count')
-
-
 @admin.register(Group)
 class GroupAdmin(admin.ModelAdmin):
     list_display = ('handle', 'name', 'created_by', 'member_count', 'created_at')
     search_fields = ('handle', 'name')
     readonly_fields = ('created_at',)
     raw_id_fields = ('created_by',)
-    inlines = (GroupMembershipInline, GroupInviteTokenInline)
+    inlines = (GroupMembershipInline,)
 
     @admin.display(description='members')
     def member_count(self, obj):
         return obj.memberships.count()
-
-
-# ── APIToken admin ──────────────────────────────────────────────────────────────
-
-@admin.register(APIToken)
-class APITokenAdmin(admin.ModelAdmin):
-    list_display = ('prefix', 'user', 'label', 'created_at', 'expires_at', 'last_used')
-    search_fields = ('prefix', 'user__email', 'label')
-    readonly_fields = ('created_at', 'last_used', 'token_hash', 'prefix')
-    raw_id_fields = ('user',)
-
-
-# ── Alias admin ─────────────────────────────────────────────────────────────────
-
-@admin.register(Alias)
-class AliasAdmin(admin.ModelAdmin):
-    list_display = ('alias', 'owner', 'ns', 'key', 'created_at')
-    search_fields = ('alias', 'owner__email', 'key')
-    readonly_fields = ('created_at',)
-    raw_id_fields = ('owner',)
-
-
-# ── DropTemplate admin ──────────────────────────────────────────────────────────
-
-@admin.register(DropTemplate)
-class DropTemplateAdmin(admin.ModelAdmin):
-    list_display = ('slug', 'name', 'owner', 'owner_group', 'burn', 'password', 'created_at')
-    search_fields = ('slug', 'name', 'owner__email')
-    readonly_fields = ('created_at',)
-    raw_id_fields = ('owner', 'owner_group')
-
-
-# ── FeatureProposal + FeatureVote admin ─────────────────────────────────────────
-# (Simplified — voting board is user-facing, admin just for moderation)
-
-@admin.register(FeatureProposal)
-class FeatureProposalAdmin(admin.ModelAdmin):
-    list_display = ('title', 'staff_pick', 'closed', 'created_at')
-    list_filter = ('closed', 'staff_pick')
-    list_editable = ('staff_pick',)
-    search_fields = ('title',)
-    readonly_fields = ('created_at',)
-    actions = ['close_proposals']
-
-    @admin.action(description="Close selected proposals")
-    def close_proposals(self, request, queryset):
-        updated = queryset.update(closed=True)
-        messages.success(request, f"{updated} proposal(s) closed.")
 
 
 # ── EmailTemplate admin ────────────────────────────────────────────────────────
@@ -367,5 +301,3 @@ class EmailTemplateAdmin(admin.ModelAdmin):
         ('Meta', {'fields': ('updated_at',)}),
     )
 
-
-# DropLike — not registered in admin (no need to monitor individual likes)

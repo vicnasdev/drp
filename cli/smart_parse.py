@@ -283,9 +283,6 @@ def detect_code_language(text: str, filename: str = ''):
         lex = guess_lexer(text)
         if isinstance(lex, TextLexer):
             return None
-        # Require reasonable confidence to avoid false positives
-        if lex.analyse_text(text) < 0.5:
-            return None
         return lex.name.lower()
     except Exception:
         return None
@@ -307,8 +304,8 @@ def _color_code(text: str, filename: str = '') -> str:
             lexer = guess_lexer(text)
             if isinstance(lexer, TextLexer):
                 return text
-            # Require reasonable confidence to avoid false positives
-            if lexer.analyse_text(text) < 0.5:
+            # Require reasonable confidence to avoid coloring plain text
+            if lexer.analyse_text(text) < 0.15:
                 return text
         return _hl(text, lexer, Terminal256Formatter(style='monokai')).rstrip()
     except Exception:

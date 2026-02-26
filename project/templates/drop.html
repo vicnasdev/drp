@@ -209,9 +209,10 @@ function copyContent() {
 }
 function downloadText() {
   const text = document.getElementById('clipContent').innerText;
+  const ext = window._detectedExt || 'txt';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], {type: 'text/plain'}));
-  a.download = `drp-${KEY}.txt`;
+  a.download = `drp-${KEY}.${ext}`;
   a.click();
 }
 
@@ -261,7 +262,25 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!block) return;
 
   // Syntax highlight
-  if (typeof hljs !== 'undefined') hljs.highlightElement(block);
+  if (typeof hljs !== 'undefined') {
+    hljs.highlightElement(block);
+    // Update download button with detected language extension
+    const lang = block.className.match(/language-(\w+)/);
+    if (lang && lang[1] !== 'undefined' && lang[1] !== 'plaintext') {
+      const extMap = {
+        python:'py', javascript:'js', typescript:'ts', ruby:'rb', rust:'rs',
+        java:'java', go:'go', cpp:'cpp', c:'c', csharp:'cs', php:'php',
+        bash:'sh', shell:'sh', yaml:'yaml', json:'json', xml:'xml',
+        html:'html', css:'css', sql:'sql', perl:'pl', lua:'lua',
+        kotlin:'kt', swift:'swift', r:'r', scala:'scala', toml:'toml',
+        markdown:'md', makefile:'Makefile', dockerfile:'Dockerfile',
+      };
+      const ext = extMap[lang[1]] || lang[1];
+      const dlBtn = document.querySelector('.clip-actions button[onclick="downloadText()"]');
+      if (dlBtn) dlBtn.textContent = `download .${ext}`;
+      window._detectedExt = ext;
+    }
+  }
 
   // CSV table toggle
   const text = block.textContent;

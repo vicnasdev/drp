@@ -254,9 +254,6 @@ def _fmt_size(n: int) -> str:
 def _upload_file(host, session, path, key, cfg, args, password='',
                  schedule=None, webhook=None, notify=None,
                  is_public=False, tags=None):
-    if not key:
-        key = api.slug(os.path.basename(path))
-
     expiry_days = _parse_expires(getattr(args, 'expires', None))
     _test_mode = os.environ.get('DRP_TEST_MODE') == '1'
 
