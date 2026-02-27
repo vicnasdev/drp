@@ -27,6 +27,7 @@ import hashlib
 import logging
 import os
 import re
+import threading
 
 import requests as http
 
@@ -38,6 +39,9 @@ GITHUB_API   = 'https://api.github.com'
 
 # Maximum number of open auto-reported issues before the flood guard kicks in.
 _FLOOD_LIMIT = 20
+
+# Lock to prevent concurrent threads from creating duplicate issues.
+_FILING_LOCK = threading.Lock()
 
 # Regex to extract a fingerprint embedded in an issue body.
 _FP_RE = re.compile(r'<!-- drp-fingerprint: ([a-f0-9]{12}) -->')
@@ -259,8 +263,12 @@ def maybe_file_issue(data: dict) -> bool:
 
     Replaces the old pattern of calling _issue_exists / _create_issue
     separately so callers don't need to touch the internals.
+
+    Uses a threading lock so concurrent 500 handlers don't race past
+    the dedup check and create duplicate GitHub issues.
     """
-    if _issue_exists(data):
-        return False
-    title, body = _build_body(data)
-    return _create_issue(title, body)
+    with _FILING_LOCK:
+        if _issue_exists(data):
+            return False
+        title, body = _build_body(data)
+        return _create_issue(title, body)

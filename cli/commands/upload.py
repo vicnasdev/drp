@@ -201,6 +201,8 @@ def _upload_url(host, session, url, key, cfg, args, password='',
     print(f'  {dim("live reference")} → {url}')
     _try_copy(final_url)
     config.record_drop(result_key, 'text', host=host)
+    from cli.completion import record_key
+    record_key(result_key)
 
 
 def _upload_url_remote(host, session, url, key, cfg, args, password='',
@@ -241,6 +243,8 @@ def _upload_url_remote(host, session, url, key, cfg, args, password='',
     print(f'  {desc}')
     _try_copy(final_url)
     config.record_drop(result_key, 'file', filename=filename, host=host)
+    from cli.completion import record_key
+    record_key(result_key)
 
 
 def _fmt_size(n: int) -> str:
@@ -275,6 +279,8 @@ def _upload_file(host, session, path, key, cfg, args, password='',
     _try_copy(url)
     config.record_drop(result_key, 'file',
                        filename=os.path.basename(path), host=host)
+    from cli.completion import record_key
+    record_key(result_key)
 
 
 def _upload_text(host, session, text, key, cfg, args, burn=False, password='',
@@ -305,6 +311,8 @@ def _upload_text(host, session, text, key, cfg, args, burn=False, password='',
     print(url)
     _try_copy(url)
     config.record_drop(result_key, 'text', host=host)
+    from cli.completion import record_key
+    record_key(result_key)
 
 
 def _try_copy(url: str) -> None:

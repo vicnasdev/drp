@@ -68,6 +68,21 @@ _KEY_CMDS = {
 # Commands whose first positional arg is a folder slug
 _SLUG_CMDS = {'cd'}
 
+def _complete_local_paths(prefix: str) -> list[str]:
+    """Return local filesystem path completions for *prefix*."""
+    import os, glob
+    expanded = os.path.expanduser(prefix)
+    # If it looks like a path hint (starts with ./ ../ / ~ or contains /)
+    # complete from the filesystem
+    if not prefix and not expanded:
+        return []
+    matches = []
+    for p in glob.glob(expanded + '*'):
+        if os.path.isdir(p):
+            matches.append(p + os.sep)
+        else:
+            matches.append(p + ' ')
+    return matches
 
 def cmd_shell(args):
     from cli.format import bold, dim, cyan, magenta, green, red, grey, yellow
@@ -80,6 +95,10 @@ def cmd_shell(args):
     version_line = dim(f'drp shell  —  type {bold("help")} for commands, ^D to exit')
     print(version_line)
     print()
+
+    # Pre-populate completion cache for tab-complete inside the shell
+    from cli.completion import sync_completions
+    sync_completions(host=host, session=session)
 
     def prompt():
         if cwd:
@@ -148,10 +167,15 @@ def cmd_shell(args):
                     # Sub-command completion (folder ls/new/add/rm, token create/list/revoke)
                     if cmd in _SUB_CMDS and len(tokens) <= 2 and not (len(tokens) == 2 and buf.endswith(' ')):
                         matches = [s + ' ' for s in _SUB_CMDS[cmd] if s.startswith(text)]
+                    # cp: complete local paths AND drop keys
+                    elif cmd == 'cp':
+                        matches = _complete_local_paths(text)
+                        from cli.completion import _read_cache
+                        matches += [k + ' ' for k in _read_cache(text)]
                     # Drop key completion
                     elif cmd in _KEY_CMDS:
                         from cli.completion import _read_cache
-                        matches = [k + ' ' for k in _read_cache(None, text)]
+                        matches = [k + ' ' for k in _read_cache(text)]
                     # Folder slug completion
                     elif cmd in _SLUG_CMDS:
                         from cli.completion import _read_folder_cache
@@ -341,6 +365,8 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
             from cli.api.actions import delete
             ok = delete(host, session, key)
             if ok:
+                from cli.completion import remove_key
+                remove_key(key)
                 return [f'  {green("✓")} Deleted /{key}/']
             return [f'  {red("✗")} Could not delete /{key}/.']
         except Exception as e:
@@ -373,6 +399,8 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
                     new_key = result if isinstance(result, str) else result.get('key', '?')
                     from cli import config as _config
                     _config.record_drop(new_key, 'file', host=host)
+                    from cli.completion import record_key
+                    record_key(new_key)
                     # Auto-add to current folder if cd'd
                     if cwd and username:
                         _folder_add(host, session, username, cwd, new_key)
@@ -390,6 +418,8 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
             if isinstance(result, str):
                 from cli import config as _config
                 _config.record_drop(result, 'text', host=host)
+                from cli.completion import record_key
+                record_key(result)
                 return [f'  {green("✓")} /{key}/ → /{result}/']
             return [f'  {red("✗")} Could not copy /{key}/.']
         except Exception as e:
@@ -407,6 +437,8 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
             if isinstance(result, str):
                 from cli import config as _config
                 _config.rename_local_drop(key, result)
+                from cli.completion import rename_key
+                rename_key(key, result)
                 return [f'  {green("✓")} /{key}/ → /{result}/']
             return [f'  {red("✗")} Could not rename /{key}/.']
         except Exception as e:
@@ -485,6 +517,8 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
             result = _mkdir(host, session, name, parent_id=parent_id)
             if result:
                 slug = result.get('slug', name)
+                from cli.completion import record_folder
+                record_folder(slug)
                 return [f'  {green("✓")} Folder /{slug}/ created.']
             return [f'  {red("✗")} Could not create folder "{name}".']
         except Exception as e:
@@ -532,6 +566,8 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
             if isinstance(result, str):
                 from cli import config as _config
                 _config.rename_local_drop(key, result)
+                from cli.completion import rename_key
+                rename_key(key, result)
                 return [f'  {green("✓")} /{key}/ → /{result}/']
             return [f'  {red("✗")} Could not rekey /{key}/.']
         except Exception as e:

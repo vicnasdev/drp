@@ -134,7 +134,7 @@ def account_view(request):
     plan_limits = Plan.LIMITS.get(profile.plan, Plan.LIMITS[Plan.FREE])
 
     if 'application/json' in request.headers.get('Accept', ''):
-        folders = request.user.folders.prefetch_related('members').order_by('-created_at')
+        folders = request.user.folders.prefetch_related('items').order_by('-created_at')
         return JsonResponse({
             'username':            request.user.username,
             'email':               request.user.email,
@@ -152,7 +152,7 @@ def account_view(request):
                     'path': f.full_path,
                     'parent_id': f.parent_id,
                     'children': list(f.children.values_list('slug', flat=True)),
-                    'drops': [{'key': m.key} for m in f.members.all()],
+                    'drops': [{'key': m.key} for m in f.items.all()],
                 }
                 for f in folders
             ],
@@ -161,7 +161,7 @@ def account_view(request):
     return render(request, 'auth/account.html', {
         'profile': profile,
         'drops': drops,
-        'saved': saved,
+        'saved': saved_items,
         'plan_limits': plan_limits,
         'Plan': Plan,
     })
@@ -183,7 +183,7 @@ def manage_view(request):
     root = Folder.objects.filter(owner=request.user, parent=None, slug="drops").first()
     saved_items = FolderItem.objects.filter(folder=root).order_by('-added_at') if root else FolderItem.objects.none()
     folders = request.user.folders.annotate(
-        drop_count=models.Count('members')
+        drop_count=models.Count('items')
     ).order_by('-created_at')
 
     return render(request, 'auth/manage.html', {
@@ -211,7 +211,7 @@ def export_drops(request):
     drops = Drop.objects.filter(owner=request.user).order_by('-created_at')
     root = Folder.objects.filter(owner=request.user, parent=None, slug="drops").first()
     saved_items = FolderItem.objects.filter(folder=root).order_by('-added_at') if root else FolderItem.objects.none()
-    folders = request.user.folders.prefetch_related('members').order_by('-created_at')
+    folders = request.user.folders.prefetch_related('items').order_by('-created_at')
 
     owned_data = []
     for d in drops:
@@ -234,7 +234,7 @@ def export_drops(request):
             'url':  f'{settings.SITE_URL}/@{request.user.username}/{f.full_path}/',
             'drops': [
                 {'key': m.key}
-                for m in f.members.all()
+                for m in f.items.all()
             ],
         }
         for f in folders

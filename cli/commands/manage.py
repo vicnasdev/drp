@@ -24,6 +24,8 @@ def cmd_rm(args):
     if ok:
         print(f'  ✓ Deleted /{key}/')
         config.remove_local_drop(key)
+        from cli.completion import remove_key
+        remove_key(key)
     else:
         report_outcome('rm', 'delete returned False')
         print(f'  ✗ Could not delete /{key}/.')
@@ -41,6 +43,8 @@ def cmd_mv(args):
     if isinstance(result, str):
         print(f'  ✓ /{key}/ → /{result}/')
         config.rename_local_drop(key, result)
+        from cli.completion import rename_key
+        rename_key(key, result)
 
     elif result is False:
         print(f'  ✗ Could not rename /{key}/.')
@@ -80,6 +84,8 @@ def cmd_cp(args):
     if isinstance(result, str):
         print(f'  ✓ /{key}/ → /{result}/')
         config.record_drop(result, 'text', host=host)
+        from cli.completion import record_key
+        record_key(result)
     elif result is False:
         sys.exit(1)
     else:
@@ -163,6 +169,8 @@ def cmd_mkdir(args):
     if result:
         slug = result.get('slug', name)
         print(f'  ✓ Folder /{slug}/ created.')
+        from cli.completion import record_folder
+        record_folder(slug)
     else:
         print(f'  ✗ Could not create folder "{name}".')
         sys.exit(1)

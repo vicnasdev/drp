@@ -103,6 +103,9 @@ def cmd_login(args):
                     cfg['username'] = username
                     config.save(cfg)
                 print(f'  ✓ Token saved — authenticated as @{username or "?"}')
+                # Populate completion cache after token login
+                from cli.completion import sync_completions
+                sync_completions(host=host, session=session)
             else:
                 print(f'  ✗ Token rejected (HTTP {res.status_code})')
                 cfg.pop('api_key', None)
@@ -142,6 +145,9 @@ def cmd_login(args):
             save_session(session)
             username_str = f' (@{cfg["username"]})' if cfg.get('username') else ''
             print(f'  ✓ Logged in as {cfg["email"]}{username_str}')
+            # Populate completion cache after login
+            from cli.completion import sync_completions
+            sync_completions(host=host, session=session)
         else:
             print('  ✗ Login failed — check your credentials.')
             sys.exit(1)

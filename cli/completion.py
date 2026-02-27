@@ -3,19 +3,24 @@ cli/completion.py
 
 Shell tab-completion for drp.
 
-Command completion:    handled by argcomplete from the parser itself.
-Key completion:        reads the local drop cache (~/.config/drp/drops.json)
-                       immediately (so the shell sees results in <1ms), then
-                       fires a background thread to refresh the cache from the
-                       server so the *next* completion is up to date.
+Architecture
+────────────
+Tab-completion reads from a single local cache file:
 
-Background refresh rules:
-  - Only runs if a session file exists (avoids prompting for a password mid-tab)
-  - Skips refresh if the cache was written within the last REFRESH_INTERVAL_SECS
-  - One process at a time (lock file prevents pile-up on repeated tabs)
-  - Silent — any error is swallowed; completions must never break the shell
-  - Prunes drops that were previously confirmed from this server but are no
-    longer returned (expired/deleted). Pure local drops are never pruned.
+    ~/.config/drp/completions.json
+
+This file is a compact JSON dict:
+
+    {"keys": ["hello", "notes", ...], "folders": ["docs", "work", ...]}
+
+The cache is populated/refreshed:
+  1. By `sync_completions()` — called after every mutating command
+     (up, rm, mv, cp, mkdir, save, login). Fetches /auth/account/ and
+     writes the file atomically.
+  2. By `_read_and_maybe_refresh()` — if the cache is stale (>60s) when
+     tab is pressed, a background thread fires a one-shot refresh.
+
+Tab-press itself is always fast (<1ms) — it just reads the file.
 
 Usage (in drp.py):
     import argcomplete
@@ -25,245 +30,238 @@ Usage (in drp.py):
     argcomplete.autocomplete(parser)
 """
 
+import json
 import os
-import sys
-import time
+import tempfile
 import threading
+import time
 from pathlib import Path
 
-# How stale the cache can be before a background refresh is triggered (seconds).
-REFRESH_INTERVAL_SECS = 30
+from cli import config
+
+COMPLETIONS_FILE = config.CONFIG_DIR / 'completions.json'
+
+# How old the cache can be before a background refresh is triggered (seconds).
+_STALE_SECS = 60
 
 
-# ── Completers ────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Public completers — wired to argparse arguments via argcomplete
+# ══════════════════════════════════════════════════════════════════════════════
 
 def key_completer(prefix, parsed_args, **kwargs):
-    """Complete drop keys."""
-    return _complete(prefix)
+    """Complete drop keys (for argcomplete)."""
+    return _complete_keys(prefix)
 
 
 def any_key_completer(prefix, parsed_args, **kwargs):
-    """Complete drop keys (alias for key_completer)."""
-    return _complete(prefix)
+    """Alias for key_completer."""
+    return _complete_keys(prefix)
 
 
 def folder_slug_completer(prefix, parsed_args, **kwargs):
-    """Complete folder slugs from the account endpoint (via cache)."""
-    return _complete_folder_slugs(prefix)
+    """Complete folder slugs (for argcomplete)."""
+    return _complete_folders(prefix)
 
 
-# ── Core ──────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Read cache — used by both argcomplete and the interactive shell
+# ══════════════════════════════════════════════════════════════════════════════
 
-def _complete(prefix: str) -> list[str]:
-    keys = _read_cache(prefix)
-    _trigger_background_refresh()
-    return keys
-
-
-def _complete_folder_slugs(prefix: str) -> list[str]:
-    """
-    Return folder slugs matching prefix.
-    Reads from a local folder slug cache (~/.config/drp/folders.json),
-    then triggers a background refresh so the next tab is up to date.
-    """
-    slugs = _read_folder_cache(prefix)
-    _trigger_background_refresh()
-    return slugs
-
-
-def _read_folder_cache(prefix: str) -> list[str]:
-    """Read folders.json and return matching slugs. Never raises."""
+def _load_cache() -> dict:
+    """Load completions.json. Returns {'keys': [...], 'folders': [...]}."""
     try:
-        from cli import config
-        cache_file = config.CONFIG_DIR / 'folders.json'
-        if not cache_file.exists():
-            return []
-        import json
-        data = json.loads(cache_file.read_text())
-        return [s for s in data if isinstance(s, str) and s.startswith(prefix)]
+        if COMPLETIONS_FILE.exists():
+            return json.loads(COMPLETIONS_FILE.read_text())
     except Exception:
-        return []
+        pass
+    return {'keys': [], 'folders': []}
 
 
 def _read_cache(prefix: str) -> list[str]:
-    """Read drops.json and return matching keys. Never raises."""
+    """Return drop keys matching *prefix*. Never raises."""
     try:
-        from cli import config
-        drops = config.load_local_drops()
-        return [d.get('key', '') for d in drops if d.get('key', '').startswith(prefix)]
+        data = _load_cache()
+        return [k for k in data.get('keys', []) if k.startswith(prefix)]
     except Exception:
         return []
 
 
-# ── Background refresh ────────────────────────────────────────────────────────
-
-def _trigger_background_refresh() -> None:
+def _read_folder_cache(prefix: str) -> list[str]:
+    """Return folder slugs matching *prefix*. Never raises."""
     try:
-        from cli import config
-        from cli.session import SESSION_FILE
-
-        if not SESSION_FILE.exists():
-            return
-
-        drops_file = config.DROPS_FILE
-        if drops_file.exists():
-            age = time.time() - drops_file.stat().st_mtime
-            if age < REFRESH_INTERVAL_SECS:
-                return
-
-        t = threading.Thread(target=_refresh_worker, daemon=True)
-        t.start()
-        t.join(timeout=0.05)
+        data = _load_cache()
+        return [s for s in data.get('folders', []) if s.startswith(prefix)]
     except Exception:
-        pass
+        return []
 
 
-def _refresh_worker() -> None:
+def _complete_keys(prefix: str) -> list[str]:
+    """Read cache, maybe trigger background refresh, return matching keys."""
+    keys = _read_cache(prefix)
+    _maybe_background_refresh()
+    return keys
+
+
+def _complete_folders(prefix: str) -> list[str]:
+    """Read cache, maybe trigger background refresh, return matching slugs."""
+    slugs = _read_folder_cache(prefix)
+    _maybe_background_refresh()
+    return slugs
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Write cache — atomic write via tempfile + rename
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _save_cache(data: dict) -> None:
+    """Atomically write completions.json (tmp + rename)."""
     try:
-        from cli import config
-        from cli.session import SESSION_FILE
-
-        lock_path = config.CONFIG_DIR / '.refresh.lock'
-
+        COMPLETIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(
+            dir=str(COMPLETIONS_FILE.parent),
+            suffix='.tmp',
+        )
         try:
-            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, json.dumps(data).encode())
             os.close(fd)
-        except FileExistsError:
-            return
+            os.replace(tmp, str(COMPLETIONS_FILE))
         except Exception:
-            return
-
-        try:
-            _do_refresh(config, SESSION_FILE)
-        finally:
+            os.close(fd) if not os.get_inheritable(fd) else None
             try:
-                lock_path.unlink(missing_ok=True)
-            except Exception:
+                os.unlink(tmp)
+            except OSError:
                 pass
-
+            raise
     except Exception:
-        pass
+        pass  # completions are never critical
 
 
-def _do_refresh(config, SESSION_FILE) -> None:
+# ══════════════════════════════════════════════════════════════════════════════
+# Sync — called after mutating commands
+# ══════════════════════════════════════════════════════════════════════════════
+
+def sync_completions(host: str = None, session=None) -> None:
     """
-    Fetch server drop list, merge into local cache, and prune stale entries.
+    Fetch the current drop/folder list from the server and write the cache.
 
-    Pruning rule: only drops that were previously synced FROM the server
-    (marked with 'from_server': True) are candidates for pruning. Pure
-    local drops (created anonymously, never confirmed by server) are kept
-    unconditionally so they survive cache refreshes.
+    Called after mutating commands (up, rm, mv, cp, mkdir, save, login).
+    If host/session aren't provided, loads them from config/session files.
+
+    Runs synchronously but is fast (single GET, compact response).
+    Silently no-ops on any error.
     """
-    import requests as req_lib
-    from cli.session import load_session
-
-    cfg = config.load()
-    host = cfg.get('host')
-    if not host:
-        return
-
-    session = req_lib.Session()
-    load_session(session)
-
     try:
+        if not host or not session:
+            import requests as req_lib
+            from cli.session import load_session, SESSION_FILE
+            if not SESSION_FILE.exists():
+                return
+            cfg = config.load()
+            host = host or cfg.get('host')
+            if not host:
+                return
+            session = req_lib.Session()
+            load_session(session)
+
         res = session.get(
             f'{host}/auth/account/',
             headers={'Accept': 'application/json'},
             timeout=8,
         )
-    except Exception:
-        return
+        if not res.ok:
+            return
 
-    if not res.ok:
-        return
-
-    try:
         data = res.json()
+        keys = []
+        for d in data.get('drops', []):
+            k = d.get('key', '')
+            if k:
+                keys.append(k)
+        for s in data.get('saved', []):
+            k = s.get('key', '')
+            if k and k not in keys:
+                keys.append(k)
+
+        folders = []
+        for f in data.get('folders', []):
+            slug = f.get('slug', '')
+            if slug:
+                folders.append(slug)
+
+        _save_cache({'keys': keys, 'folders': folders})
+
     except Exception:
-        return
+        pass  # never crash on completion sync
 
-    server_drops = data.get('drops', [])
-    saved_drops  = data.get('saved', [])
 
-    # Build a set of keys the server currently knows about.
-    server_keys = set()
-    for d in server_drops:
-        key = d.get('key', '')
-        if key:
-            server_keys.add(key)
-    for s in saved_drops:
-        key = s.get('key', '')
-        if key:
-            server_keys.add(key)
-
-    existing = config.load_local_drops()
-    existing_by_key = {}
-    for d in existing:
-        key = d.get('key', '')
-        if not key:
-            continue
-
-        drop_host      = d.get('host', '')
-        from_server    = d.get('from_server', False)
-
-        # Prune if this drop belongs to the current host and the server
-        # no longer knows about it — covers both previously-synced drops
-        # and locally-cached drops that have since expired/been deleted.
-        # Drops from other hosts are always kept.
-        if drop_host == host and from_server and key not in server_keys:
-            continue  # gone from server — prune it
-
-        existing_by_key[key] = d
-
-    # Merge server drops in (server is authoritative for fields it returns).
-    # Mark them from_server=True so future refreshes can prune them correctly.
-    for d in server_drops:
-        key = d.get('key', '')
-        if not key:
-            continue
-        existing_by_key[key] = {
-            'key':         key,
-            'kind':        d.get('kind', 'text'),
-            'created_at':  d.get('created_at', ''),
-            'host':        host,
-            'filename':    d.get('filename') or None,
-            'from_server': True,
-        }
-
-    for s in saved_drops:
-        key = s.get('key', '')
-        if not key:
-            continue
-        if key not in existing_by_key:
-            existing_by_key[key] = {
-                'key':         key,
-                'kind':        s.get('kind', 'text'),
-                'created_at':  s.get('saved_at', ''),
-                'host':        host,
-                'from_server': True,
-            }
-
-    merged = sorted(
-        existing_by_key.values(),
-        key=lambda d: d.get('created_at', ''),
-        reverse=True,
-    )
-
-    # Cap the cache at 200 entries. When trimming, evict unconfirmed
-    # (from_server=False) drops first, then oldest confirmed.
-    _CAP = 200
-    if len(merged) > _CAP:
-        confirmed   = [d for d in merged if d.get('from_server', False)]
-        unconfirmed = [d for d in merged if not d.get('from_server', False)]
-        merged = (confirmed + unconfirmed)[:_CAP]
-
-    config.save_local_drops(merged)
-
-    # Also persist folder slugs for tab completion.
+def record_key(key: str) -> None:
+    """Add a key to the cache immediately (no network). Used after upload."""
     try:
-        import json
-        slugs = [f.get('slug', '') for f in data.get('folders', []) if f.get('slug')]
-        cache_file = config.CONFIG_DIR / 'folders.json'
-        cache_file.write_text(json.dumps(slugs))
+        data = _load_cache()
+        keys = data.get('keys', [])
+        if key not in keys:
+            keys.insert(0, key)
+        data['keys'] = keys
+        _save_cache(data)
+    except Exception:
+        pass
+
+
+def remove_key(key: str) -> None:
+    """Remove a key from the cache immediately. Used after delete."""
+    try:
+        data = _load_cache()
+        data['keys'] = [k for k in data.get('keys', []) if k != key]
+        _save_cache(data)
+    except Exception:
+        pass
+
+
+def rename_key(old: str, new: str) -> None:
+    """Rename a key in the cache. Used after mv/rekey."""
+    try:
+        data = _load_cache()
+        keys = data.get('keys', [])
+        data['keys'] = [new if k == old else k for k in keys]
+        _save_cache(data)
+    except Exception:
+        pass
+
+
+def record_folder(slug: str) -> None:
+    """Add a folder slug to the cache immediately. Used after mkdir."""
+    try:
+        data = _load_cache()
+        folders = data.get('folders', [])
+        if slug not in folders:
+            folders.insert(0, slug)
+        data['folders'] = folders
+        _save_cache(data)
+    except Exception:
+        pass
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Background refresh — only for stale cache during tab-press
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _maybe_background_refresh() -> None:
+    """If the cache is old, fire a one-shot daemon thread to refresh it."""
+    try:
+        if COMPLETIONS_FILE.exists():
+            age = time.time() - COMPLETIONS_FILE.stat().st_mtime
+            if age < _STALE_SECS:
+                return
+        t = threading.Thread(target=_bg_refresh, daemon=True)
+        t.start()
+    except Exception:
+        pass
+
+
+def _bg_refresh() -> None:
+    """Background worker — just calls sync_completions()."""
+    try:
+        sync_completions()
     except Exception:
         pass

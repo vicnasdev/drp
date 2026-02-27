@@ -143,8 +143,8 @@ def build_parser():
 
 def _configure_subparsers(sub):
     try:
-        from cli.completion import key_completer
-        _completers = {'key': key_completer}
+        from cli.completion import key_completer, folder_slug_completer
+        _completers = {'key': key_completer, 'folder': folder_slug_completer}
     except Exception:
         _completers = {}
 
@@ -161,6 +161,8 @@ def _configure_subparsers(sub):
     p_up.add_argument('-c', '--clip', action='store_true',
                       help='Force upload as clipboard text')
     p_up.add_argument('--key', '-k', default=None)
+    if 'key' in _completers:
+        p_up._option_string_actions['--key'].completer = _completers['key']
     p_up.add_argument('--expires', '-e', default=None, metavar='DURATION',
                       help='7d, 30d, 1y (paid accounts only)')
     p_up.add_argument('--burn', '-b', action='store_true',
@@ -272,6 +274,8 @@ def _configure_subparsers(sub):
     p_mkdir.add_argument('name', help='Folder name')
     p_mkdir.add_argument('--parent', default=None, metavar='SLUG',
                          help='Parent folder slug (creates nested folder)')
+    if 'folder' in _completers:
+        p_mkdir._option_string_actions['--parent'].completer = _completers['folder']
     # ── ls ────────────────────────────────────────────────────────────────────
     p_ls = sub._name_parser_map['ls']
     p_ls.add_argument('-l', '--long', action='store_true',
