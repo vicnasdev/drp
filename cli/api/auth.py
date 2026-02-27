@@ -17,11 +17,23 @@ def get_csrf(host, session):
 
 
 def _first_csrf(session):
-    """Safely get csrftoken even if duplicate cookies exist."""
+    """Return the most authoritative csrftoken.
+
+    Prefer a cookie with a domain attribute (set by the server during a
+    response) over a bare cookie (loaded from the JSON session file with no
+    domain).  When both exist, they may differ — the domain-matched cookie
+    is the one the requests library actually sends in the Cookie header, so
+    that is the one Django compares against the X-CSRFToken header.
+    """
+    domain_token = None
+    bare_token = None
     for cookie in session.cookies:
         if cookie.name == 'csrftoken':
-            return cookie.value
-    return None
+            if getattr(cookie, 'domain', ''):
+                domain_token = cookie.value
+            else:
+                bare_token = cookie.value
+    return domain_token or bare_token
 
 
 def login(host, session, identifier, password):

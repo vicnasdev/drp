@@ -149,3 +149,60 @@ class TestConstants:
 
     def test_retry_codes_frozen(self):
         assert isinstance(RETRY_STATUS_CODES, frozenset)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# _first_csrf — CSRF cookie preference logic
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestFirstCsrf:
+    """_first_csrf should prefer domain-set cookies over bare ones."""
+
+    def test_bare_cookie_returned(self):
+        """When only a bare cookie exists, return it."""
+        from cli.api.auth import _first_csrf
+        session = ResilientSession()
+        session.cookies.set('csrftoken', 'bare-value')
+        assert _first_csrf(session) == 'bare-value'
+
+    def test_domain_cookie_preferred(self):
+        """When both bare and domain-set cookies exist, prefer domain."""
+        from cli.api.auth import _first_csrf
+        session = ResilientSession()
+        # Bare cookie (from JSON load — no domain metadata)
+        session.cookies.set('csrftoken', 'old-value')
+        # Domain-set cookie (from server Set-Cookie header)
+        session.cookies.set('csrftoken', 'new-value', domain='.drp.fyi')
+        assert _first_csrf(session) == 'new-value'
+
+    def test_only_domain_cookie(self):
+        """When only a domain cookie exists, return it."""
+        from cli.api.auth import _first_csrf
+        session = ResilientSession()
+        session.cookies.set('csrftoken', 'srv', domain='.drp.fyi')
+        assert _first_csrf(session) == 'srv'
+
+    def test_no_csrf_cookie_returns_none(self):
+        from cli.api.auth import _first_csrf
+        session = ResilientSession()
+        assert _first_csrf(session) is None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# load_context — Referer header
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestLoadContextReferer:
+    """load_context should set Referer header on the session."""
+
+    def test_referer_set(self):
+        from cli.commands._context import load_context
+        with patch('cli.commands._context.config') as mock_config, \
+             patch('cli.commands._context.auto_login', return_value=True):
+            mock_config.load.return_value = {
+                'host': 'https://dev.drp.fyi',
+                'email': 'a@b.com',
+            }
+            mock_config.CONFIG_DIR = MagicMock()
+            cfg, host, session = load_context()
+        assert session.headers.get('Referer') == 'https://dev.drp.fyi/'

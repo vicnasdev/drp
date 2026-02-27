@@ -123,6 +123,48 @@ class TestCmdCp:
             mock_api.copy_drop.return_value = None
             cmd_cp(args)
 
+    def test_cp_local_file_uploads(self, capsys, tmp_path, monkeypatch):
+        """drp cp file1.txt → file exists → upload instead of server copy."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'file1.txt').write_text('hello')
+        args = SimpleNamespace(key='file1.txt', new_key=None)
+        with _fake_context(), \
+             patch('cli.commands.manage.api') as mock_api, \
+             patch('cli.commands.manage.config'):
+            mock_api.upload_file.return_value = 'abc-123'
+            cmd_cp(args)
+        out = capsys.readouterr().out
+        assert '✓' in out
+        assert 'abc-123' in out
+        mock_api.upload_file.assert_called_once()
+        # Should NOT call copy_drop
+        mock_api.copy_drop.assert_not_called()
+
+    def test_cp_local_file_not_exists_does_server_copy(self, capsys, tmp_path, monkeypatch):
+        """drp cp nonexistent → no file → server-side copy."""
+        monkeypatch.chdir(tmp_path)
+        args = SimpleNamespace(key='nonexistent', new_key=None)
+        with _fake_context(), \
+             patch('cli.commands.manage.api') as mock_api, \
+             patch('cli.commands.manage.config'):
+            mock_api.copy_drop.return_value = 'nonexistent-1'
+            cmd_cp(args)
+        out = capsys.readouterr().out
+        assert 'nonexistent-1' in out
+        mock_api.upload_file.assert_not_called()
+
+    def test_cp_local_file_upload_failure_exits(self, tmp_path, monkeypatch):
+        """drp cp file.txt → upload fails → exit 1."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'file.txt').write_text('data')
+        args = SimpleNamespace(key='file.txt', new_key=None)
+        with _fake_context(), \
+             patch('cli.commands.manage.api') as mock_api, \
+             patch('cli.commands.manage.config'), \
+             pytest.raises(SystemExit):
+            mock_api.upload_file.return_value = None
+            cmd_cp(args)
+
 
 # ── cmd_renew ─────────────────────────────────────────────────────────────────
 

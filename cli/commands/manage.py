@@ -73,10 +73,27 @@ def cmd_renew(args):
 
 
 def cmd_cp(args):
+    import os
     from cli.spinner import Spinner
     cfg, host, session = load_context()
     key = args.key
     new_key = getattr(args, 'new_key', None)
+
+    # Detect local file → upload instead of server-side copy
+    expanded = os.path.expanduser(key)
+    if os.path.exists(expanded):
+        with Spinner('uploading'):
+            result = api.upload_file(host, session, expanded)
+        if result:
+            print(f'  ✓ uploaded {os.path.basename(expanded)} → /{result}/')
+            print(f'    {host}/{result}/')
+            config.record_drop(result, 'file', host=host)
+            from cli.completion import record_key
+            record_key(result)
+        else:
+            print(f'  ✗ Upload failed.')
+            sys.exit(1)
+        return
 
     with Spinner('copying'):
         result = api.copy_drop(host, session, key, new_key)

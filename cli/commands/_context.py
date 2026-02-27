@@ -32,6 +32,11 @@ def load_context(require_login=False):
 
     session = ResilientSession()
 
+    # Referer header — required by Django's CSRF middleware when the
+    # connection is detected as HTTPS (Referer check).  Setting it once on
+    # the session covers every subsequent request.
+    session.headers['Referer'] = f'{host}/'
+
     api_key = os.environ.get("DRP_API_KEY", "").strip() or cfg.get("api_key", "")
     if api_key:
         session.headers["Authorization"] = f"Bearer {api_key}"
