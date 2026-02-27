@@ -82,7 +82,7 @@ class TestResolveOutside:
     def test_absolute_returns_local(self):
         r = resolve_any("/tmp/test", HOST, None, USER)
         assert isinstance(r, Path)
-        assert str(r) == "/tmp/test"
+        assert r == Path("/tmp/test").resolve()
 
     def test_tilde_returns_local(self):
         r = resolve_any("~/docs", HOST, None, USER)
@@ -125,7 +125,7 @@ class TestResolveInsideShell:
         cwd = _cwd()
         r = resolve_any("/etc/hosts", HOST, None, USER, cwd=cwd)
         assert isinstance(r, Path)
-        assert str(r) == "/etc/hosts"
+        assert r == Path("/etc/hosts").resolve()
 
     def test_at_path_still_drp(self):
         cwd = _cwd()
