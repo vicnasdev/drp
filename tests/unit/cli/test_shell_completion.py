@@ -114,6 +114,7 @@ class TestCompleteLocalPaths:
 
     def test_tilde_expansion(self, tmp_path, monkeypatch):
         monkeypatch.setenv('HOME', str(tmp_path))
+        monkeypatch.setenv('USERPROFILE', str(tmp_path))  # Windows
         (tmp_path / 'tilde_file.log').write_text('t')
         results = _complete_local_paths('~/tilde_')
         assert len(results) == 1
@@ -179,6 +180,7 @@ class TestCpLocalPathDetection:
 
     def test_tilde_path_detected_as_local(self, tmp_path, monkeypatch):
         monkeypatch.setenv('HOME', str(tmp_path))
+        monkeypatch.setenv('USERPROFILE', str(tmp_path))  # Windows
         f = tmp_path / 'notes.md'
         f.write_text('# Notes')
         with patch('cli.api.file.upload_file', return_value='notes-k') as mock_up, \

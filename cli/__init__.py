@@ -2,7 +2,7 @@
 
 Drop, share, and manage text snippets and files from the terminal.
 https://drp.fyi
-"""
+"""  # noqa: D400
 
 # VERSION file holds major.minor (e.g. "1.0") — only bumped manually.
 # CI queries PyPI for latest published version, bumps patch +1,
