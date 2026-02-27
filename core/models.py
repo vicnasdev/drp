@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import User
+from django.contrib.postgres.fields import ArrayField
 from django.db.models.signals import post_save, pre_delete, post_delete
 from django.dispatch import receiver
 from django.utils import timezone
@@ -24,22 +25,23 @@ class Plan:
         ANON: {
             "label":                      "Anonymous",
             "price_monthly":              0,
-            "max_file_mb":                200,
+            "max_file_mb":                10,
             "max_text_kb":                500,
-            "max_expiry_days":            None,
+            "max_expiry_days":            7,
             "clipboard_idle_hours":       24,
             "clipboard_max_lifetime_days": 7,
-            "anon_file_lifetime_days":    90,
+            "anon_file_lifetime_days":    7,
             "storage_gb":                 None,
             "renewals":                   0,
             "password_protection":        False,
+            "encryption":                 False,
             "max_folders":                0,
             "webhooks":                   False,
             "api_keys":                   0,
             "scheduled_drops":            0,
             "helpbot_hourly":             0,
             "smart_parse":                True,
-            "api_fetch":                  True,
+            "api_fetch":                  False,
             "remote_upload":              False,
         },
         FREE: {
@@ -47,20 +49,21 @@ class Plan:
             "price_monthly":              0,
             "max_file_mb":                200,
             "max_text_kb":                500,
-            "max_expiry_days":            None,
+            "max_expiry_days":            7,
             "clipboard_idle_hours":       48,
-            "clipboard_max_lifetime_days": 30,
-            "anon_file_lifetime_days":    90,
-            "storage_gb":                 None,
+            "clipboard_max_lifetime_days": 7,
+            "anon_file_lifetime_days":    7,
+            "storage_gb":                 1,
             "renewals":                   0,
             "password_protection":        False,
-            "max_folders":                0,
+            "encryption":                 False,
+            "max_folders":                3,
             "webhooks":                   False,
             "api_keys":                   0,
             "scheduled_drops":            0,
             "helpbot_hourly":             5,
             "smart_parse":                True,
-            "api_fetch":                  True,
+            "api_fetch":                  False,
             "remote_upload":              False,
         },
         STARTER: {
@@ -68,34 +71,36 @@ class Plan:
             "price_monthly":              5,
             "max_file_mb":                1024,
             "max_text_kb":                2048,
-            "max_expiry_days":            365,
+            "max_expiry_days":            None,
             "clipboard_idle_hours":       None,
             "clipboard_max_lifetime_days": None,
             "anon_file_lifetime_days":    None,
             "storage_gb":                 5,
             "renewals":                   None,
             "password_protection":        True,
-            "max_folders":                10,
+            "encryption":                 True,
+            "max_folders":                20,
             "webhooks":                   True,
             "api_keys":                   5,
             "scheduled_drops":            10,
             "helpbot_hourly":             25,
             "smart_parse":                True,
             "api_fetch":                  True,
-            "remote_upload":              False,
+            "remote_upload":              True,
         },
         PRO: {
             "label":                      "Pro",
             "price_monthly":              10,
             "max_file_mb":                5120,
             "max_text_kb":                10240,
-            "max_expiry_days":            365 * 3,
+            "max_expiry_days":            None,
             "clipboard_idle_hours":       None,
             "clipboard_max_lifetime_days": None,
             "anon_file_lifetime_days":    None,
             "storage_gb":                 20,
             "renewals":                   None,
             "password_protection":        True,
+            "encryption":                 True,
             "max_folders":                None,
             "webhooks":                   True,
             "api_keys":                   None,
@@ -139,6 +144,8 @@ class PlanLimit(models.Model):
     renewals                   = models.PositiveIntegerField(null=True, blank=True,
                                      help_text="null = unlimited, 0 = none")
     password_protection        = models.BooleanField(default=False)
+    encryption                 = models.BooleanField(default=False,
+                                     help_text="Allow client-side AES-256-GCM encryption.")
     max_folders                = models.PositiveIntegerField(null=True, blank=True,
                                      help_text="null = unlimited, 0 = none")
     webhooks                   = models.BooleanField(default=False)
@@ -174,6 +181,7 @@ class PlanLimit(models.Model):
             "storage_gb":                  self.storage_gb,
             "renewals":                    self.renewals,
             "password_protection":         self.password_protection,
+            "encryption":                  self.encryption,
             "max_folders":                 self.max_folders,
             "webhooks":                    self.webhooks,
             "api_keys":                    self.api_keys,
@@ -297,7 +305,6 @@ def create_user_profile(sender, instance, created, **kwargs):
         UserProfile.objects.get_or_create(user=instance)
         Folder.objects.get_or_create(
             owner=instance, parent=None, slug="drops",
-            defaults={"name": "My Drops"},
         )
 
 
@@ -389,6 +396,10 @@ def _sniff_text_format(content: str) -> str:
 
 
 class Drop(models.Model):
+    """
+    The File model. 'Drop' is the product/user-facing term.
+    'File' is conceptual but we keep 'Drop' to avoid Django clashes.
+    """
     TEXT = "text"
     FILE = "file"
 
@@ -399,18 +410,29 @@ class Drop(models.Model):
         on_delete=models.SET_NULL,
         related_name="drops",
     )
+    folder = models.ForeignKey(
+        "Folder", null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="drops",
+        help_text="Primary folder this drop belongs to.",
+    )
 
     anon_token = models.CharField(max_length=64, null=True, blank=True, db_index=True)
 
     content = models.TextField(blank=True, default="")
 
     file_url       = models.URLField(blank=True, default="")
-    file_public_id = models.CharField(max_length=512, blank=True, default="")
+    file_public_id = models.CharField(max_length=512, blank=True, default="",
+                                      help_text="B2 object name. Aliased as b2_name.")
     filename       = models.CharField(max_length=255, blank=True, default="")
     filesize       = models.PositiveBigIntegerField(default=0)
     content_type   = models.CharField(max_length=255, blank=True, default="")
 
+    is_encrypted = models.BooleanField(default=False,
+                                       help_text="Client-side AES-256-GCM. Server stores ciphertext only.")
+
     created_at        = models.DateTimeField(auto_now_add=True)
+    updated_at        = models.DateTimeField(auto_now=True)
     last_accessed_at  = models.DateTimeField(null=True, blank=True, db_index=True)
     max_lifetime_secs = models.PositiveIntegerField(null=True, blank=True)
 
@@ -446,9 +468,9 @@ class Drop(models.Model):
         default=False, db_index=True,
         help_text="Visible in public feed and searchable.",
     )
-    tags = models.CharField(
-        max_length=500, blank=True, default="",
-        help_text="Comma-separated tags for public discovery. e.g. 'python,snippet'.",
+    tags = models.JSONField(
+        default=list, blank=True,
+        help_text="List of tags for public discovery. e.g. ['python', 'snippet'].",
     )
 
     source_url = models.URLField(
@@ -460,10 +482,8 @@ class Drop(models.Model):
                                   help_text="Created by the integration test suite. Purged at deploy.")
 
     # ── Password protection (paid accounts only) ──────────────────────────────
-    # Stored as a Django password hash (PBKDF2). Never stored in plaintext.
-    # None = no password. Set/change/remove only by the owner on a paid plan.
     password_hash = models.CharField(max_length=256, blank=True, default="",
-                                     help_text="PBKDF2 hash. Empty = no password.")
+                                     help_text="Argon2 hash. Empty = no password.")
 
     # ── View tracking ─────────────────────────────────────────────────────────
     view_count     = models.PositiveIntegerField(default=0)
@@ -471,6 +491,22 @@ class Drop(models.Model):
 
     class Meta:
         pass
+
+    # ── Aliases ───────────────────────────────────────────────────────────────
+
+    @property
+    def b2_name(self) -> str:
+        """Alias for file_public_id — the B2 object key."""
+        return self.file_public_id
+
+    @b2_name.setter
+    def b2_name(self, value: str):
+        self.file_public_id = value
+
+    @property
+    def size(self) -> int:
+        """Alias for filesize."""
+        return self.filesize
 
     # ── computed kind ─────────────────────────────────────────────────────────
 
@@ -631,10 +667,13 @@ class Drop(models.Model):
         return True
 
     def can_edit(self, user):
+        if self.owner_id:
+            if getattr(user, "is_authenticated", False) and self.owner_id == user.pk:
+                return True  # owner always can edit, even during creation lock
+            return False
+        # Anonymous drop: anyone can edit unless creation-locked
         if self.is_creation_locked():
             return False
-        if self.owner_id:
-            return getattr(user, "is_authenticated", False) and self.owner_id == user.pk
         return True
 
     def is_creation_locked(self):
@@ -708,17 +747,16 @@ def update_storage_on_delete(sender, instance, **kwargs):
 
 @receiver(post_delete, sender=Drop)
 def cleanup_folder_items(sender, instance, **kwargs):
-    """Remove any FolderItem rows pointing at a deleted drop."""
-    from core.models import FolderItem
+    """Remove any FolderItem rows and FileBookmark rows pointing at a deleted drop."""
     FolderItem.objects.filter(key=instance.key).delete()
+    FileBookmark.objects.filter(file_key=instance.key).delete()
 
 
 # ── Folder ────────────────────────────────────────────────────────────────────
 
 class Folder(models.Model):
     """
-    Unified organiser: nesting (sub-folders) + optional member sharing.
-    Replaces the old Collection + Group models.
+    Unified organiser: nesting (sub-folders) + group-based sharing.
     """
     owner      = models.ForeignKey(User, on_delete=models.CASCADE, related_name="folders")
     parent     = models.ForeignKey(
@@ -728,10 +766,9 @@ class Folder(models.Model):
         help_text="Parent folder for nesting (sub-folders).",
     )
     slug       = models.SlugField(max_length=60)
-    name       = models.CharField(max_length=120)
-    public_inbox = models.BooleanField(
+    is_public  = models.BooleanField(
         default=False,
-        help_text="Anyone can drop into this folder; only owner/members can read.",
+        help_text="Visible at /@user/folder/",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -757,10 +794,14 @@ class Folder(models.Model):
         return f"/@{self.owner.username}/{self.full_path}/"
 
     def can_edit(self, user):
-        """Owner or admin member can edit."""
+        """Owner or group admin can edit."""
         if getattr(user, "is_authenticated", False) and self.owner_id == user.pk:
             return True
-        return self.members.filter(user=user, role=FolderMember.ROLE_ADMIN).exists()
+        # Check group-based admin access
+        return FolderGroup.objects.filter(
+            folder=self, group__members__user=user,
+            role=FolderGroup.ROLE_ADMIN,
+        ).exists()
 
     def get_ancestors(self):
         """Return list of ancestors from root to self (excluding self)."""
@@ -806,7 +847,8 @@ class Folder(models.Model):
 
 
 class FolderItem(models.Model):
-    """A drop that belongs to a folder (many-to-many through table)."""
+    """A drop that belongs to a folder (many-to-many through table).
+    key is a string, not a FK — intentionally loose."""
     folder     = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name="items")
     key        = models.CharField(max_length=120)
     label      = models.CharField(
@@ -846,8 +888,55 @@ class FolderItem(models.Model):
         return f"{self.folder.url_path}{self.display_label}"
 
 
-class FolderMember(models.Model):
-    """A user who has been shared access to a folder with a specific role."""
+# ── FolderShareToken ──────────────────────────────────────────────────────────
+
+class FolderShareToken(models.Model):
+    """
+    Owner-managed share tokens. Sharing a folder = generating a signed URL
+    containing the token. No email, no claim step.
+    Token expiry only blocks new uses — existing bookmarks are unaffected.
+    """
+    folder     = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name="share_tokens")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE,
+                                   help_text="Must be owner or admin.")
+    token      = models.CharField(max_length=64, unique=True, db_index=True)
+    expires_at = models.DateTimeField(null=True, blank=True,
+                                      help_text="Default expiry: 24h.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def is_expired(self):
+        if self.expires_at and timezone.now() > self.expires_at:
+            return True
+        return False
+
+    def __str__(self):
+        return f"Share token for {self.folder} (by {self.created_by.username})"
+
+
+# ── Group (Pro plan) ──────────────────────────────────────────────────────────
+
+class Group(models.Model):
+    """
+    A group is shared on folders. Members join via invite link (managed via
+    drp token). Once in the group, they have access to all folders the group
+    is shared on — including ones shared before they joined.
+    """
+    name       = models.CharField(max_length=120)
+    owner      = models.ForeignKey(User, on_delete=models.CASCADE, related_name="owned_groups")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} (by {self.owner.username})"
+
+
+class GroupMember(models.Model):
+    """Membership in a group with a role."""
     ROLE_READER = "reader"
     ROLE_WRITER = "writer"
     ROLE_ADMIN  = "admin"
@@ -857,41 +946,88 @@ class FolderMember(models.Model):
         (ROLE_ADMIN,  "Admin"),
     ]
 
-    folder   = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name="members")
-    user     = models.ForeignKey(User, on_delete=models.CASCADE, related_name="folder_memberships")
-    role     = models.CharField(max_length=8, choices=ROLE_CHOICES, default=ROLE_READER)
+    group     = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="members")
+    user      = models.ForeignKey(User, on_delete=models.CASCADE, related_name="group_memberships")
+    role      = models.CharField(max_length=8, choices=ROLE_CHOICES, default=ROLE_READER,
+                                 help_text="Set at join, editable by group admin.")
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = [("folder", "user")]
+        unique_together = [("group", "user")]
         ordering = ["role", "joined_at"]
 
     def __str__(self):
-        return f"{self.user.username} → @{self.folder.owner.username}/{self.folder.slug} [{self.role}]"
+        return f"{self.user.username} in {self.group.name} [{self.role}]"
 
 
-class FolderInviteToken(models.Model):
-    """A single-use or limited-use invite token for sharing folder access."""
-    folder     = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name="invite_tokens")
-    token      = models.CharField(max_length=64, unique=True, db_index=True)
-    role       = models.CharField(max_length=8, choices=FolderMember.ROLE_CHOICES,
-                                  default=FolderMember.ROLE_READER)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+class FolderGroup(models.Model):
+    """
+    Links a group to a folder. Once linked, all current and future group
+    members have access.
+    """
+    ROLE_READER = "reader"
+    ROLE_WRITER = "writer"
+    ROLE_ADMIN  = "admin"
+    ROLE_CHOICES = [
+        (ROLE_READER, "Reader"),
+        (ROLE_WRITER, "Writer"),
+        (ROLE_ADMIN,  "Admin"),
+    ]
+
+    folder     = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name="groups")
+    group      = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="folder_links")
+    role       = models.CharField(max_length=8, choices=ROLE_CHOICES, default=ROLE_READER,
+                                  help_text="Applies to whole group for this folder.")
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField(null=True, blank=True)
-    max_uses   = models.PositiveIntegerField(null=True, blank=True,
-                                             help_text="null = unlimited, 1 = single-use")
-    use_count  = models.PositiveIntegerField(default=0)
 
-    def is_expired(self):
-        if self.expires_at and timezone.now() > self.expires_at:
-            return True
-        if self.max_uses is not None and self.use_count >= self.max_uses:
-            return True
-        return False
+    class Meta:
+        unique_together = [("folder", "group")]
+        ordering = ["-created_at"]
 
     def __str__(self):
-        return f"Invite to @{self.folder.owner.username}/{self.folder.slug} [{self.role}]"
+        return f"{self.group.name} → {self.folder} [{self.role}]"
+
+
+# ── FileBookmark ──────────────────────────────────────────────────────────────
+
+class FileBookmark(models.Model):
+    """
+    Key reference only — intentionally fragile.
+    Key expires → bookmark is dead.
+    """
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name="file_bookmarks")
+    file_key   = models.CharField(max_length=120, help_text="Not a FK — survives nothing.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("user", "file_key")]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.username} → /{self.file_key}/"
+
+    @property
+    def drop(self):
+        return Drop.objects.filter(key=self.file_key).first()
+
+
+# ── FolderBookmark ────────────────────────────────────────────────────────────
+
+class FolderBookmark(models.Model):
+    """FK to the original folder. Folder deleted → bookmark gone (CASCADE)."""
+    user        = models.ForeignKey(User, on_delete=models.CASCADE, related_name="folder_bookmarks")
+    folder      = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name="bookmarks")
+    share_token = models.ForeignKey(FolderShareToken, null=True, blank=True,
+                                    on_delete=models.SET_NULL,
+                                    help_text="Which token was used to claim.")
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("user", "folder")]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.username} bookmarked {self.folder}"
 
 
 # ── EmailVerification ─────────────────────────────────────────────────────────
@@ -919,7 +1055,6 @@ class BugReport(models.Model):
         ('other',    'Other'),
     ]
 
-    # GitHub label to apply per category
     CATEGORY_LABELS = {
         'bug':      'bug',
         'ui':       'ui',
@@ -940,6 +1075,31 @@ class BugReport(models.Model):
 
     def __str__(self):
         return f'[{self.category}] by {self.user.email if self.user else "anon"} @ {self.created_at:%Y-%m-%d}'
+
+
+# ── CrashReport ──────────────────────────────────────────────────────────────
+
+class CrashReport(models.Model):
+    """
+    One row per unique fingerprint (exception type + scrubbed traceback hash).
+    Used for worker-safe dedup via select_for_update(). Server 500s and
+    CLI-reported crashes share this path.
+    """
+    fingerprint      = models.CharField(max_length=128, unique=True,
+                                        help_text="Hash of exc_type + scrubbed traceback.")
+    github_issue_url = models.URLField(blank=True, default="",
+                                       help_text="Set after issue is filed.")
+    exc_type         = models.CharField(max_length=200, help_text="e.g. KeyError")
+    title            = models.CharField(max_length=300, help_text="Issue title.")
+    created_at       = models.DateTimeField(auto_now_add=True)
+    last_seen_at     = models.DateTimeField(auto_now=True)
+    hit_count        = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ["-last_seen_at"]
+
+    def __str__(self):
+        return f"{self.exc_type}: {self.title[:60]} (×{self.hit_count})"
 
 
 # ── APIToken (paid) ─────────────────────────────────────────────────────────────
@@ -964,23 +1124,6 @@ class APIToken(models.Model):
 
     def __str__(self):
         return f"APIToken {self.prefix}... ({self.user.username})"
-
-
-# ── Alias ────────────────────────────────────────────────────────────────────────
-
-class Alias(models.Model):
-    """Server-side alias: /@handle/alias → a drop key."""
-    owner      = models.ForeignKey(User, on_delete=models.CASCADE, related_name="aliases")
-    alias      = models.CharField(max_length=120)
-    key        = models.CharField(max_length=120, help_text="Drop key this alias points to.")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = [("owner", "alias")]
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"@{self.owner.username}/{self.alias} → /{self.key}/"
 
 
 # ── DropTemplate ──────────────────────────────────────────────────────────────────
@@ -1044,36 +1187,14 @@ class FeatureVote(models.Model):
         return f"{self.user.username} voted on '{self.proposal.title}' (w={self.weight})"
 
 
-# ── TransferToken ─────────────────────────────────────────────────────────────
+# ── Like ──────────────────────────────────────────────────────────────────────
 
-class TransferToken(models.Model):
-    """One-time token to transfer drop ownership. Expires after 24 h."""
-    drop       = models.ForeignKey(Drop, on_delete=models.CASCADE, related_name="transfer_tokens")
-    token      = models.CharField(max_length=64, unique=True, db_index=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transfer_tokens_sent")
-    created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
-    claimed_by = models.ForeignKey(User, null=True, blank=True,
-                                   on_delete=models.SET_NULL, related_name="transfer_tokens_claimed")
-    claimed_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def is_valid(self):
-        return self.claimed_by is None and timezone.now() < self.expires_at
-
-    def __str__(self):
-        status = "claimed" if self.claimed_by else ("expired" if not self.is_valid() else "pending")
-        return f"Transfer {self.drop} [{status}]"
-
-
-# ── DropLike ──────────────────────────────────────────────────────────────────
-
-class DropLike(models.Model):
-    """One like per user per drop. Only public drops can be liked."""
+class Like(models.Model):
+    """One like per user per drop. IP stored for anon rate-limiting."""
     drop       = models.ForeignKey(Drop, on_delete=models.CASCADE, related_name="likes")
-    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name="drop_likes")
+    user       = models.ForeignKey(User, null=True, blank=True,
+                                   on_delete=models.CASCADE, related_name="drop_likes")
+    ip         = models.GenericIPAddressField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1081,10 +1202,11 @@ class DropLike(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.user.username} liked {self.drop}"
+        who = self.user.username if self.user else self.ip
+        return f"{who} liked {self.drop}"
 
 
-# ── Help Bot History ──────────────────────────────────────────────────────────
+# ── EmailTemplate ─────────────────────────────────────────────────────────────
 
 class EmailTemplate(models.Model):
     """
@@ -1120,11 +1242,9 @@ class EmailTemplate(models.Model):
     def render_text(self, **kwargs):
         if self.body_text:
             return self.body_text.format(**kwargs)
-        # Auto-generate plain text from HTML
         from django.utils.html import strip_tags
         import re
         txt = strip_tags(self.body_html.format(**kwargs))
-        # Collapse whitespace runs but keep paragraph breaks
         txt = re.sub(r'[ \t]+', ' ', txt)
         txt = re.sub(r'\n{3,}', '\n\n', txt)
         return txt.strip()

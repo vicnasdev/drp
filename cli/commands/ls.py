@@ -17,16 +17,10 @@ from datetime import datetime, timezone
 
 
 from cli.commands._context import load_context
+from cli.format import human_size
 
 
-# ── Formatting helpers ────────────────────────────────────────────────────────
-
-def _human(n):
-    for unit in ('B', 'K', 'M', 'G', 'T'):
-        if n < 1024:
-            return f'{n:.0f}{unit}' if unit == 'B' else f'{n:.1f}{unit}'
-        n /= 1024
-    return f'{n:.1f}P'
+# ── Formatting helpers ─────────────────────────────────────────────────────────────────
 
 
 def _since(iso):
@@ -176,7 +170,7 @@ def cmd_ls(args):
     def fmt_size(n):
         if n == 0:
             return '—'
-        return str(n) if raw_bytes else _human(n)
+        return str(n) if raw_bytes else human_size(n)
 
     rows = []
     for d in drops:

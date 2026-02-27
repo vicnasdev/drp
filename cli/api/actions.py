@@ -12,7 +12,7 @@ Return value conventions for callers (manage.py):
 """
 
 from .auth import get_csrf
-from .helpers import err
+from .helpers import err, handle_error, report_http
 
 
 def _url(host, key, action):
@@ -31,10 +31,10 @@ def delete(host, session, key):
             return True
         if res.status_code == 404:
             err(f'Drop /{key}/ not found.')
-            _report_http('rm', 404, 'delete — not found')
+            report_http('rm', 404, 'delete — not found')
             return False
-        _handle_error(res, 'Delete failed')
-        _report_http('rm', res.status_code, 'delete')
+        handle_error(res, 'Delete failed')
+        report_http('rm', res.status_code, 'delete')
     except Exception as e:
         err(f'Delete error: {e}')
     return False
@@ -63,12 +63,12 @@ def rename(host, session, key, new_key):
 
         if res.status_code == 404:
             err(f'Drop /{key}/ not found.')
-            _report_http('mv', 404, 'rename — not found')
+            report_http('mv', 404, 'rename — not found')
             return False
 
         if res.status_code == 409:
             err(f'Key "{new_key}" is already taken.')
-            _report_http('mv', 409, 'rename key conflict')
+            report_http('mv', 409, 'rename key conflict')
             return False
 
         if res.status_code == 403:
@@ -77,16 +77,16 @@ def rename(host, session, key, new_key):
             except Exception:
                 msg = 'Permission denied.'
             err(f'Rename blocked: {msg}')
-            _report_http('mv', 403, 'rename')
+            report_http('mv', 403, 'rename')
             return False
 
         if res.status_code == 400:
-            _handle_error(res, 'Rename failed')
-            _report_http('mv', 400, 'rename')
+            handle_error(res, 'Rename failed')
+            report_http('mv', 400, 'rename')
             return False
 
-        _handle_error(res, 'Rename failed')
-        _report_http('mv', res.status_code, 'rename')
+        handle_error(res, 'Rename failed')
+        report_http('mv', res.status_code, 'rename')
 
     except Exception as e:
         err(f'Rename error: {e}')
@@ -105,8 +105,8 @@ def renew(host, session, key):
         if res.ok:
             data = res.json()
             return data.get('expires_at'), data.get('renewals')
-        _handle_error(res, 'Renew failed')
-        _report_http('renew', res.status_code, 'renew')
+        handle_error(res, 'Renew failed')
+        report_http('renew', res.status_code, 'renew')
     except Exception as e:
         err(f'Renew error: {e}')
     return None, None
@@ -131,11 +131,11 @@ def copy_drop(host, session, key, new_key=None):
             return res.json().get('key', new_key)
         if res.status_code == 404:
             err(f'Drop /{key}/ not found.')
-            _report_http('cp', 404, 'copy — not found')
+            report_http('cp', 404, 'copy — not found')
             return False
         if res.status_code == 409:
             err(f'Key "{new_key}" is already taken.')
-            _report_http('cp', 409, 'copy key conflict')
+            report_http('cp', 409, 'copy key conflict')
             return False
         if res.status_code == 403:
             try:
@@ -143,10 +143,10 @@ def copy_drop(host, session, key, new_key=None):
             except Exception:
                 msg = 'Permission denied.'
             err(f'Copy blocked: {msg}')
-            _report_http('cp', 403, 'copy')
+            report_http('cp', 403, 'copy')
             return False
-        _handle_error(res, 'Copy failed')
-        _report_http('cp', res.status_code, 'copy')
+        handle_error(res, 'Copy failed')
+        report_http('cp', res.status_code, 'copy')
     except Exception as e:
         err(f'Copy error: {e}')
     return None
@@ -177,8 +177,8 @@ def lock_drop(host, session, key, password=None, remove=False):
         if res.status_code == 403:
             err('Password protection requires a paid plan.')
             return False
-        _handle_error(res, 'Lock failed')
-        _report_http('lock', res.status_code, 'lock')
+        handle_error(res, 'Lock failed')
+        report_http('lock', res.status_code, 'lock')
     except Exception as e:
         err(f'Lock error: {e}')
     return False
@@ -205,8 +205,8 @@ def create_folder(host, session, name, parent_id=None):
         if res.status_code == 409:
             err(f'Folder "{name}" already exists.')
             return None
-        _handle_error(res, 'Create folder failed')
-        _report_http('mkdir', res.status_code, 'create_folder')
+        handle_error(res, 'Create folder failed')
+        report_http('mkdir', res.status_code, 'create_folder')
     except Exception as e:
         err(f'Create folder error: {e}')
     return None
@@ -236,8 +236,8 @@ def save_bookmark(host, session, key):
         if res.status_code == 404:
             err(f'Drop /{key}/ not found.')
             return False
-        _handle_error(res, 'Save failed')
-        _report_http('save', res.status_code, 'save_bookmark')
+        handle_error(res, 'Save failed')
+        report_http('save', res.status_code, 'save_bookmark')
     except Exception as e:
         err(f'Save error: {e}')
     return False
@@ -255,7 +255,7 @@ def list_drops(host, session):
         if res.status_code in (302, 403):
             return None
         err(f'Server returned {res.status_code}.')
-        _report_http('ls', res.status_code, 'list_drops')
+        report_http('ls', res.status_code, 'list_drops')
     except Exception as e:
         err(f'List error: {e}')
     return None
@@ -273,20 +273,3 @@ def key_exists(host, session, key):
     except Exception:
         pass
     return False
-
-
-def _handle_error(res, prefix):
-    try:
-        msg = res.json().get('error', res.text[:200])
-    except Exception:
-        msg = res.text[:200]
-    err(f'{prefix}: {msg}')
-
-
-def _report_http(command: str, status_code: int, context: str) -> None:
-    """Fire-and-forget — never raises."""
-    try:
-        from cli.crash_reporter import report_http_error
-        report_http_error(command, status_code, context)
-    except Exception:
-        pass

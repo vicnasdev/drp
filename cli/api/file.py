@@ -8,25 +8,9 @@ import mimetypes
 import requests as _requests
 
 from .auth import get_csrf
-from .helpers import err
+from .helpers import err, touch_session, handle_error, handle_http_error, report_crash
 
 CHUNK = 256 * 1024
-
-
-def _report(command, msg):
-    try:
-        from cli.crash_reporter import report
-        report(command, RuntimeError(msg))
-    except Exception:
-        pass
-
-
-def _touch_session():
-    try:
-        from cli.session import SESSION_FILE
-        SESSION_FILE.touch()
-    except Exception:
-        pass
 
 
 # ── Upload ────────────────────────────────────────────────────────────────────
@@ -67,11 +51,11 @@ def upload_file(host, session, filepath, key=None, expiry_days=None, password=No
         )
         if not res.ok:
             msg = f"Prepare failed (HTTP {res.status_code})"
-            _handle_error(res, "Prepare failed")
-            _report("up", msg)
+            handle_error(res, "Prepare failed")
+            report_crash("up", msg)
             return None
         prep = res.json()
-        _touch_session()
+        touch_session()
     except Exception as e:
         err(f"Prepare error: {e}")
         raise
@@ -109,7 +93,7 @@ def upload_file(host, session, filepath, key=None, expiry_days=None, password=No
         if not put_res.ok:
             msg = f"B2 upload failed (HTTP {put_res.status_code})"
             err(f"{msg}: {put_res.text[:200]}")
-            _report("up", msg)
+            report_crash("up", msg)
             return None
     except Exception as e:
         err(f"Upload error: {e}")
@@ -151,11 +135,11 @@ def upload_file(host, session, filepath, key=None, expiry_days=None, password=No
             timeout=30,
         )
         if res.ok:
-            _touch_session()
+            touch_session()
             return res.json().get("key")
         msg = f"Confirm failed (HTTP {res.status_code})"
-        _handle_error(res, "Confirm failed")
-        _report("up", msg)
+        handle_error(res, "Confirm failed")
+        report_crash("up", msg)
     except Exception as e:
         err(f"Confirm error: {e}")
         raise
@@ -191,10 +175,10 @@ def get_file(host, session, key, password=''):
             return 'password_required', None
 
         if not res.ok:
-            _handle_http_error(res, key)
+            handle_http_error(res, key)
             return None, None
 
-        _touch_session()
+        touch_session()
 
         data = res.json()
         if data.get("kind") != "file":
@@ -210,7 +194,7 @@ def get_file(host, session, key, password=''):
             download_path = data.get("download")
             if not download_path:
                 err(f"No download URL in response for /{key}/.")
-                _report("get", "missing both presigned_url and download fields")
+                report_crash("get", "missing both presigned_url and download fields")
                 return None, None
 
             dl_res = session.get(
@@ -227,7 +211,7 @@ def get_file(host, session, key, password=''):
             else:
                 msg = f"Download redirect failed (HTTP {dl_res.status_code})"
                 err(f"{msg}.")
-                _report("get", msg)
+                report_crash("get", msg)
                 return None, None
 
         bar        = ProgressBar(max(filesize, 1), label="downloading")
@@ -245,7 +229,7 @@ def get_file(host, session, key, password=''):
                     if stream.status_code not in (200, 206):
                         msg = f"B2 download failed (HTTP {stream.status_code})"
                         err(f"{msg}.")
-                        _report("get", msg)
+                        report_crash("get", msg)
                         return None, None
                     for chunk in stream.iter_content(chunk_size=CHUNK):
                         if chunk:
@@ -268,25 +252,6 @@ def get_file(host, session, key, password=''):
     except Exception as e:
         err(f"Get error: {e}")
         raise
-
-
-def _handle_error(res, prefix):
-    try:
-        msg = res.json().get("error", res.text[:200])
-    except Exception:
-        msg = res.text[:200]
-    err(f"{prefix}: {msg}")
-
-
-def _handle_http_error(res, key):
-    if res.status_code == 404:
-        err(f"Drop /{key}/ not found.")
-    elif res.status_code == 410:
-        err(f"Drop /{key}/ has expired.")
-    else:
-        msg = f"Server returned {res.status_code}"
-        err(f"{msg}.")
-        _report("get", msg)
 
 
 # ── Remote URL upload ─────────────────────────────────────────────────────────
@@ -324,13 +289,13 @@ def upload_from_url(host, session, url, key=None, expiry_days=None,
             f"{host}/upload/from-url/",
             json=payload,
             headers={"X-CSRFToken": csrf},
-            timeout=120,  # server-side fetch can take a while
+            timeout=120,
         )
         if not res.ok:
-            _handle_error(res, "Remote upload failed")
-            _report("up", f"upload_from_url HTTP {res.status_code}")
+            handle_error(res, "Remote upload failed")
+            report_crash("up", f"upload_from_url HTTP {res.status_code}")
             return None
-        _touch_session()
+        touch_session()
         data = res.json()
         return data.get("key"), data.get("filename", ""), data.get("filesize", 0)
     except Exception as e:

@@ -210,9 +210,9 @@ def public_feed(request):
     user_liked_ids = set()
     if request.user.is_authenticated:
         drop_ids = [d.pk for d in drops]
-        from core.models import DropLike
+        from core.models import Like
         user_liked_ids = set(
-            DropLike.objects.filter(user=request.user, drop_id__in=drop_ids)
+            Like.objects.filter(user=request.user, drop_id__in=drop_ids)
             .values_list("drop_id", flat=True)
         )
 

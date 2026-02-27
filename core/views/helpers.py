@@ -144,8 +144,8 @@ def can_user_access_folder(user, folder):
     
     # Members always have access — quota only constrains the owner
     if folder.owner_id != user.id:
-        from core.models import FolderMember
-        if folder.members.filter(user=user).exists():
+        from core.models import FolderGroup
+        if FolderGroup.objects.filter(folder=folder, group__members__user=user).exists():
             return True, None
         return False, "You don't have access to this folder."
     

@@ -1,26 +1,23 @@
 """
-Folder views — unified organiser with nesting and sharing.
+Folder views — unified organiser with nesting and group-based sharing.
 
 URL patterns:
   GET  /@username/                           — list user's folders (public)
   GET  /@username/<path>/                    — view a folder (public)
-  POST /@username/<path>/                    — inbox: drop into public_inbox folder (anyone)
   POST /folders/create/                      — create folder (owner, paid)
   POST /folders/<id>/add/                    — add drop to folder (owner / writer+)
   POST /folders/<id>/remove/                 — remove drop from folder (owner / writer+)
   POST /folders/<id>/delete/                 — delete folder (owner)
   POST /folders/<id>/rename/                 — rename folder (owner / admin)
-  POST /folders/<id>/toggle-inbox/           — toggle public_inbox (owner / admin)
-  POST /folders/<id>/invite/                 — create invite token (owner / admin)
-  POST /folders/join/                        — join folder via invite token
-  POST /folders/<id>/members/<uid>/role/     — change member role (owner / admin)
-  POST /folders/<id>/members/<uid>/remove/   — remove member (owner / admin)
+  POST /folders/<id>/share/                  — create share token (owner / admin)
+  GET  /folders/<id>/share/list/             — list share tokens
+  POST /folders/<id>/share/<tid>/revoke/     — revoke share token
 
 Auth / sharing rules:
   - Anyone can view a folder page and its public drop list.
   - Creating/editing folders requires login + paid plan.
-  - Members (reader/writer/admin) gain access through invite tokens.
-  - Readers can view; writers can add/remove drops; admins can manage members.
+  - Group members gain access via FolderGroup links.
+  - Readers can view; writers can add/remove drops; admins can manage.
   - The owner always has full control.
 
 Plan downgrade policy:
@@ -32,7 +29,6 @@ Plan downgrade policy:
 import json
 import re
 import secrets
-import uuid
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -41,7 +37,10 @@ from django.shortcuts import render, get_object_or_404
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
-from core.models import Folder, FolderItem, FolderMember, FolderInviteToken, Drop, Plan
+from core.models import (
+    Folder, FolderItem, FolderGroup, FolderShareToken,
+    Drop, Plan,
+)
 from core.views.helpers import user_plan, can_user_access_folder
 
 
@@ -61,21 +60,25 @@ def _folder_quota_ok(user):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _is_folder_admin(user, folder):
-    """True if user is the owner or has admin role."""
+    """True if user is the owner or has admin role via a group."""
     if folder.owner_id == user.pk:
         return True
-    return folder.members.filter(user=user, role=FolderMember.ROLE_ADMIN).exists()
+    return FolderGroup.objects.filter(
+        folder=folder,
+        group__members__user=user,
+        role=FolderGroup.ROLE_ADMIN,
+    ).exists()
 
 
 def _is_folder_member(user, folder, min_role=None):
-    """True if user is the owner or a member with at least the given role."""
+    """True if user is the owner or a group member with at least the given role."""
     if folder.owner_id == user.pk:
         return True
-    qs = folder.members.filter(user=user)
-    if min_role == FolderMember.ROLE_WRITER:
-        qs = qs.filter(role__in=[FolderMember.ROLE_WRITER, FolderMember.ROLE_ADMIN])
-    elif min_role == FolderMember.ROLE_ADMIN:
-        qs = qs.filter(role=FolderMember.ROLE_ADMIN)
+    qs = FolderGroup.objects.filter(folder=folder, group__members__user=user)
+    if min_role == FolderGroup.ROLE_WRITER:
+        qs = qs.filter(role__in=[FolderGroup.ROLE_WRITER, FolderGroup.ROLE_ADMIN])
+    elif min_role == FolderGroup.ROLE_ADMIN:
+        qs = qs.filter(role=FolderGroup.ROLE_ADMIN)
     return qs.exists()
 
 
@@ -93,7 +96,7 @@ def user_folders(request, username):
 
 
 def folder_view(request, username, slug, folder=None):
-    """GET/POST /@username/<path>/ — view a folder or drop into its inbox."""
+    """GET /@username/<path>/ — view a folder."""
     owner = get_object_or_404(User, username__iexact=username)
     if folder is None:
         folder = get_object_or_404(Folder, owner=owner, slug=slug, parent=None)
@@ -114,31 +117,6 @@ def folder_view(request, username, slug, folder=None):
                 "message": reason or "You no longer have access to this folder.",
             }, status=403)
 
-    # ── Inbox POST (anyone can drop into public_inbox folders) ──
-    if request.method == "POST":
-        if not folder.public_inbox:
-            return JsonResponse({"error": "This folder does not accept submissions."}, status=403)
-
-        try:
-            data = json.loads(request.body)
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            return JsonResponse({"error": "Invalid JSON."}, status=400)
-
-        content = (data.get("content") or "").strip()
-        if not content:
-            return JsonResponse({"error": "Content is required."}, status=400)
-        if len(content) > 50_000:
-            return JsonResponse({"error": "Inbox drops limited to 50KB."}, status=400)
-
-        key = uuid.uuid4().hex[:8]
-        drop = Drop.objects.create(
-            key=key,
-            content=content,
-            owner=owner,
-        )
-        FolderItem.objects.create(folder=folder, key=key)
-        return JsonResponse({"key": key, "url": f"/{key}/"}, status=201)
-
     # ── GET ──
     items = folder.items.all()
 
@@ -146,11 +124,6 @@ def folder_view(request, username, slug, folder=None):
     for item in items:
         drop = item.drop
         entries.append({"item": item, "drop": drop})
-
-    # Member list (for owner/admin)
-    members = []
-    if is_own or _is_folder_admin(request.user, folder) if request.user.is_authenticated else False:
-        members = list(folder.members.select_related("user").all())
 
     if 'application/json' in request.headers.get('Accept', ''):
         from django.conf import settings as _settings
@@ -162,15 +135,10 @@ def folder_view(request, username, slug, folder=None):
             'id':   folder.pk,
             'slug': folder.slug,
             'path': folder.full_path,
-            'name': folder.name,
             'drops': [{'key': i.key} for i in items],
             'children': children,
             'share_url': share_url,
             'qr_url': qr_url,
-            'members': [
-                {'username': m.user.username, 'role': m.role}
-                for m in members
-            ],
         })
 
     # Owned drops available to add (for the add-drop UI)
@@ -191,7 +159,6 @@ def folder_view(request, username, slug, folder=None):
         "folder":       folder,
         "owner":        owner,
         "entries":      entries,
-        "members":      members,
         "is_own":       is_own,
         "addable_drops": addable_drops,
     })
@@ -222,14 +189,11 @@ def create_folder(request):
             status=403,
         )
 
-    name = (data.get("name") or "").strip()
-    if not name:
-        return JsonResponse({"error": "Folder name is required."}, status=400)
-    if len(name) > 120:
-        return JsonResponse({"error": "Name must be 120 characters or fewer."}, status=400)
+    slug = (data.get("slug") or data.get("name") or "").strip()
+    slug = slugify(slug)[:60]
 
-    slug = (data.get("slug") or "").strip() or slugify(name)
-    slug = slug[:60]
+    if not slug:
+        return JsonResponse({"error": "Folder slug is required."}, status=400)
 
     if not _SLUG_RE.match(slug):
         return JsonResponse(
@@ -248,13 +212,12 @@ def create_folder(request):
         return JsonResponse({"error": f'You already have a folder named "{slug}" at this level.'}, status=409)
 
     folder = Folder.objects.create(
-        owner=request.user, slug=slug, name=name, parent=parent,
+        owner=request.user, slug=slug, parent=parent,
     )
     return JsonResponse({
         "id":   folder.pk,
         "slug": folder.slug,
         "path": folder.full_path,
-        "name": folder.name,
         "url":  folder.url_path,
     }, status=201)
 
@@ -264,7 +227,7 @@ def create_folder(request):
 def add_to_folder(request, folder_id):
     """POST /folders/<id>/add/  body: {key}"""
     folder = get_object_or_404(Folder, pk=folder_id)
-    if not _is_folder_member(request.user, folder, min_role=FolderMember.ROLE_WRITER):
+    if not _is_folder_member(request.user, folder, min_role=FolderGroup.ROLE_WRITER):
         return JsonResponse({"error": "You don't have write access to this folder."}, status=403)
 
     allowed, reason = can_user_access_folder(request.user, folder)
@@ -292,7 +255,7 @@ def add_to_folder(request, folder_id):
 def remove_from_folder(request, folder_id):
     """POST /folders/<id>/remove/  body: {key}"""
     folder = get_object_or_404(Folder, pk=folder_id)
-    if not _is_folder_member(request.user, folder, min_role=FolderMember.ROLE_WRITER):
+    if not _is_folder_member(request.user, folder, min_role=FolderGroup.ROLE_WRITER):
         return JsonResponse({"error": "You don't have write access to this folder."}, status=403)
 
     allowed, reason = can_user_access_folder(request.user, folder)
@@ -313,7 +276,7 @@ def remove_from_folder(request, folder_id):
 @login_required
 @require_POST
 def rename_folder(request, folder_id):
-    """POST /folders/<id>/rename/  body: {name, slug?}"""
+    """POST /folders/<id>/rename/  body: {slug}"""
     folder = get_object_or_404(Folder, pk=folder_id)
     if not _is_folder_admin(request.user, folder):
         return JsonResponse({"error": "Only the owner or admin can rename this folder."}, status=403)
@@ -327,28 +290,23 @@ def rename_folder(request, folder_id):
     except (json.JSONDecodeError, UnicodeDecodeError):
         return JsonResponse({"error": "Invalid JSON."}, status=400)
 
-    name = (data.get("name") or "").strip()
-    if not name:
-        return JsonResponse({"error": "Name is required."}, status=400)
-    if len(name) > 120:
-        return JsonResponse({"error": "Name must be 120 characters or fewer."}, status=400)
+    new_slug = (data.get("slug") or "").strip()
+    new_slug = slugify(new_slug)[:60]
 
-    new_slug = (data.get("slug") or "").strip() or slugify(name)
-    new_slug = new_slug[:60]
+    if not new_slug:
+        return JsonResponse({"error": "Slug is required."}, status=400)
 
     if not _SLUG_RE.match(new_slug):
         return JsonResponse({"error": "Slug may only contain letters, numbers, hyphens and underscores."}, status=400)
 
     if new_slug != folder.slug:
-        if Folder.objects.filter(owner=folder.owner, slug=new_slug).exists():
+        if Folder.objects.filter(owner=folder.owner, parent=folder.parent, slug=new_slug).exists():
             return JsonResponse({"error": f'A folder named "{new_slug}" already exists.'}, status=409)
 
-    folder.name = name
     folder.slug = new_slug
-    folder.save(update_fields=["name", "slug"])
+    folder.save(update_fields=["slug"])
 
     return JsonResponse({
-        "name": folder.name,
         "slug": folder.slug,
         "url":  folder.url_path,
     })
@@ -365,156 +323,83 @@ def delete_folder(request, folder_id):
     return JsonResponse({"deleted": True})
 
 
-@login_required
-@require_POST
-def toggle_inbox(request, folder_id):
-    """POST /folders/<id>/toggle-inbox/"""
-    folder = get_object_or_404(Folder, pk=folder_id)
-    if not _is_folder_admin(request.user, folder):
-        return JsonResponse({"error": "Only the owner or admin can change inbox settings."}, status=403)
-
-    allowed, reason = can_user_access_folder(request.user, folder)
-    if not allowed and folder.owner_id == request.user.pk:
-        return JsonResponse({"error": reason or "You no longer have access to this folder."}, status=403)
-
-    folder.public_inbox = not folder.public_inbox
-    folder.save(update_fields=["public_inbox"])
-    return JsonResponse({
-        "public_inbox": folder.public_inbox,
-        "message": "Inbox enabled." if folder.public_inbox else "Inbox disabled.",
-    })
-
-
-# ── Sharing / invite ─────────────────────────────────────────────────────────
+# ── FolderShareToken management ──────────────────────────────────────────────
 
 @login_required
 @require_POST
-def create_invite(request, folder_id):
-    """POST /folders/<id>/invite/  body: {role?, max_uses?, expires_hours?}"""
+def create_share_token(request, folder_id):
+    """POST /folders/<id>/share/  body: {expires_hours?}"""
     folder = get_object_or_404(Folder, pk=folder_id)
     if not _is_folder_admin(request.user, folder):
-        return JsonResponse({"error": "Only the owner or admin can create invites."}, status=403)
+        return JsonResponse({"error": "Only the owner or admin can share this folder."}, status=403)
 
     try:
-        data = json.loads(request.body)
+        data = json.loads(request.body) if request.body else {}
     except (json.JSONDecodeError, UnicodeDecodeError):
         data = {}
 
-    role = data.get("role", FolderMember.ROLE_READER)
-    if role not in dict(FolderMember.ROLE_CHOICES):
-        return JsonResponse({"error": f"Invalid role: {role}"}, status=400)
-
-    max_uses = data.get("max_uses")
-    if max_uses is not None:
-        try:
-            max_uses = int(max_uses)
-        except (ValueError, TypeError):
-            return JsonResponse({"error": "max_uses must be an integer."}, status=400)
-
     from django.utils import timezone as _tz
-    expires_at = None
-    expires_hours = data.get("expires_hours")
-    if expires_hours:
-        try:
-            expires_at = _tz.now() + __import__('datetime').timedelta(hours=float(expires_hours))
-        except (ValueError, TypeError):
-            return JsonResponse({"error": "expires_hours must be a number."}, status=400)
+    from datetime import timedelta
+
+    expires_hours = data.get("expires_hours", 24)
+    try:
+        expires_hours = float(expires_hours)
+    except (ValueError, TypeError):
+        expires_hours = 24
+
+    expires_at = _tz.now() + timedelta(hours=expires_hours)
 
     token = secrets.token_urlsafe(32)
-    invite = FolderInviteToken.objects.create(
+    share = FolderShareToken.objects.create(
         folder=folder,
-        token=token,
-        role=role,
         created_by=request.user,
-        max_uses=max_uses,
+        token=token,
         expires_at=expires_at,
     )
+
+    from django.conf import settings as _settings
+    site = getattr(_settings, 'SITE_URL', '')
+    share_url = f"{site}/@{folder.owner.username}/{folder.full_path}/?t={token}"
+
     return JsonResponse({
         "token": token,
-        "role": role,
-        "max_uses": max_uses,
-        "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
+        "share_url": share_url,
+        "expires_at": share.expires_at.isoformat() if share.expires_at else None,
     }, status=201)
 
 
 @login_required
-@require_POST
-def join_folder(request):
-    """POST /folders/join/  body: {token}"""
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return JsonResponse({"error": "Invalid JSON."}, status=400)
+def list_share_tokens(request, folder_id):
+    """GET /folders/<id>/share/list/"""
+    folder = get_object_or_404(Folder, pk=folder_id)
+    if not _is_folder_admin(request.user, folder):
+        return JsonResponse({"error": "Only the owner or admin can view share tokens."}, status=403)
 
-    token_value = (data.get("token") or "").strip()
-    if not token_value:
-        return JsonResponse({"error": "Token is required."}, status=400)
-
-    invite = FolderInviteToken.objects.filter(token=token_value).first()
-    if not invite:
-        return JsonResponse({"error": "Invalid invite token."}, status=404)
-    if invite.is_expired():
-        return JsonResponse({"error": "This invite has expired."}, status=410)
-
-    folder = invite.folder
-    if folder.owner_id == request.user.pk:
-        return JsonResponse({"error": "You already own this folder."}, status=400)
-
-    member, created = FolderMember.objects.get_or_create(
-        folder=folder, user=request.user,
-        defaults={"role": invite.role},
-    )
-
-    if created:
-        invite.use_count += 1
-        invite.save(update_fields=["use_count"])
-
-    from django.conf import settings as _settings
-    site = getattr(_settings, 'SITE_URL', '')
+    tokens = FolderShareToken.objects.filter(folder=folder).order_by("-created_at")
     return JsonResponse({
-        "joined": created,
-        "role": member.role,
-        "folder": folder.full_path,
-        "url": f"{site}{folder.url_path}",
+        "tokens": [
+            {
+                "id": t.pk,
+                "token": t.token,
+                "expires_at": t.expires_at.isoformat() if t.expires_at else None,
+                "expired": t.is_expired(),
+                "created_at": t.created_at.isoformat(),
+            }
+            for t in tokens
+        ],
     })
 
 
 @login_required
 @require_POST
-def change_member_role(request, folder_id, user_id):
-    """POST /folders/<id>/members/<uid>/role/  body: {role}"""
+def revoke_share_token(request, folder_id, token_id):
+    """POST /folders/<id>/share/<tid>/revoke/"""
     folder = get_object_or_404(Folder, pk=folder_id)
     if not _is_folder_admin(request.user, folder):
-        return JsonResponse({"error": "Only the owner or admin can change roles."}, status=403)
+        return JsonResponse({"error": "Only the owner or admin can revoke share tokens."}, status=403)
 
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return JsonResponse({"error": "Invalid JSON."}, status=400)
-
-    role = data.get("role", "").strip()
-    if role not in dict(FolderMember.ROLE_CHOICES):
-        return JsonResponse({"error": f"Invalid role: {role}"}, status=400)
-
-    membership = FolderMember.objects.filter(folder=folder, user_id=user_id).first()
-    if not membership:
-        return JsonResponse({"error": "User is not a member of this folder."}, status=404)
-
-    membership.role = role
-    membership.save(update_fields=["role"])
-    return JsonResponse({"role": role, "user_id": user_id})
-
-
-@login_required
-@require_POST
-def remove_member(request, folder_id, user_id):
-    """POST /folders/<id>/members/<uid>/remove/"""
-    folder = get_object_or_404(Folder, pk=folder_id)
-    if not _is_folder_admin(request.user, folder):
-        return JsonResponse({"error": "Only the owner or admin can remove members."}, status=403)
-
-    deleted, _ = FolderMember.objects.filter(folder=folder, user_id=user_id).delete()
-    return JsonResponse({"removed": bool(deleted)})
+    deleted, _ = FolderShareToken.objects.filter(pk=token_id, folder=folder).delete()
+    return JsonResponse({"revoked": bool(deleted)})
 
 
 # ── Handle resolution ─────────────────────────────────────────────────────────
@@ -532,12 +417,12 @@ def resolve_handle(request, handle):
     return user_folders(request, user.username)
 
 
-def folder_or_alias_view(request, username, path):
+def folder_or_item_view(request, username, path):
     """
     GET /@username/<path>/
     Resolve a folder path (supports nested sub-folders).
     If the last segment is a FolderItem label, render the drop.
-    Falls back to alias resolution for single-segment paths.
+    No alias fallback.
     """
     from django.http import Http404
     try:
@@ -558,11 +443,5 @@ def folder_or_alias_view(request, username, path):
             raise Http404
         from core.views.drops import _drop_response
         return _drop_response(request, drop, folder_item=item)
-
-    # Single-segment path → try alias resolution
-    segments = [s for s in path.strip('/').split('/') if s]
-    if len(segments) == 1:
-        from core.views.aliases import resolve_alias
-        return resolve_alias(request, username, segments[0])
 
     raise Http404

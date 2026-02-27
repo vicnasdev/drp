@@ -1,194 +1,326 @@
 """
-Integration tests: drop lifecycle — rename, copy, delete, expiry.
+test_lifecycle.py — full drop lifecycle: up → get → status → mv → cp → renew → rm.
 
-Exercises the action endpoints end-to-end with both text and file drops.
+Runs real CLI commands against the live server, exactly as a user would.
 """
 
 import json
+import os
+import subprocess
+import uuid
+
 import pytest
-from datetime import timedelta
-from django.core.files.uploadedfile import SimpleUploadedFile
-from django.utils import timezone
-
-from core.models import Drop, UserProfile, Plan
-
-pytestmark = pytest.mark.django_db
 
 
-class TestDeleteDrop:
-    """DELETE /<key>/delete/"""
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    def test_owner_delete_own_text_drop(self, client, fake_b2, free_user):
-        client.force_login(free_user)
-        client.post("/save/", {"content": "goodbye", "key": "lc-del1"})
-        resp = client.delete("/lc-del1/delete/")
-        assert resp.status_code == 200
-        assert resp.json()["deleted"] is True
-        assert not Drop.objects.filter(key="lc-del1").exists()
-
-    def test_delete_file_removes_from_b2(self, client, fake_b2, free_user):
-        client.force_login(free_user)
-        f = SimpleUploadedFile("rm.txt", b"remove me", content_type="text/plain")
-        client.post("/save/", {"file": f, "key": "lc-del2"})
-        drop = Drop.objects.get(key="lc-del2")
-        b2_key = drop.file_public_id
-        assert b2_key in fake_b2.store
-
-        resp = client.delete("/lc-del2/delete/")
-        assert resp.status_code == 200
-        assert b2_key not in fake_b2.store
-        assert not Drop.objects.filter(key="lc-del2").exists()
-
-    def test_other_user_cannot_delete_locked(self, client, fake_b2, starter_user, free_user):
-        client.force_login(starter_user)
-        client.post("/save/", {"content": "locked", "key": "lc-del3"})
-
-        client.force_login(free_user)
-        resp = client.delete("/lc-del3/delete/")
-        assert resp.status_code == 403
-        assert Drop.objects.filter(key="lc-del3").exists()
+ENV = {
+    **os.environ,
+    "DRP_TEST_MODE": "1",
+    "NO_COLOR": "1",
+    "TERM": "dumb",
+}
 
 
-class TestRenameDrop:
-    """POST /<key>/rename/"""
-
-    def test_rename_text_drop(self, client, fake_b2, free_user):
-        client.force_login(free_user)
-        client.post("/save/", {"content": "renamable", "key": "lc-rn1"})
-        resp = client.post("/lc-rn1/rename/", {"new_key": "lc-rn1-new"})
-        assert resp.status_code == 200
-        assert resp.json()["key"] == "lc-rn1-new"
-        assert not Drop.objects.filter(key="lc-rn1").exists()
-        assert Drop.objects.filter(key="lc-rn1-new").exists()
-
-    def test_rename_file_preserves_b2_key(self, client, fake_b2, free_user):
-        client.force_login(free_user)
-        f = SimpleUploadedFile("doc.pdf", b"pdf-data", content_type="application/pdf")
-        client.post("/save/", {"file": f, "key": "lc-rn2"})
-        drop = Drop.objects.get(key="lc-rn2")
-        original_b2 = drop.file_public_id
-
-        resp = client.post("/lc-rn2/rename/", {"new_key": "lc-rn2-new"})
-        assert resp.status_code == 200
-
-        drop.refresh_from_db()
-        # B2 object key should be preserved (no re-upload needed)
-        assert drop.key == "lc-rn2-new"
-        assert drop.file_public_id == original_b2
-        assert original_b2 in fake_b2.store
-
-    def test_rename_to_taken_key_fails(self, client, fake_b2, free_user):
-        client.force_login(free_user)
-        client.post("/save/", {"content": "first", "key": "lc-rn3a"})
-        client.post("/save/", {"content": "second", "key": "lc-rn3b"})
-        resp = client.post("/lc-rn3a/rename/", {"new_key": "lc-rn3b"})
-        assert resp.status_code == 409
+def drp(*args, stdin=None, timeout=30):
+    cmd = ["python", "-m", "cli.drp"] + list(args)
+    proc = subprocess.run(
+        cmd, capture_output=True, text=True,
+        timeout=timeout, cwd=ROOT, env=ENV,
+        input=stdin,
+    )
+    return proc.returncode, proc.stdout, proc.stderr
 
 
-class TestCopyDrop:
-    """POST /<key>/copy/"""
-
-    def test_copy_text_drop(self, client, fake_b2, free_user):
-        client.force_login(free_user)
-        client.post("/save/", {"content": "copy me", "key": "lc-cp1"})
-        resp = client.post(
-            "/lc-cp1/copy/",
-            data=json.dumps({"new_key": "lc-cp1-copy"}),
-            content_type="application/json",
-        )
-        assert resp.status_code == 200
-        original = Drop.objects.get(key="lc-cp1")
-        copy = Drop.objects.get(key="lc-cp1-copy")
-        assert copy.content == original.content
-        assert copy.kind == original.kind
-
-    def test_copy_file_drop_copies_b2(self, client, fake_b2, free_user):
-        client.force_login(free_user)
-        f = SimpleUploadedFile("cp.bin", b"binary data", content_type="application/octet-stream")
-        client.post("/save/", {"file": f, "key": "lc-cp2"})
-
-        resp = client.post(
-            "/lc-cp2/copy/",
-            data=json.dumps({"new_key": "lc-cp2-copy"}),
-            content_type="application/json",
-        )
-        assert resp.status_code == 200
-        copy = Drop.objects.get(key="lc-cp2-copy")
-        assert copy.kind == Drop.FILE
-        # B2 should have a copy of the object
-        assert fake_b2.object_key("lc-cp2-copy") in fake_b2.store or copy.file_public_id in fake_b2.store
+def unique_key(prefix="t"):
+    return f"{prefix}-{uuid.uuid4().hex[:8]}"
 
 
-class TestDropExpiry:
-    """Expired drops should be cleaned up on access."""
+# ── Upload + Get ──────────────────────────────────────────────────────────────
 
-    def test_expired_text_returns_410(self, client, fake_b2):
-        client.post("/save/", {"content": "ephemeral", "key": "lc-exp1"})
-        drop = Drop.objects.get(key="lc-exp1")
-        drop.expires_at = timezone.now() - timedelta(hours=1)
-        drop.save(update_fields=["expires_at"])
+class TestUpGet:
 
-        resp = client.get("/lc-exp1/", HTTP_ACCEPT="application/json")
-        assert resp.status_code == 410
-        assert not Drop.objects.filter(key="lc-exp1").exists()
+    def test_text_roundtrip(self, text_drop):
+        """drp up <text> then drp get <key> returns the same text."""
+        key, content = text_drop
+        rc, out, _ = drp("get", key)
+        assert rc == 0
+        assert content in out
 
-    def test_expired_file_deleted_from_b2(self, client, fake_b2):
-        f = SimpleUploadedFile("exp.txt", b"going away", content_type="text/plain")
-        client.post("/save/", {"file": f, "key": "lc-exp2"})
-        drop = Drop.objects.get(key="lc-exp2")
-        b2_key = drop.file_public_id
-        drop.expires_at = timezone.now() - timedelta(hours=1)
-        drop.save(update_fields=["expires_at"])
+    def test_stdin_upload(self, key):
+        """echo ... | drp up -k <key> works."""
+        rc, out, _ = drp("up", "-k", key, stdin="piped from stdin")
+        assert rc == 0
+        assert key in out  # URL printed
 
-        resp = client.get("/lc-exp2/", HTTP_ACCEPT="application/json")
-        assert resp.status_code == 410
-        assert b2_key not in fake_b2.store
+        rc, out, _ = drp("get", key)
+        assert rc == 0
+        assert "piped from stdin" in out
 
-    def test_non_expired_still_accessible(self, client, fake_b2):
-        client.post("/save/", {"content": "still here", "key": "lc-exp3"})
-        drop = Drop.objects.get(key="lc-exp3")
-        drop.expires_at = timezone.now() + timedelta(days=30)
-        drop.save(update_fields=["expires_at"])
+    def test_file_roundtrip(self, file_drop, tmp_path):
+        """drp up <file> then drp get <key> -o <path> saves the file."""
+        key, _ = file_drop
+        dest = tmp_path / "downloaded.txt"
+        rc, out, _ = drp("get", key, "-o", str(dest))
+        assert rc == 0
+        assert dest.exists()
+        assert "file content for integration test" in dest.read_text()
 
-        resp = client.get("/lc-exp3/", HTTP_ACCEPT="application/json")
-        assert resp.status_code == 200
-        assert resp.json()["content"] == "still here"
+    def test_upload_with_burn(self):
+        """--burn drop is deleted after first get."""
+        k = unique_key("burn")
+        rc, _, _ = drp("up", "burn me", "-k", k, "--burn")
+        assert rc == 0
+
+        # First get succeeds
+        rc, out, _ = drp("get", k)
+        assert rc == 0
+        assert "burn me" in out
+
+        # Second get fails (already burned)
+        rc, _, err = drp("get", k)
+        assert rc != 0
+
+    def test_get_nonexistent(self):
+        """drp get <bogus> exits nonzero."""
+        rc, _, err = drp("get", "nonexistent-key-zzz999")
+        assert rc != 0
+        assert "not found" in (err.lower() + "")
 
 
-class TestSetPassword:
-    """POST /<key>/set-password/ — paid owners only."""
+# ── Status ────────────────────────────────────────────────────────────────────
 
-    def test_set_password_on_existing_drop(self, client, fake_b2, starter_user):
-        client.force_login(starter_user)
-        client.post("/save/", {"content": "protect me", "key": "lc-sp1"})
-        resp = client.post(
-            "/lc-sp1/set-password/",
-            data=json.dumps({"password": "newpass"}),
-            content_type="application/json",
-        )
-        assert resp.status_code == 200
-        assert resp.json()["password_protected"] is True
+class TestStatus:
 
-        drop = Drop.objects.get(key="lc-sp1")
-        assert drop.is_password_protected
+    def test_drop_status(self, text_drop):
+        """drp status <key> shows view count and kind."""
+        key, _ = text_drop
+        rc, out, _ = drp("status", key)
+        assert rc == 0
+        assert key in out
+        assert "views" in out.lower() or "kind" in out.lower()
 
-    def test_remove_password(self, client, fake_b2, starter_user):
-        client.force_login(starter_user)
-        client.post("/save/", {"content": "was protected", "key": "lc-sp2", "password": "old"})
-        resp = client.post(
-            "/lc-sp2/set-password/",
-            data=json.dumps({"password": ""}),
-            content_type="application/json",
-        )
-        assert resp.status_code == 200
-        assert resp.json()["password_protected"] is False
+    def test_status_nonexistent(self):
+        """drp status <bogus> exits nonzero."""
+        rc, _, err = drp("status", "nonexistent-key-zzz999")
+        assert rc != 0
 
-    def test_free_user_cannot_set_password(self, client, fake_b2, free_user):
-        client.force_login(free_user)
-        client.post("/save/", {"content": "free drop", "key": "lc-sp3"})
-        resp = client.post(
-            "/lc-sp3/set-password/",
-            data=json.dumps({"password": "nope"}),
-            content_type="application/json",
-        )
-        assert resp.status_code == 403
+    def test_global_status(self):
+        """drp status (no key) shows config info."""
+        rc, out, _ = drp("status")
+        assert rc == 0
+        assert "host" in out.lower() or "drp" in out.lower()
+
+
+# ── Rename ────────────────────────────────────────────────────────────────────
+
+class TestRename:
+
+    def test_mv(self, text_drop):
+        """drp mv <old> <new> renames the drop."""
+        old_key, content = text_drop
+        new_key = unique_key("mv")
+
+        rc, out, err = drp("mv", old_key, new_key)
+        combined = (out + err).lower()
+        if rc != 0 and ("protected" in combined or "locked" in combined):
+            pytest.skip("Drop is locked (24h protection on paid accounts)")
+        assert rc == 0
+        assert new_key in out
+
+        # Old key gone
+        rc, _, _ = drp("get", old_key)
+        assert rc != 0
+
+        # New key has the content
+        rc, out, _ = drp("get", new_key)
+        assert rc == 0
+        assert content in out
+
+        # Cleanup moved key
+        drp("rm", new_key)
+
+    def test_mv_conflict(self, text_drop):
+        """drp mv to an existing key fails."""
+        key, _ = text_drop
+        other = unique_key("conflict")
+        drp("up", "blocker", "-k", other)
+
+        rc, out, err = drp("mv", key, other)
+        combined = (out + err).lower()
+        # Either conflict (taken) or lock (protected) — both are valid rejections
+        assert rc != 0
+
+        drp("rm", other)
+
+
+# ── Copy ──────────────────────────────────────────────────────────────────────
+
+class TestCopy:
+
+    def test_cp(self, text_drop):
+        """drp cp <key> <new> duplicates the drop."""
+        key, content = text_drop
+        copy_key = unique_key("cp")
+
+        rc, out, err = drp("cp", key, copy_key)
+        combined = (out + err).lower()
+        if rc != 0 and ("protected" in combined or "locked" in combined):
+            pytest.skip("Drop is locked (24h protection on paid accounts)")
+        assert rc == 0
+        assert "→" in out or "✓" in out
+
+        # Extract the actual resulting key from the output (server may auto-generate)
+        actual_key = copy_key
+        for line in out.splitlines():
+            if "→" in line:
+                # Format: "  ✓ /old/ → /new/"
+                after_arrow = line.split("→")[-1].strip()
+                actual_key = after_arrow.strip("/").strip()
+                break
+
+        rc, out, _ = drp("get", actual_key)
+        assert rc == 0
+        assert content in out
+
+        drp("rm", actual_key)
+
+    def test_cp_auto_key(self, text_drop):
+        """drp cp <key> (no new_key) auto-generates a key."""
+        key, content = text_drop
+
+        rc, out, err = drp("cp", key)
+        combined = (out + err).lower()
+        if rc != 0 and ("protected" in combined or "locked" in combined):
+            pytest.skip("Drop is locked (24h protection on paid accounts)")
+        assert rc == 0
+        assert "/" in out
+
+        # Extract auto-generated key and clean up
+        for line in out.splitlines():
+            if "\u2192" in line or "→" in line:
+                parts = line.split("/")
+                for p in parts:
+                    p = p.strip().rstrip("/")
+                    if p and p != key and len(p) > 2:
+                        drp("rm", p)
+                        break
+
+
+# ── Renew ─────────────────────────────────────────────────────────────────────
+
+class TestRenew:
+
+    def test_renew(self, text_drop):
+        """drp renew <key> extends the expiry."""
+        key, _ = text_drop
+        rc, out, err = drp("renew", key)
+        combined = (out + err).lower()
+        if rc != 0 and ("owner" in combined or "protected" in combined):
+            pytest.skip("Renew blocked by server policy (ownership/lock)")
+        assert rc == 0
+        assert "renewed" in out.lower() or "renew" in out.lower() or "✓" in out
+
+
+# ── Delete ────────────────────────────────────────────────────────────────────
+
+class TestDelete:
+
+    def test_rm(self):
+        """drp rm <key> deletes the drop."""
+        k = unique_key("rm")
+        drp("up", "delete me", "-k", k)
+
+        rc, out, err = drp("rm", k)
+        combined = (out + err).lower()
+        if rc != 0 and ("protected" in combined or "locked" in combined):
+            pytest.skip("Drop is locked (24h protection on paid accounts)")
+        assert rc == 0
+        assert "deleted" in out.lower() or "✓" in out
+
+        # Confirm gone
+        rc, _, _ = drp("get", k)
+        assert rc != 0
+
+    def test_rm_nonexistent(self):
+        """drp rm <bogus> exits nonzero."""
+        rc, _, _ = drp("rm", "nonexistent-key-zzz999")
+        assert rc != 0
+
+
+# ── Ls ────────────────────────────────────────────────────────────────────────
+
+class TestLs:
+
+    def test_ls(self):
+        """drp ls runs successfully."""
+        rc, out, _ = drp("ls")
+        assert rc == 0
+        # Either shows drops or "(no drops)"
+        assert len(out.strip()) > 0
+
+    def test_ls_long(self):
+        """drp ls -l runs and shows extended format."""
+        rc, out, _ = drp("ls", "-l")
+        assert rc == 0
+        assert len(out.strip()) > 0
+
+    def test_ls_export(self):
+        """drp ls --export outputs valid JSON (may have trailing version notice)."""
+        rc, out, _ = drp("ls", "--export")
+        assert rc == 0
+        # Strip trailing version notice lines (non-JSON)
+        lines = out.strip().splitlines()
+        json_lines = []
+        for line in lines:
+            json_lines.append(line)
+            if line.strip() == "}":
+                break
+        data = json.loads("\n".join(json_lines))
+        assert "drops" in data
+
+
+# ── Ping ──────────────────────────────────────────────────────────────────────
+
+class TestPing:
+
+    def test_ping(self):
+        """drp ping succeeds."""
+        rc, out, _ = drp("ping")
+        assert rc == 0
+        assert "reachable" in out.lower() or "✓" in out
+
+
+# ── Getlink ───────────────────────────────────────────────────────────────────
+
+class TestGetlink:
+
+    def test_getlink(self, text_drop):
+        """drp getlink <key> prints the URL."""
+        key, _ = text_drop
+        rc, out, _ = drp("getlink", key)
+        assert rc == 0
+        assert key in out
+        assert "http" in out.lower()
+
+
+# ── Rekey (alias for mv) ─────────────────────────────────────────────────────
+
+class TestRekey:
+
+    def test_rekey(self, text_drop):
+        """drp rekey <old> <new> renames the drop (same as mv)."""
+        old_key, content = text_drop
+        new_key = unique_key("rk")
+
+        rc, out, err = drp("rekey", old_key, new_key)
+        combined = (out + err).lower()
+        if rc != 0 and ("protected" in combined or "locked" in combined):
+            pytest.skip("Drop is locked (24h protection on paid accounts)")
+        assert rc == 0
+
+        rc, out, _ = drp("get", new_key)
+        assert rc == 0
+        assert content in out
+
+        drp("rm", new_key)

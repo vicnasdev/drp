@@ -7,21 +7,18 @@ from core.views.drops import raw_view, raw_file, set_drop_password, embed_view, 
 from core.views.helpers import qr_view
 from core.views.legal import privacy_view, terms_view
 from core.views.folders import (
-    resolve_handle, create_folder, create_invite, join_folder,
-    change_member_role, remove_member,
+    resolve_handle, create_folder, create_share_token,
+    list_share_tokens, revoke_share_token,
 )
 from core.views.tokens import create_token, list_tokens, revoke_token
-from core.views.aliases import create_alias, list_aliases, delete_alias, resolve_alias
 from core.views.templates import create_template, list_templates, get_template, delete_template
 from core.views.features import feature_list, feature_submit, feature_vote
-from core.views.transfers import send_transfer, claim_transfer
 from core.views.likes import toggle_like
 
 KEY = r"(?P<key>[^/\s]+)"
 
 urlpatterns = [
     path("api/report-error/",   report_error,          name="report_error"),
-    # path("staff/mobile/", views.mobile_blueprint, name="mobile_blueprint"),
     path("api/github-webhook/", github_webhook,         name="github_webhook"),
     path("save/",               views.save_drop,        name="save_drop"),
     path("check-key/",          views.check_key,        name="check_key"),
@@ -46,10 +43,6 @@ urlpatterns = [
     path("auth/tokens/",                  list_tokens,    name="token_list"),
     path("auth/tokens/create/",           create_token,   name="token_create"),
     path("auth/tokens/<int:token_id>/revoke/", revoke_token, name="token_revoke"),
-    # Aliases
-    path("auth/aliases/",                   list_aliases,   name="alias_list"),
-    path("auth/aliases/create/",            create_alias,   name="alias_create"),
-    path("auth/aliases/<int:alias_id>/delete/", delete_alias, name="alias_delete"),
     # Drop templates
     path("auth/templates/",                        list_templates,   name="template_list"),
     path("auth/templates/create/",                 create_template,  name="template_create"),
@@ -85,24 +78,23 @@ urlpatterns = [
              template_name="registration/password_reset_complete.html",
          ),
          name="password_reset_complete"),
-    # Folders — must be before the /<key>/ catch-all
+    # Folders
     path("folders/create/",                   views.create_folder,        name="folder_create"),
-    path("folders/join/",                     join_folder,                name="folder_join"),
     path("folders/<int:folder_id>/add/",      views.add_to_folder,        name="folder_add"),
     path("folders/<int:folder_id>/remove/",   views.remove_from_folder,   name="folder_remove"),
     path("folders/<int:folder_id>/rename/",   views.rename_folder,        name="folder_rename"),
     path("folders/<int:folder_id>/delete/",   views.delete_folder,        name="folder_delete"),
-    path("folders/<int:folder_id>/toggle-inbox/", views.toggle_inbox,     name="folder_toggle_inbox"),
-    path("folders/<int:folder_id>/invite/",   create_invite,              name="folder_invite"),
-    path("folders/<int:folder_id>/members/<int:user_id>/role/",    change_member_role, name="folder_member_role"),
-    path("folders/<int:folder_id>/members/<int:user_id>/remove/",  remove_member,      name="folder_member_remove"),
+    # Folder share tokens
+    path("folders/<int:folder_id>/share/",       create_share_token,   name="folder_share"),
+    path("folders/<int:folder_id>/share/list/",  list_share_tokens,    name="folder_share_list"),
+    path("folders/<int:folder_id>/share/<int:token_id>/revoke/", revoke_share_token, name="folder_share_revoke"),
+    # Folder bookmarks
+    path("bookmarks/folder/<int:folder_id>/save/",   views.save_folder_bookmark,   name="save_folder_bookmark"),
+    path("bookmarks/folder/<int:folder_id>/unsave/", views.unsave_folder_bookmark, name="unsave_folder_bookmark"),
+    # Handle / folder / item resolution
     re_path(r"^@(?P<handle>[^/]+)/$",                    resolve_handle,         name="resolve_handle"),
-    re_path(r"^@(?P<username>[^/]+)/(?P<path>.+)/$", views.folder_or_alias_view, name="folder_view"),
-    # Legacy /f/ prefix — redirect to unified /<key>/ URL
-    re_path(rf"^f/{KEY}/download/$",      views.download_drop,       name="download_drop_legacy"),
-    re_path(rf"^f/{KEY}/raw/$",           raw_file,                  name="raw_file_legacy"),
-    re_path(rf"^f/{KEY}/$",              drop_view,                  name="file_view_legacy"),
-    # Unified drop actions (no more /f/ prefix)
+    re_path(r"^@(?P<username>[^/]+)/(?P<path>.+)/$", views.folder_or_item_view, name="folder_view"),
+    # Unified drop actions
     re_path(rf"^{KEY}/download/$",     views.download_drop,          name="download_drop"),
     re_path(rf"^{KEY}/raw/$",          raw_file,                     name="raw_file"),
     re_path(rf"^{KEY}/rename/$",       views.rename_drop,            name="rename_drop"),
@@ -112,8 +104,6 @@ urlpatterns = [
     re_path(rf"^{KEY}/save/$",         views.save_bookmark,          name="save_bookmark"),
     re_path(rf"^{KEY}/unsave/$",       views.unsave_bookmark,        name="unsave_bookmark"),
     re_path(rf"^{KEY}/set-password/$", set_drop_password,            name="set_password"),
-    re_path(rf"^{KEY}/send/$",         send_transfer,                name="send_transfer"),
     re_path(rf"^{KEY}/like/$",         toggle_like,                  name="toggle_like"),
-    path("claim/<str:token>/",         claim_transfer,               name="claim_transfer"),
     re_path(rf"^{KEY}/$",             drop_view,                     name="drop_view"),
 ]

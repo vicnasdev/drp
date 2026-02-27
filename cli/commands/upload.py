@@ -19,6 +19,7 @@ import requests
 from cli import config, api
 from cli.commands._context import load_context
 from cli.crash_reporter import report_outcome
+from cli.format import human_size
 from cli.prompt import prompt_for_value
 
 
@@ -80,7 +81,7 @@ def cmd_up(args):
     schedule   = getattr(args, 'schedule', None)
     webhook    = getattr(args, 'webhook', None)
     notify     = getattr(args, 'notify', None)
-    alias      = getattr(args, 'alias', None)
+    alias      = None  # aliases removed
     template   = getattr(args, 'template', None)
     is_public  = getattr(args, 'public', False)
     tags       = getattr(args, 'tag', None)
@@ -152,21 +153,6 @@ def cmd_up(args):
                  schedule=schedule, webhook=webhook, notify=notify,
                  is_public=is_public, tags=tags)
 
-    # Create alias after upload if requested
-    if alias and key:
-        from cli.api.auth import get_csrf
-        csrf = get_csrf(host, session)
-        import json
-        res = session.post(
-            f'{host}/auth/aliases/create/',
-            json={'alias': alias, 'key': key},
-            headers={'X-CSRFToken': csrf, 'Referer': f'{host}/'},
-            timeout=15,
-        )
-        if res.ok:
-            from cli.format import dim
-            print(f'  {dim("alias created:")} @{cfg.get("username", "?")}/{alias}')
-
 
 def _upload_url(host, session, url, key, cfg, args, password='',
                 schedule=None, webhook=None, notify=None,
@@ -234,7 +220,7 @@ def _upload_url_remote(host, session, url, key, cfg, args, password='',
     result_key, filename, filesize = result
     final_url = f'{host}/{result_key}/'
     print(final_url)
-    size_str = _fmt_size(filesize) if filesize else ''
+    size_str = human_size(filesize) if filesize else ''
     desc = f'{dim("remote")} ← {url}'
     if filename:
         desc += f'  {dim(filename)}'
@@ -245,14 +231,6 @@ def _upload_url_remote(host, session, url, key, cfg, args, password='',
     config.record_drop(result_key, 'file', filename=filename, host=host)
     from cli.completion import record_key
     record_key(result_key)
-
-
-def _fmt_size(n: int) -> str:
-    for unit in ('B', 'KB', 'MB', 'GB'):
-        if n < 1024:
-            return f'{n:.0f} {unit}' if unit == 'B' else f'{n:.1f} {unit}'
-        n /= 1024
-    return f'{n:.1f} TB'
 
 
 def _upload_file(host, session, path, key, cfg, args, password='',

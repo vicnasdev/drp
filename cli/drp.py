@@ -14,6 +14,8 @@ from cli.commands.ask import cmd_ask
 from cli.commands.getlink import cmd_getlink
 from cli.commands.manage import cmd_rm, cmd_mv, cmd_renew, cmd_cp, cmd_save, cmd_lock, cmd_mkdir
 from cli.commands.ls import cmd_ls
+from cli.commands.share import cmd_share
+from cli.commands.rekey import cmd_rekey
 
 COMMANDS = [
     ('setup',      cmd_setup,       'Configure host and log in'),
@@ -31,6 +33,8 @@ COMMANDS = [
     ('save',       cmd_save,        'Bookmark a drop to your root folder'),
     ('lock',       cmd_lock,        'Set or remove password on a drop'),
     ('mkdir',      cmd_mkdir,       'Create a folder'),
+    ('share',      cmd_share,       'Manage sharing: links, folder tokens'),
+    ('rekey',      cmd_rekey,       'Change a drop\'s URL key (alias for mv)'),
     ('token',      cmd_token,       'Manage API tokens (paid accounts)'),
     ('ask',        cmd_ask,         'Ask the help bot a question about drp'),
     ('getlink',    cmd_getlink,     'Print shareable link (global or --relative)'),
@@ -42,7 +46,8 @@ COMMANDS = [
 
 COMMAND_GROUPS = [
     ('upload / download',  ['up', 'get', 'getlink']),
-    ('manage',             ['rm', 'mv', 'cp', 'renew', 'save', 'lock', 'mkdir']),
+    ('manage',             ['rm', 'mv', 'cp', 'renew', 'rekey', 'save', 'lock', 'mkdir']),
+    ('sharing',            ['share']),
     ('account',            ['token']),
     ('info',               ['ls', 'status', 'ping']),
     ('help',               ['ask']),
@@ -175,8 +180,6 @@ def _configure_subparsers(sub):
                       help='Email before expiry: 7d, 24h (paid)')
     p_up.add_argument('--template', default=None, metavar='SLUG',
                       help='Use a drop template')
-    p_up.add_argument('--alias', default=None, metavar='NAME',
-                      help='Create alias after upload: @handle/alias → drop')
     p_up.add_argument('--public', action='store_true', default=False,
                       help='Make drop visible in public feed')
     p_up.add_argument('--tag', default=None, metavar='TAGS',
@@ -289,6 +292,23 @@ def _configure_subparsers(sub):
                       help='Reverse sort order')
     p_ls.add_argument('--export', action='store_true',
                       help='Export as JSON')
+
+    # ── share ─────────────────────────────────────────────────────────────────
+    p_share = sub._name_parser_map['share']
+    _attach(p_share.add_argument('key'), 'key')
+    p_share.add_argument('--folder', action='store_true',
+                         help='Create a folder share token (key = folder ID)')
+    p_share.add_argument('--list', action='store_true',
+                         help='List share tokens for a folder')
+    p_share.add_argument('--revoke', default=None, metavar='TOKEN_ID', type=int,
+                         help='Revoke a share token by ID')
+    p_share.add_argument('--expires-hours', default=24, type=float,
+                         help='Token lifetime in hours (default: 24)')
+
+    # ── rekey ─────────────────────────────────────────────────────────────────
+    p_rekey = sub._name_parser_map['rekey']
+    _attach(p_rekey.add_argument('key'), 'key')
+    p_rekey.add_argument('new_key', help='New drop key')
 
 _HANDLERS = {name: handler for name, handler, _ in COMMANDS}
 

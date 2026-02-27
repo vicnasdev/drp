@@ -9,7 +9,10 @@ from django.utils.html import format_html
 
 from .models import (
     UserProfile, PlanLimit,
-    Folder, FolderMember,
+    Folder, FolderGroup, FolderShareToken,
+    Group, GroupMember,
+    FileBookmark, FolderBookmark,
+    Like, CrashReport,
     EmailTemplate,
 )
 
@@ -213,25 +216,83 @@ class PlanLimitAdmin(admin.ModelAdmin):
 
 # ── Folder admin ────────────────────────────────────────────────────────────────
 
-class FolderMemberInline(admin.TabularInline):
-    model = FolderMember
+class FolderGroupInline(admin.TabularInline):
+    model = FolderGroup
+    extra = 0
+    fields = ('group', 'role')
+    raw_id_fields = ('group',)
+
+
+class FolderShareTokenInline(admin.TabularInline):
+    model = FolderShareToken
+    extra = 0
+    fields = ('token', 'created_by', 'expires_at', 'created_at')
+    readonly_fields = ('token', 'created_at')
+    raw_id_fields = ('created_by',)
+
+
+@admin.register(Folder)
+class FolderAdmin(admin.ModelAdmin):
+    list_display = ('slug', 'owner', 'is_public', 'created_at')
+    search_fields = ('slug',)
+    list_filter = ('is_public',)
+    readonly_fields = ('created_at',)
+    raw_id_fields = ('owner', 'parent')
+    inlines = (FolderGroupInline, FolderShareTokenInline)
+
+
+# ── Group admin ─────────────────────────────────────────────────────────────────
+
+class GroupMemberInline(admin.TabularInline):
+    model = GroupMember
     extra = 0
     fields = ('user', 'role', 'joined_at')
     readonly_fields = ('joined_at',)
     raw_id_fields = ('user',)
 
 
-@admin.register(Folder)
-class FolderAdmin(admin.ModelAdmin):
-    list_display = ('slug', 'name', 'owner', 'member_count', 'created_at')
-    search_fields = ('slug', 'name')
-    readonly_fields = ('created_at',)
+@admin.register(Group)
+class GroupAdmin(admin.ModelAdmin):
+    list_display = ('name', 'owner', 'member_count')
+    search_fields = ('name',)
     raw_id_fields = ('owner',)
-    inlines = (FolderMemberInline,)
+    inlines = (GroupMemberInline,)
 
     @admin.display(description='members')
     def member_count(self, obj):
         return obj.members.count()
+
+
+# ── Bookmark admin ──────────────────────────────────────────────────────────────
+
+@admin.register(FileBookmark)
+class FileBookmarkAdmin(admin.ModelAdmin):
+    list_display = ('user', 'file_key', 'created_at')
+    search_fields = ('file_key', 'user__username')
+    raw_id_fields = ('user',)
+
+
+@admin.register(FolderBookmark)
+class FolderBookmarkAdmin(admin.ModelAdmin):
+    list_display = ('user', 'folder', 'created_at')
+    raw_id_fields = ('user', 'folder', 'share_token')
+
+
+# ── Like admin ──────────────────────────────────────────────────────────────────
+
+@admin.register(Like)
+class LikeAdmin(admin.ModelAdmin):
+    list_display = ('drop', 'user', 'ip', 'created_at')
+    raw_id_fields = ('drop', 'user')
+
+
+# ── CrashReport admin ──────────────────────────────────────────────────────────
+
+@admin.register(CrashReport)
+class CrashReportAdmin(admin.ModelAdmin):
+    list_display = ('fingerprint', 'exc_type', 'title', 'hit_count', 'last_seen_at')
+    search_fields = ('fingerprint', 'title', 'exc_type')
+    readonly_fields = ('fingerprint', 'hit_count', 'last_seen_at')
 
 
 # ── EmailTemplate admin ────────────────────────────────────────────────────────
