@@ -9,7 +9,6 @@ from cli.commands.setup import cmd_setup, cmd_login, cmd_logout
 from cli.commands.upload import cmd_up
 from cli.commands.get import cmd_get
 from cli.commands.status import cmd_status, cmd_ping
-from cli.commands.shell import cmd_shell
 from cli.commands.token import cmd_token
 from cli.commands.ask import cmd_ask
 from cli.commands.getlink import cmd_getlink
@@ -35,7 +34,6 @@ COMMANDS = [
     ('token',      cmd_token,       'Manage API tokens (paid accounts)'),
     ('ask',        cmd_ask,         'Ask the help bot a question about drp'),
     ('getlink',    cmd_getlink,     'Print shareable link (global or --relative)'),
-    ('shell',      cmd_shell,       'Interactive shell — ls, cd, cp, mv, rm, and more'),
 ]
 
 # ── Shared display data ───────────────────────────────────────────────────────
@@ -49,7 +47,6 @@ COMMAND_GROUPS = [
     ('info',               ['ls', 'status', 'ping']),
     ('help',               ['ask']),
     ('setup',              ['setup', 'login', 'logout']),
-    ('shell',              ['shell']),
 ]
 
 # (command_prefix, argument, description)
@@ -78,9 +75,9 @@ EXAMPLES = [
     ('drp status',  'notes',                          'view count and expiry'),
     ('drp token',   'create --expires 90d',           'create an API key'),
     ('drp ask',     '"how do I upload a file?"',      'ask the help bot'),
-    ('drp shell',   '',                               'interactive shell'),
+    ('drp',         '',                               'open interactive shell'),
     ('',            '',                               ''),
-    ('',            'shell extras:  ls cd cat add',   ''),
+    ('',            'shell commands:  ls cd cat add',  ''),
     ('',            'open link pwd status clear',     ''),
 ]
 
@@ -302,6 +299,7 @@ def _print_colored_help():
     print(f'  {bold("drp")} {dim(__version__)}  — drop clipboards and files, get a link instantly.')
     print()
     print(f'  {dim("usage:")}  drp <command> [options]')
+    print(f'  {dim("       ")}  drp              {dim("open interactive shell")}')
     print()
 
     # ── Commands ──────────────────────────────────────────────────────────────
@@ -339,7 +337,9 @@ def main():
         pass
     args = parser.parse_args()
     if args.command is None:
-        _print_colored_help()
+        # No subcommand → open interactive shell
+        from cli.commands.shell import cmd_shell
+        cmd_shell(args)
         return
 
     # Fire-and-forget background version check (never blocks the command)

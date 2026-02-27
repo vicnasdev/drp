@@ -67,14 +67,24 @@ def cmd_ls(args):
     from cli.spinner import Spinner
     from cli.format import dim, green, cyan, yellow, magenta, blue, grey, bold
 
+    def _fetch():
+        res = session.get(
+            f'{host}/auth/account/',
+            headers={'Accept': 'application/json'},
+            timeout=15,
+        )
+        res.raise_for_status()
+        return res
+
     try:
         with Spinner('loading'):
-            res = session.get(
-                f'{host}/auth/account/',
-                headers={'Accept': 'application/json'},
-                timeout=15,
-            )
-            res.raise_for_status()
+            res = _fetch()
+            ct = res.headers.get('Content-Type', '')
+            if 'application/json' not in ct:
+                # Session expired — server redirected to login page.
+                from cli.session import ensure_authenticated
+                ensure_authenticated(host, session, cfg)
+                res = _fetch()
             data = res.json()
     except Exception as e:
         print(f'  ✗ Could not fetch drops: {e}')

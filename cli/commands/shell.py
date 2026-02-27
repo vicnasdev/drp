@@ -167,11 +167,12 @@ def cmd_shell(args):
                     # Sub-command completion (folder ls/new/add/rm, token create/list/revoke)
                     if cmd in _SUB_CMDS and len(tokens) <= 2 and not (len(tokens) == 2 and buf.endswith(' ')):
                         matches = [s + ' ' for s in _SUB_CMDS[cmd] if s.startswith(text)]
-                    # cp: complete local paths AND drop keys
-                    elif cmd == 'cp':
+                    # cp/up/serve: complete local paths (and drop keys for cp)
+                    elif cmd in ('cp', 'up', 'serve'):
                         matches = _complete_local_paths(text)
-                        from cli.completion import _read_cache
-                        matches += [k + ' ' for k in _read_cache(text)]
+                        if cmd == 'cp':
+                            from cli.completion import _read_cache
+                            matches += [k + ' ' for k in _read_cache(text)]
                     # Drop key completion
                     elif cmd in _KEY_CMDS:
                         from cli.completion import _read_cache

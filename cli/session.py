@@ -60,6 +60,23 @@ class ResilientSession(requests.Session):
         return resp  # noqa: the variable is always bound here
 
 
+def ensure_authenticated(host, session, cfg):
+    """Verify the session is actually valid; re-auth if the server rejected it.
+
+    Call this after a request returns HTML instead of JSON (302 → login page).
+    Invalidates the cache so auto_login takes the slow path and prompts if needed.
+    Returns True if re-authenticated, False otherwise.
+    """
+    # Invalidate the cache so auto_login hits the server
+    try:
+        if SESSION_FILE.exists():
+            import os
+            os.utime(str(SESSION_FILE), (0, 0))
+    except Exception:
+        pass
+    return auto_login(cfg, host, session, required=True)
+
+
 def load_session(session):
     """Load saved cookies into session. Silent — never prompts."""
     if SESSION_FILE.exists():
