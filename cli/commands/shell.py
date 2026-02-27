@@ -92,7 +92,9 @@ def cmd_shell(args):
     username = cfg.get('username', '')
     cwd = None  # Current folder path (e.g. 'notes' or 'notes/work')
 
-    version_line = dim(f'drp shell  —  type {bold("help")} for commands, ^D to exit')
+    import os as _os
+    local_dir = _os.path.basename(_os.getcwd()) or _os.getcwd()
+    version_line = dim(f'{bold(local_dir)}/drp  \u2014  type {bold("help")} for commands, ^D to exit')
     print(version_line)
     print()
 
@@ -103,7 +105,7 @@ def cmd_shell(args):
     def prompt():
         if cwd:
             return f'{magenta("@" + username + "/" + cwd)}> '
-        return f'{cyan("drp")}> '
+        return f'{dim(local_dir + "/")}{cyan("drp")}> '
 
     def _resolve_folder_path(target):
         """Resolve a target path relative to cwd. Returns full path or None."""
@@ -167,9 +169,17 @@ def cmd_shell(args):
                     # Sub-command completion (folder ls/new/add/rm, token create/list/revoke)
                     if cmd in _SUB_CMDS and len(tokens) <= 2 and not (len(tokens) == 2 and buf.endswith(' ')):
                         matches = [s + ' ' for s in _SUB_CMDS[cmd] if s.startswith(text)]
-                    # cp/up/serve: complete local paths (and drop keys for cp)
+                    # cp/up/serve: complete local paths only when prefix
+                    # looks like a path; always show drop keys for cp
                     elif cmd in ('cp', 'up', 'serve'):
-                        matches = _complete_local_paths(text)
+                        _is_path_prefix = (
+                            text.startswith('.') or text.startswith('/')
+                            or text.startswith('~')
+                        )
+                        if _is_path_prefix:
+                            matches = _complete_local_paths(text)
+                        else:
+                            matches = []
                         if cmd == 'cp':
                             from cli.completion import _read_cache
                             matches += [k + ' ' for k in _read_cache(text)]
@@ -223,8 +233,11 @@ def cmd_shell(args):
                 elif target == '..':
                     if cwd and '/' in cwd:
                         cwd = cwd.rsplit('/', 1)[0]
-                    else:
+                    elif cwd:
                         cwd = None
+                    else:
+                        # At root — cd .. exits the shell
+                        break
                 else:
                     # Resolve relative or absolute path
                     full_path = _resolve_folder_path(target)
@@ -381,12 +394,14 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
         dst = rest[1] if len(rest) > 1 else None
 
         # Detect local file paths: ./foo, ../foo, /abs/path, ~/path,
-        # or anything containing / or with a file extension
+        # anything containing os.sep, or a bare filename that exists in cwd
         import os
+        expanded_src = os.path.expanduser(src)
         is_local = (
             src.startswith('./')  or src.startswith('../')
             or src.startswith('/') or src.startswith('~')
-            or (os.sep in src and os.path.exists(os.path.expanduser(src)))
+            or (os.sep in src and os.path.exists(expanded_src))
+            or os.path.exists(expanded_src)
         )
         if is_local:
             # Upload local file as a drop

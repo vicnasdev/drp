@@ -82,8 +82,15 @@ def cmd_ls(args):
             ct = res.headers.get('Content-Type', '')
             if 'application/json' not in ct:
                 # Session expired — server redirected to login page.
-                from cli.session import ensure_authenticated
-                ensure_authenticated(host, session, cfg)
+                # Re-auth without a second spinner (ensure_authenticated
+                # may show its own "connecting" spinner).
+                pass
+            else:
+                data = res.json()
+        if 'application/json' not in ct:
+            from cli.session import ensure_authenticated
+            ensure_authenticated(host, session, cfg)
+            with Spinner('loading'):
                 res = _fetch()
             data = res.json()
     except Exception as e:
