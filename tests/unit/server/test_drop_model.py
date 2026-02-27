@@ -26,9 +26,9 @@ def other_user(db):
     return User.objects.create_user('bob', 'bob@test.com', 'pw')
 
 
-def _drop(owner=None, kind='text', key='test', **kw):
+def _drop(owner=None, key='test', **kw):
     """Create a drop with sensible defaults."""
-    return Drop.objects.create(owner=owner, kind=kind, key=key, **kw)
+    return Drop.objects.create(owner=owner, key=key, **kw)
 
 
 # ── Expiry ────────────────────────────────────────────────────────────────────
@@ -54,14 +54,14 @@ class TestDropExpiry:
         assert not d.is_expired()
 
     def test_file_drop_expires_after_90_days(self):
-        d = _drop(key='file1', kind='file')
+        d = _drop(key='file1', file_public_id='drops/file1')
         Drop.objects.filter(pk=d.pk).update(
             created_at=timezone.now() - timedelta(days=91))
         d.refresh_from_db()
         assert d.is_expired()
 
     def test_file_drop_not_expired_under_90_days(self):
-        d = _drop(key='file2', kind='file')
+        d = _drop(key='file2', file_public_id='drops/file2')
         assert not d.is_expired()
 
     def test_paid_clipboard_never_idle_expires(self, user):
@@ -179,3 +179,103 @@ class TestDropTouch:
         d.touch()
         d.refresh_from_db()
         assert d.view_count == 2
+
+
+# ── Computed kind / is_file / is_text ─────────────────────────────────────────
+
+class TestComputedKind:
+    def test_text_drop_kind(self):
+        d = _drop(key='ck1', content='hello')
+        assert d.kind == 'text'
+        assert d.is_text is True
+        assert d.is_file is False
+
+    def test_file_drop_kind(self):
+        d = _drop(key='ck2', file_public_id='drops/ck2')
+        assert d.kind == 'file'
+        assert d.is_file is True
+        assert d.is_text is False
+
+
+# ── content_format detection ──────────────────────────────────────────────────
+
+class TestContentFormat:
+    # ── text drops ────────────────────────────────────────────────────────
+    def test_empty_text(self):
+        d = _drop(key='cf1', content='')
+        assert d.content_format == 'text'
+
+    def test_plain_text(self):
+        d = _drop(key='cf2', content='just some words')
+        assert d.content_format == 'text'
+
+    def test_json_object(self):
+        d = _drop(key='cf3', content='{"key": "value"}')
+        assert d.content_format == 'json'
+
+    def test_json_array(self):
+        d = _drop(key='cf4', content='[1, 2, 3]')
+        assert d.content_format == 'json'
+
+    def test_csv(self):
+        d = _drop(key='cf5', content='a,b,c\n1,2,3\n4,5,6')
+        assert d.content_format == 'csv'
+
+    def test_xml(self):
+        d = _drop(key='cf6', content='<?xml version="1.0"?><root/>')
+        assert d.content_format == 'xml'
+
+    def test_yaml(self):
+        d = _drop(key='cf7', content='---\nkey: value\n')
+        assert d.content_format == 'yaml'
+
+    def test_markdown(self):
+        d = _drop(key='cf8', content='# Title\nsome text')
+        assert d.content_format == 'markdown'
+
+    def test_python(self):
+        d = _drop(key='cf9', content='import os\nprint(os.getcwd())')
+        assert d.content_format == 'python'
+
+    def test_shell(self):
+        d = _drop(key='cf10', content='#!/bin/bash\necho hello')
+        assert d.content_format == 'shell'
+
+    def test_sql(self):
+        d = _drop(key='cf11', content='SELECT * FROM users')
+        assert d.content_format == 'sql'
+
+    def test_html(self):
+        d = _drop(key='cf12', content='<!DOCTYPE html><html></html>')
+        assert d.content_format == 'html'
+
+    # ── file drops ────────────────────────────────────────────────────────
+    def test_file_by_extension(self):
+        d = _drop(key='cf20', file_public_id='drops/cf20', filename='data.csv')
+        assert d.content_format == 'csv'
+
+    def test_file_python(self):
+        d = _drop(key='cf21', file_public_id='drops/cf21', filename='main.py')
+        assert d.content_format == 'python'
+
+    def test_file_archive(self):
+        d = _drop(key='cf22', file_public_id='drops/cf22', filename='pkg.tar.gz')
+        assert d.content_format == 'archive'
+
+    def test_file_image_by_mime(self):
+        d = _drop(key='cf23', file_public_id='drops/cf23',
+                  content_type='image/png')
+        assert d.content_format == 'image'
+
+    def test_file_json_by_mime(self):
+        d = _drop(key='cf24', file_public_id='drops/cf24',
+                  content_type='application/json')
+        assert d.content_format == 'json'
+
+    def test_file_unknown_binary(self):
+        d = _drop(key='cf25', file_public_id='drops/cf25')
+        assert d.content_format == 'binary'
+
+    def test_file_pdf(self):
+        d = _drop(key='cf26', file_public_id='drops/cf26', filename='report.pdf')
+        assert d.content_format == 'pdf'

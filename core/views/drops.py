@@ -376,7 +376,7 @@ def _save_file(request, f, key, existing, paid, anon_token):
         expires_at, locked_until = _expiry_and_lock(request, paid)
         owner = request.user if request.user.is_authenticated else None
         drop = Drop.objects.create(
-            key=key, kind=Drop.FILE,
+            key=key,
             file_public_id=b2_key,
             file_url="",
             filename=f.name,
@@ -386,7 +386,7 @@ def _save_file(request, f, key, existing, paid, anon_token):
             locked=paid,
             locked_until=locked_until,
             expires_at=expires_at,
-            max_lifetime_secs=max_lifetime_secs(request.user, Drop.FILE),
+            max_lifetime_secs=max_lifetime_secs(request.user, is_text=False),
             anon_token=anon_token,
         )
         add_storage(request.user, f.size)
@@ -439,12 +439,12 @@ def _save_text(request, key, existing, paid, anon_token):
         notify_secs = _parse_notify(notify) if paid and notify else None
 
         drop = Drop.objects.create(
-            key=key, kind=Drop.TEXT, content=text,
+            key=key, content=text,
             owner=owner,
             locked=paid,
             locked_until=locked_until,
             expires_at=expires_at,
-            max_lifetime_secs=max_lifetime_secs(request.user, Drop.TEXT),
+            max_lifetime_secs=max_lifetime_secs(request.user, is_text=True),
             anon_token=anon_token,
             burn=burn,
             visible_from=visible_from,
@@ -633,7 +633,7 @@ def upload_confirm(request):
 
         owner = request.user if request.user.is_authenticated else None
         drop = Drop.objects.create(
-            key=key, kind=Drop.FILE,
+            key=key,
             file_public_id=b2_object_key(key),
             file_url="",
             filename=filename,
@@ -643,7 +643,7 @@ def upload_confirm(request):
             locked=paid,
             locked_until=locked_until,
             expires_at=expires_at,
-            max_lifetime_secs=max_lifetime_secs(request.user, Drop.FILE),
+            max_lifetime_secs=max_lifetime_secs(request.user, is_text=False),
             anon_token=anon_token,
             burn=burn,
             visible_from=visible_from,
@@ -859,7 +859,7 @@ def upload_from_url(request):
         notify_secs = _parse_notify(notify) if paid and notify else None
 
         drop = Drop.objects.create(
-            key=key, kind=Drop.FILE,
+            key=key,
             file_public_id=b2_object_key(key),
             file_url="",
             filename=filename,
@@ -868,7 +868,7 @@ def upload_from_url(request):
             owner=request.user,
             locked=paid,
             expires_at=expires_at,
-            max_lifetime_secs=max_lifetime_secs(request.user, Drop.FILE),
+            max_lifetime_secs=max_lifetime_secs(request.user, is_text=False),
             burn=False,
             visible_from=visible_from,
             webhook_url=wh,
@@ -1008,7 +1008,7 @@ def _drop_response(request, drop, folder_item=None):
         }
         if _fi:
             data["folder_path"] = _fi.folder_url
-        if drop.kind == Drop.TEXT:
+        if drop.is_text:
             # Live API reference — fetch fresh content from source_url
             if drop.source_url:
                 import requests as _req
@@ -1129,20 +1129,13 @@ def drop_view(request, key):
 # ── Raw text view ─────────────────────────────────────────────────────────────
 
 def raw_view(request, key):
-    drop = Drop.objects.filter(key=key, kind=Drop.TEXT).first()
+    drop = Drop.objects.filter(key=key, file_public_id='').first()
     if not drop:
         return HttpResponse("not found\n", content_type="text/plain", status=404)
 
     if drop.is_expired():
         drop.hard_delete()
         return HttpResponse("expired\n", content_type="text/plain", status=410)
-
-    if drop.kind != Drop.TEXT:
-        return HttpResponse(
-            "file drops cannot be fetched as raw text\n",
-            content_type="text/plain",
-            status=400,
-        )
 
     # Password gate for raw view — header only (no browser prompt)
     if drop.is_password_protected and not _is_owner(request, drop):
@@ -1164,7 +1157,7 @@ def raw_view(request, key):
 
 def raw_file(request, key):
     """Stream file content through Django for in-browser rendering (avoids B2 CORS)."""
-    drop = Drop.objects.filter(key=key, kind=Drop.FILE).first()
+    drop = Drop.objects.filter(key=key).exclude(file_public_id='').first()
     if not drop:
         raise Http404
     if drop.is_expired():
@@ -1190,7 +1183,7 @@ def raw_file(request, key):
 
 
 def download_drop(request, key):
-    drop = Drop.objects.filter(key=key, kind=Drop.FILE).first()
+    drop = Drop.objects.filter(key=key).exclude(file_public_id='').first()
     if not drop:
         raise Http404
     if drop.is_expired():

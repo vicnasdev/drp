@@ -134,7 +134,6 @@ def folder_view(request, username, slug, folder=None):
         drop = Drop.objects.create(
             key=key,
             content=content,
-            kind="text",
             owner=owner,
         )
         FolderItem.objects.create(folder=folder, key=key)

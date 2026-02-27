@@ -182,13 +182,13 @@ def can_user_access_folder(user, folder):
     )
 
 
-def max_lifetime_secs(user, kind):
+def max_lifetime_secs(user, is_text: bool = True):
     """
     Max total lifetime in seconds for activity-based expiry.
     Only applies to text drops.
     Reads clipboard_max_lifetime_days from the DB-driven PlanLimit.
     """
-    if kind != Drop.TEXT:
+    if not is_text:
         return None
     plan = user_plan(user)
     days = Plan.get(plan, "clipboard_max_lifetime_days")
@@ -310,7 +310,7 @@ def claim_anon_drops(user, token):
         locked_until=None,
         anon_token=None,
         max_lifetime_secs=db_models.Case(
-            db_models.When(kind=Drop.TEXT, then=free_lifetime_secs),
+            db_models.When(file_public_id='', then=free_lifetime_secs),
             default=None,
             output_field=db_models.IntegerField(),
         ),

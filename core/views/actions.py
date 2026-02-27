@@ -57,7 +57,7 @@ def rename_drop(request, key):
         return JsonResponse({'error': 'Key already taken.'}, status=409)
 
     # For file drops, preserve the B2 object key so downloads still work
-    if drop.kind == Drop.FILE:
+    if drop.is_file:
         from core.views.b2 import invalidate_presigned
         invalidate_presigned(key, filename=drop.filename or "")
         if not drop.file_public_id:
@@ -65,7 +65,7 @@ def rename_drop(request, key):
 
     drop.key = new_key
     fields = ['key']
-    if drop.kind == Drop.FILE:
+    if drop.is_file:
         fields.append('file_public_id')
     drop.save(update_fields=fields)
 
@@ -87,7 +87,7 @@ def delete_drop(request, key):
         return err
 
     # Bust presigned cache before deleting
-    if drop.kind == Drop.FILE:
+    if drop.is_file:
         from core.views.b2 import invalidate_presigned
         invalidate_presigned(key, filename=drop.filename or "")
 
@@ -180,10 +180,9 @@ def copy_drop(request, key):
 
     owner = request.user if request.user.is_authenticated else None
 
-    if drop.kind == Drop.TEXT:
+    if drop.is_text:
         new_drop = Drop.objects.create(
             key=new_key,
-            kind=Drop.TEXT,
             content=drop.content,
             owner=owner,
             locked=owner is not None,
@@ -203,7 +202,6 @@ def copy_drop(request, key):
         from core.views.helpers import add_storage
         new_drop = Drop.objects.create(
             key=new_key,
-            kind=Drop.FILE,
             file_public_id=dst_b2_key,
             file_url='',
             filename=drop.filename,

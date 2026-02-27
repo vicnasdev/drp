@@ -5,7 +5,9 @@ from django.db.models.signals import post_save, pre_delete, post_delete
 from django.dispatch import receiver
 from django.utils import timezone
 from datetime import timedelta
+import json as _json
 import logging
+import os.path as _osp
 
 logger = logging.getLogger(__name__)
 
@@ -302,13 +304,95 @@ def create_user_profile(sender, instance, created, **kwargs):
 
 # ── Drop ──────────────────────────────────────────────────────────────────────
 
+# ── content-format detection helpers ──────────────────────────────────────────
+
+_EXT_FORMAT = {
+    '.json': 'json', '.csv': 'csv', '.tsv': 'tsv',
+    '.yaml': 'yaml', '.yml': 'yaml', '.toml': 'toml', '.ini': 'ini',
+    '.xml': 'xml', '.html': 'html', '.htm': 'html',
+    '.md': 'markdown', '.markdown': 'markdown', '.rst': 'rst',
+    '.py': 'python', '.pyw': 'python',
+    '.js': 'javascript', '.mjs': 'javascript', '.jsx': 'javascript',
+    '.ts': 'typescript', '.tsx': 'typescript',
+    '.sh': 'shell', '.bash': 'shell', '.zsh': 'shell', '.fish': 'shell',
+    '.rb': 'ruby', '.go': 'go', '.rs': 'rust', '.java': 'java',
+    '.c': 'c', '.cpp': 'cpp', '.h': 'c', '.hpp': 'cpp',
+    '.css': 'css', '.scss': 'scss', '.less': 'less',
+    '.sql': 'sql', '.r': 'r', '.lua': 'lua', '.php': 'php',
+    '.swift': 'swift', '.kt': 'kotlin', '.tex': 'latex',
+    '.pdf': 'pdf',
+    '.zip': 'archive', '.tar': 'archive', '.gz': 'archive',
+    '.bz2': 'archive', '.xz': 'archive', '.7z': 'archive', '.rar': 'archive',
+    '.png': 'image', '.jpg': 'image', '.jpeg': 'image',
+    '.gif': 'image', '.svg': 'svg', '.webp': 'image', '.ico': 'image',
+    '.mp3': 'audio', '.wav': 'audio', '.flac': 'audio', '.ogg': 'audio',
+    '.mp4': 'video', '.avi': 'video', '.mov': 'video', '.webm': 'video',
+    '.doc': 'document', '.docx': 'document',
+    '.xls': 'spreadsheet', '.xlsx': 'spreadsheet',
+    '.ppt': 'presentation', '.pptx': 'presentation',
+}
+
+_MIME_FORMAT = {
+    'application/json': 'json', 'application/xml': 'xml',
+    'application/pdf': 'pdf', 'application/zip': 'archive',
+    'application/gzip': 'archive', 'application/x-tar': 'archive',
+    'text/csv': 'csv', 'text/html': 'html', 'text/xml': 'xml',
+    'text/markdown': 'markdown',
+}
+
+
+def _sniff_text_format(content: str) -> str:
+    """Best-effort format detection for text content."""
+    if not content:
+        return 'text'
+    s = content.strip()
+    # JSON
+    if (s[:1] in '{[') and (s[-1:] in '}]'):
+        try:
+            _json.loads(s)
+            return 'json'
+        except (ValueError, _json.JSONDecodeError):
+            pass
+    # XML / HTML
+    if s.startswith('<?xml'):
+        return 'xml'
+    if s[:5].lower() in ('<!doc', '<html'):
+        return 'html'
+    # YAML front-matter
+    if s.startswith('---'):
+        return 'yaml'
+    lines = s.split('\n', 10)
+    first = lines[0].strip()
+    # Shebang
+    if first.startswith('#!'):
+        if 'python' in first:
+            return 'python'
+        if 'bash' in first or '/sh' in first:
+            return 'shell'
+        return 'shell'
+    # Markdown heading
+    if first.startswith('#') and len(first) > 1 and first[1] in (' ', '#'):
+        return 'markdown'
+    # Python heuristic
+    if first.startswith(('import ', 'from ', 'def ', 'class ')):
+        return 'python'
+    # SQL heuristic
+    kw = first.split()[0].upper() if first else ''
+    if kw in ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP'):
+        return 'sql'
+    # CSV heuristic — multiple lines with consistent comma counts
+    if len(lines) >= 2:
+        counts = [l.count(',') for l in lines[:6] if l.strip()]
+        if len(counts) >= 2 and counts[0] >= 1 and all(c == counts[0] for c in counts):
+            return 'csv'
+    return 'text'
+
+
 class Drop(models.Model):
     TEXT = "text"
     FILE = "file"
-    TYPE_CHOICES = [(TEXT, "Text"), (FILE, "File")]
 
     key  = models.CharField(max_length=120, unique=True)
-    kind = models.CharField(max_length=4, choices=TYPE_CHOICES)
 
     owner = models.ForeignKey(
         User, null=True, blank=True,
@@ -388,6 +472,40 @@ class Drop(models.Model):
     class Meta:
         pass
 
+    # ── computed kind ─────────────────────────────────────────────────────────
+
+    @property
+    def is_file(self) -> bool:
+        return bool(self.file_public_id)
+
+    @property
+    def is_text(self) -> bool:
+        return not self.is_file
+
+    @property
+    def kind(self) -> str:
+        """Backward-compatible 'text' / 'file' — now computed."""
+        return self.FILE if self.is_file else self.TEXT
+
+    @property
+    def content_format(self) -> str:
+        """Richer format detection: json, csv, python, image, archive, …"""
+        if self.is_file:
+            if self.filename:
+                _, ext = _osp.splitext(self.filename)
+                fmt = _EXT_FORMAT.get(ext.lower())
+                if fmt:
+                    return fmt
+            if self.content_type:
+                fmt = _MIME_FORMAT.get(self.content_type)
+                if fmt:
+                    return fmt
+                cat = self.content_type.split('/')[0]
+                if cat in ('image', 'audio', 'video'):
+                    return cat
+            return 'binary'
+        return _sniff_text_format(self.content)
+
     def __str__(self):
         return f"/{self.key}/ ({self.kind})"
 
@@ -438,7 +556,7 @@ class Drop(models.Model):
 
         plan = self.owner_plan if self.owner_id else Plan.ANON
 
-        if self.kind == self.TEXT:
+        if self.is_text:
             idle_hours = Plan.get(plan, "clipboard_idle_hours")
             if idle_hours is None:
                 return False  # Paid plans: no idle expiry
@@ -496,7 +614,7 @@ class Drop(models.Model):
         so cleanup can retry on the next run.
         The pre_delete signal is a safety net for admin / queryset deletes.
         """
-        if self.kind == self.FILE:
+        if self.is_file:
             from core.views.b2 import delete_object
             try:
                 if not delete_object(self.key,
@@ -529,7 +647,7 @@ class Drop(models.Model):
         return object_key(self.key)
 
     def download_url(self, expires_in: int = 3600) -> str:
-        if self.kind != self.FILE:
+        if not self.is_file:
             raise ValueError("download_url() called on non-file drop")
         from core.views.b2 import presigned_get
         return presigned_get(self.key, filename=self.filename,
@@ -547,7 +665,7 @@ def delete_b2_object_on_delete(sender, instance, **kwargs):
     """
     if getattr(instance, '_b2_cleaned', False):
         return
-    if instance.kind == Drop.FILE:
+    if instance.is_file:
         try:
             from core.views.b2 import delete_object
             ok = delete_object(instance.key,
@@ -710,7 +828,7 @@ class FolderItem(models.Model):
         if self.label:
             return self.label
         drop = self.drop
-        if drop and drop.kind == Drop.FILE and drop.filename:
+        if drop and drop.is_file and drop.filename:
             return drop.filename
         return self.key
 

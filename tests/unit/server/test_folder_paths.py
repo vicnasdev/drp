@@ -27,13 +27,14 @@ def folder(user):
 
 @pytest.fixture
 def text_drop(user):
-    return Drop.objects.create(key='hello', kind=Drop.TEXT, content='hi', owner=user)
+    return Drop.objects.create(key='hello', content='hi', owner=user)
 
 
 @pytest.fixture
 def file_drop(user):
     return Drop.objects.create(
-        key='abc123', kind=Drop.FILE, filename='sunset.jpg',
+        key='abc123', filename='sunset.jpg',
+        file_public_id='drops/abc123',
         filesize=1024, owner=user,
     )
 
