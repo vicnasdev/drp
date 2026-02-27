@@ -159,7 +159,7 @@ def cmd_up(args):
         import json
         res = session.post(
             f'{host}/auth/aliases/create/',
-            json={'alias': alias, 'key': key, 'ns': 'c'},
+            json={'alias': alias, 'key': key},
             headers={'X-CSRFToken': csrf, 'Referer': f'{host}/'},
             timeout=15,
         )
@@ -200,7 +200,7 @@ def _upload_url(host, session, url, key, cfg, args, password='',
     print(final_url)
     print(f'  {dim("live reference")} → {url}')
     _try_copy(final_url)
-    config.record_drop(result_key, 'text', ns='c', host=host)
+    config.record_drop(result_key, 'text', host=host)
 
 
 def _upload_url_remote(host, session, url, key, cfg, args, password='',
@@ -230,7 +230,7 @@ def _upload_url_remote(host, session, url, key, cfg, args, password='',
         sys.exit(1)
 
     result_key, filename, filesize = result
-    final_url = f'{host}/f/{result_key}/'
+    final_url = f'{host}/{result_key}/'
     print(final_url)
     size_str = _fmt_size(filesize) if filesize else ''
     desc = f'{dim("remote")} ← {url}'
@@ -240,7 +240,7 @@ def _upload_url_remote(host, session, url, key, cfg, args, password='',
         desc += f'  {dim(size_str)}'
     print(f'  {desc}')
     _try_copy(final_url)
-    config.record_drop(result_key, 'file', ns='f', filename=filename, host=host)
+    config.record_drop(result_key, 'file', filename=filename, host=host)
 
 
 def _fmt_size(n: int) -> str:
@@ -270,10 +270,10 @@ def _upload_file(host, session, path, key, cfg, args, password='',
         report_outcome('up', 'upload_file returned None (prepare/confirm flow failed)')
         sys.exit(1)
 
-    url = f'{host}/f/{result_key}/'
+    url = f'{host}/{result_key}/'
     print(url)
     _try_copy(url)
-    config.record_drop(result_key, 'file', ns='f',
+    config.record_drop(result_key, 'file',
                        filename=os.path.basename(path), host=host)
 
 
@@ -304,7 +304,7 @@ def _upload_text(host, session, text, key, cfg, args, burn=False, password='',
     url = f'{host}/{result_key}/'
     print(url)
     _try_copy(url)
-    config.record_drop(result_key, 'text', ns='c', host=host)
+    config.record_drop(result_key, 'text', host=host)
 
 
 def _try_copy(url: str) -> None:

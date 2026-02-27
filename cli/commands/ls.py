@@ -1,14 +1,14 @@
 """
-drp ls — list drops and collections.
+drp ls — list drops and folders.
 
-  drp ls             list keys (clipboards + files + saved)
+  drp ls             list keys (all drops + saved)
   drp ls -l          long format with size, time, expiry (human-readable sizes)
   drp ls -l --bytes  long format with raw byte counts
-  drp ls -t c        only clipboards
-  drp ls -t f        only files
+  drp ls -t text     only text drops
+  drp ls -t file     only file drops
   drp ls -t s        only saved (bookmarked) drops
-  drp ls --col       show collections instead
-  drp ls --export    export as JSON (includes saved and collections)
+  drp ls --col       show folders instead
+  drp ls --export    export as JSON (includes saved and folders)
 """
 
 import json
@@ -82,15 +82,15 @@ def cmd_ls(args):
 
     drops       = data.get('drops', [])
     saved       = data.get('saved', [])
-    collections = data.get('collections', [])
+    folders     = data.get('folders', [])
 
-    # ── Collections mode ──────────────────────────────────────────────────────
+    # ── Folders mode ────────────────────────────────────────────────────
     if getattr(args, 'col', False):
-        if not collections:
-            print(dim('  (no collections)'))
+        if not folders:
+            print(dim('  (no folders)'))
             return
         username = cfg.get('username', '')
-        for col in collections:
+        for col in folders:
             slug       = col.get('slug', '')
             name       = col.get('name', slug)
             drop_count = len(col.get('drops', []))
@@ -99,14 +99,14 @@ def cmd_ls(args):
         return
 
     # ── Filter ────────────────────────────────────────────────────────────────
-    ns_filter = getattr(args, 'type', None)
-    if ns_filter == 'c':
-        drops = [d for d in drops if d['ns'] == 'c']
+    type_filter = getattr(args, 'type', None)
+    if type_filter == 'text':
+        drops = [d for d in drops if d.get('kind') == 'text']
         saved = []
-    elif ns_filter == 'f':
-        drops = [d for d in drops if d['ns'] == 'f']
+    elif type_filter == 'file':
+        drops = [d for d in drops if d.get('kind') == 'file']
         saved = []
-    elif ns_filter == 's':
+    elif type_filter == 's':
         drops = []
 
     # ── Sort ──────────────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ def cmd_ls(args):
 
     # ── Export ────────────────────────────────────────────────────────────────
     if getattr(args, 'export', False):
-        out = {'drops': drops, 'saved': saved, 'collections': collections}
+        out = {'drops': drops, 'saved': saved, 'folders': folders}
         json.dump(out, sys.stdout, indent=2)
         print()
         return
@@ -141,13 +141,17 @@ def cmd_ls(args):
 
     if not long_fmt:
         for d in drops:
-            key_str = cyan(d['key']) if d['ns'] == 'c' else blue('f/' + d['key'])
+            fn = d.get('filename') or ''
+            key_str = blue(d['key']) if d.get('kind') == 'file' else cyan(d['key'])
             lock    = yellow(' 🔒') if d.get('locked') else ''
-            print(f'  {key_str}{lock}')
+            if fn and fn != d['key']:
+                print(f'  {fn:<24}  {key_str}{lock}')
+            else:
+                print(f'  {key_str}{lock}')
         if drops and saved:
             print()
         for s in saved:
-            key_str = cyan(s['key']) if s['ns'] == 'c' else blue('f/' + s['key'])
+            key_str = cyan(s['key'])
             print(f'  {key_str}  {dim("[saved]")}')
         return
 
@@ -159,43 +163,45 @@ def cmd_ls(args):
 
     rows = []
     for d in drops:
-        is_file = d['ns'] == 'f'
-        key_col = blue(f'f/{d["key"]}') if is_file else cyan(d['key'])
+        is_file = d.get('kind') == 'file'
+        fn = d.get('filename') or ''
+        key_col = blue(d['key']) if is_file else cyan(d['key'])
         size    = fmt_size(d['filesize']) if d['kind'] == 'file' else '—'
         created = _since(d.get('created_at'))
         expires = _until(d.get('expires_at')) if d.get('expires_at') else grey('idle')
         lock    = yellow('🔒') if d.get('locked') else '  '
-        rows.append((lock, key_col, d['key'], size, created, expires, ''))
+        rows.append((lock, fn, key_col, d['key'], size, created, expires, ''))
 
     if drops and saved:
         rows.append(None)  # separator
 
     for s in saved:
-        is_file = s['ns'] == 'f'
-        key_col = blue(f'f/{s["key"]}') if is_file else cyan(s['key'])
+        key_col = cyan(s['key'])
         saved_at = _since(s.get('saved_at'))
-        rows.append(('🔖', key_col, s['key'], '—', saved_at, '—', dim('[saved]')))
+        rows.append(('🔖', '', key_col, s['key'], '—', saved_at, '—', dim('[saved]')))
 
     if not rows:
         print(dim('  (no drops)'))
         return
 
-    # Calculate widths from raw key strings (not colour-escaped)
-    key_w     = max((len(r[2]) + (2 if r[2] == r[2] else 0) for r in rows if r), default=4)
-    size_w    = max((len(r[3]) for r in rows if r), default=4)
-    created_w = max((len(r[4]) for r in rows if r), default=7)
+    # Calculate widths from raw key and filename strings (not colour-escaped)
+    fn_w      = max((len(r[1]) for r in rows if r), default=0)
+    key_w     = max((len(r[3]) for r in rows if r), default=4)
+    size_w    = max((len(r[4]) for r in rows if r), default=4)
+    created_w = max((len(r[5]) for r in rows if r), default=7)
 
     for row in rows:
         if row is None:
             print()
             continue
-        lock, key_col, raw_key, size, created, expires, tag = row
-        # Pad based on raw key length to keep columns aligned despite ANSI codes
-        is_file = raw_key.startswith('f/') or False
-        display_len = len(raw_key) + (2 if 'f/' not in raw_key[:2] else 0)
-        padding = ' ' * max(0, key_w - len(raw_key))
+        lock, fn, key_col, raw_key, size, created, expires, tag = row
+        key_pad = ' ' * max(0, key_w - len(raw_key))
+        fn_part = ''
+        if fn_w > 0:
+            fn_pad = ' ' * max(0, fn_w - len(fn))
+            fn_part = f'{fn}{fn_pad}  '
         print(
-            f'  {lock}  {key_col}{padding}  '
+            f'  {lock}  {fn_part}{key_col}{key_pad}  '
             f'{grey(size):>{size_w + 15}}  '
             f'{grey(created):>{created_w + 15}}  '
             f'{dim(expires)}'

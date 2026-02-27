@@ -14,9 +14,9 @@ from core.models import Drop, DropLike
 
 @login_required
 @require_POST
-def toggle_like(request, ns, key):
+def toggle_like(request, key):
     try:
-        drop = Drop.objects.get(ns=ns, key=key, is_public=True)
+        drop = Drop.objects.get(key=key, is_public=True)
     except Drop.DoesNotExist:
         return JsonResponse({"error": "Drop not found or not public."}, status=404)
 

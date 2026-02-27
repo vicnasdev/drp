@@ -27,7 +27,7 @@ from django.views.decorators.clickjacking import xframe_options_exempt
 
 from core.views.b2 import object_exists, object_size, object_head
 from core.views.b2 import object_key as b2_object_key
-from core.models import Drop, Plan, SavedDrop
+from core.models import Drop, Folder, FolderItem, Plan
 from .helpers import (
     user_plan, max_file_bytes, max_text_bytes, storage_ok,
     is_paid_user, max_lifetime_secs, gen_key, is_valid_drop_key,
@@ -87,7 +87,6 @@ def _fire_webhook(drop):
                 json={
                     "event": "drop.accessed",
                     "key": drop.key,
-                    "ns": drop.ns,
                     "kind": drop.kind,
                     "view_count": drop.view_count,
                 },
@@ -99,18 +98,18 @@ def _fire_webhook(drop):
     threading.Thread(target=_post, daemon=True).start()
 
 
-def _drop_pw_session_key(ns: str, key: str) -> str:
-    return f"{_PW_SESSION_PREFIX}{ns}:{key}"
+def _drop_pw_session_key(key: str) -> str:
+    return f"{_PW_SESSION_PREFIX}{key}"
 
 
 def _is_password_unlocked(request, drop) -> bool:
     """True if this browser session has already authenticated this drop."""
-    sk = _drop_pw_session_key(drop.ns, drop.key)
+    sk = _drop_pw_session_key(drop.key)
     return request.session.get(sk, False)
 
 
 def _mark_password_unlocked(request, drop) -> None:
-    sk = _drop_pw_session_key(drop.ns, drop.key)
+    sk = _drop_pw_session_key(drop.key)
     request.session[sk] = True
 
 
@@ -150,14 +149,14 @@ def home(request):
             .filter(owner=request.user)
             .order_by("-created_at")[:50]
         )
-        saved_drops = (
-            SavedDrop.objects
-            .filter(user=request.user)
-            .order_by("-saved_at")[:50]
-        )
+        root = Folder.objects.filter(
+            owner=request.user, parent=None, slug="drops"
+        ).first()
+        if root:
+            saved_drops = root.items.order_by("-added_at")[:50]
         collections = (
-            request.user.collections
-            .prefetch_related("memberships")
+            request.user.folders
+            .prefetch_related("members")
             .order_by("-created_at")[:50]
         )
 
@@ -222,14 +221,13 @@ def public_feed(request):
             "drops": [
                 {
                     "key": d.key,
-                    "ns": d.ns,
                     "kind": d.kind,
                     "owner": d.owner.username if d.owner else None,
                     "tags": d.tags,
                     "like_count": d.like_count,
                     "liked": d.pk in user_liked_ids,
                     "created_at": d.created_at.isoformat(),
-                    "url": f"/{'f/' if d.ns == 'f' else ''}{d.key}/",
+                    "url": f"/{d.key}/",
                 }
                 for d in drops
             ]
@@ -248,16 +246,15 @@ def public_feed(request):
 
 def check_key(request):
     key = request.GET.get("key", "").strip()
-    ns  = request.GET.get("ns", Drop.NS_CLIPBOARD)
     if not key:
         return JsonResponse({"error": "Key required."}, status=400)
     if not is_valid_drop_key(key):
-        return JsonResponse({"available": False, "reserved": True, "ns": ns, "key": key,
+        return JsonResponse({"available": False, "reserved": True, "key": key,
                              "error": invalid_key_message(key)})
     if key in _get_reserved_keys():
-        return JsonResponse({"available": False, "reserved": True, "ns": ns, "key": key})
-    taken = Drop.objects.filter(ns=ns, key=key).exists()
-    return JsonResponse({"available": not taken, "ns": ns, "key": key})
+        return JsonResponse({"available": False, "reserved": True, "key": key})
+    taken = Drop.objects.filter(key=key).exists()
+    return JsonResponse({"available": not taken, "key": key})
 
 
 # ── Save drop (web flow) ──────────────────────────────────────────────────────
@@ -267,8 +264,7 @@ def save_drop(request):
         return JsonResponse({"error": "POST required."}, status=405)
 
     f  = request.FILES.get("file")
-    ns = Drop.NS_FILE if f else Drop.NS_CLIPBOARD
-    key = request.POST.get("key", "").strip() or gen_key(ns)
+    key = request.POST.get("key", "").strip() or gen_key()
 
     if key in _get_reserved_keys():
         return JsonResponse({"error": f'"{key}" is a reserved key.'}, status=400)
@@ -276,7 +272,7 @@ def save_drop(request):
     if not is_valid_drop_key(key):
         return JsonResponse({"error": invalid_key_message(key)}, status=400)
 
-    existing = Drop.objects.filter(ns=ns, key=key).first()
+    existing = Drop.objects.filter(key=key).first()
     if existing and existing.is_expired():
         existing.hard_delete()
         existing = None
@@ -308,9 +304,9 @@ def save_drop(request):
     paid = is_paid_user(request.user)
 
     if f:
-        response = _save_file(request, f, ns, key, existing, paid, anon_token)
+        response = _save_file(request, f, key, existing, paid, anon_token)
     else:
-        response = _save_text(request, ns, key, existing, paid, anon_token)
+        response = _save_text(request, key, existing, paid, anon_token)
 
     if anon_token and not existing:
         response.set_cookie(
@@ -344,7 +340,7 @@ def _expiry_and_lock(request, paid):
     return expires_at, locked_until
 
 
-def _save_file(request, f, ns, key, existing, paid, anon_token):
+def _save_file(request, f, key, existing, paid, anon_token):
     if f.size > max_file_bytes(request.user):
         limit = Plan.get(user_plan(request.user), "max_file_mb")
         return JsonResponse({"error": f"File exceeds {limit} MB limit."}, status=400)
@@ -355,7 +351,7 @@ def _save_file(request, f, ns, key, existing, paid, anon_token):
     content_type = f.content_type or "application/octet-stream"
 
     try:
-        b2_key = upload_to_b2(f, ns, key, content_type=content_type)
+        b2_key = upload_to_b2(f, key, content_type=content_type)
     except Exception as e:
         return JsonResponse({"error": f"File upload failed: {e}"}, status=500)
 
@@ -368,7 +364,7 @@ def _save_file(request, f, ns, key, existing, paid, anon_token):
         existing.content_type   = content_type
         existing.save(update_fields=["file_public_id", "file_url", "filename", "filesize", "content_type"])
         from core.views.b2 import invalidate_presigned
-        invalidate_presigned(ns, key, filename=f.name)
+        invalidate_presigned(key, filename=f.name)
         if existing.owner_id:
             from django.db import models as db_models
             from core.models import UserProfile
@@ -380,7 +376,7 @@ def _save_file(request, f, ns, key, existing, paid, anon_token):
         expires_at, locked_until = _expiry_and_lock(request, paid)
         owner = request.user if request.user.is_authenticated else None
         drop = Drop.objects.create(
-            ns=ns, key=key, kind=Drop.FILE,
+            key=key, kind=Drop.FILE,
             file_public_id=b2_key,
             file_url="",
             filename=f.name,
@@ -390,21 +386,20 @@ def _save_file(request, f, ns, key, existing, paid, anon_token):
             locked=paid,
             locked_until=locked_until,
             expires_at=expires_at,
-            max_lifetime_secs=max_lifetime_secs(request.user, ns),
+            max_lifetime_secs=max_lifetime_secs(request.user, Drop.FILE),
             anon_token=anon_token,
         )
         add_storage(request.user, f.size)
 
     return JsonResponse({
         "key":  drop.key,
-        "ns":   drop.ns,
         "kind": drop.kind,
-        "url":  f"/f/{drop.key}/",
+        "url":  f"/{drop.key}/",
         "new":  existing is None,
     })
 
 
-def _save_text(request, ns, key, existing, paid, anon_token):
+def _save_text(request, key, existing, paid, anon_token):
     text = request.POST.get("content", "").strip()
     if len(text.encode()) > max_text_bytes(request.user):
         limit = Plan.get(user_plan(request.user), "max_text_kb")
@@ -444,12 +439,12 @@ def _save_text(request, ns, key, existing, paid, anon_token):
         notify_secs = _parse_notify(notify) if paid and notify else None
 
         drop = Drop.objects.create(
-            ns=ns, key=key, kind=Drop.TEXT, content=text,
+            key=key, kind=Drop.TEXT, content=text,
             owner=owner,
             locked=paid,
             locked_until=locked_until,
             expires_at=expires_at,
-            max_lifetime_secs=max_lifetime_secs(request.user, ns),
+            max_lifetime_secs=max_lifetime_secs(request.user, Drop.TEXT),
             anon_token=anon_token,
             burn=burn,
             visible_from=visible_from,
@@ -468,7 +463,6 @@ def _save_text(request, ns, key, existing, paid, anon_token):
 
     return JsonResponse({
         "key":  drop.key,
-        "ns":   drop.ns,
         "kind": drop.kind,
         "url":  f"/{drop.key}/",
         "new":  existing is None,
@@ -492,11 +486,7 @@ def upload_prepare(request):
     filename     = (data.get("filename") or "").strip()
     size         = int(data.get("size", 0))
     content_type = data.get("content_type") or "application/octet-stream"
-    ns           = data.get("ns", Drop.NS_FILE)
-    key          = (data.get("key") or "").strip() or gen_key(ns)
-
-    if ns not in (Drop.NS_CLIPBOARD, Drop.NS_FILE):
-        return JsonResponse({"error": "Invalid ns."}, status=400)
+    key          = (data.get("key") or "").strip() or gen_key()
 
     if key in _get_reserved_keys():
         return JsonResponse({"error": f'"{key}" is a reserved key.'}, status=400)
@@ -511,7 +501,7 @@ def upload_prepare(request):
     if not storage_ok(request.user, size):
         return JsonResponse({"error": "Storage quota exceeded."}, status=507)
 
-    existing = Drop.objects.filter(ns=ns, key=key).first()
+    existing = Drop.objects.filter(key=key).first()
     if existing and existing.is_expired():
         existing.hard_delete()
         existing = None
@@ -523,7 +513,7 @@ def upload_prepare(request):
             candidate = f'{base_key}-{i}'
             if candidate in _get_reserved_keys():
                 continue
-            ex = Drop.objects.filter(ns=ns, key=candidate).first()
+            ex = Drop.objects.filter(key=candidate).first()
             if ex and ex.is_expired():
                 ex.hard_delete()
                 ex = None
@@ -536,13 +526,12 @@ def upload_prepare(request):
 
     from core.views.b2 import presigned_put
     EXPIRES_IN = 3600
-    presigned_url = presigned_put(ns, key, content_type=content_type,
+    presigned_url = presigned_put(key, content_type=content_type,
                                   size=size, expires_in=EXPIRES_IN)
 
     return JsonResponse({
         "presigned_url": presigned_url,
         "key":           key,
-        "ns":            ns,
         "expires_in":    EXPIRES_IN,
     })
 
@@ -558,7 +547,6 @@ def upload_confirm(request):
         return JsonResponse({"error": "Invalid JSON."}, status=400)
 
     key          = (data.get("key") or "").strip()
-    ns           = data.get("ns", Drop.NS_FILE)
     filename     = (data.get("filename") or key).strip()
     content_type = (data.get("content_type") or "application/octet-stream").strip()
     burn         = bool(data.get("burn", False))
@@ -578,10 +566,10 @@ def upload_confirm(request):
 
     # ── Short expiry for test-mode drops ──────────────────────────────────
 
-    if not key or ns not in (Drop.NS_CLIPBOARD, Drop.NS_FILE):
-        return JsonResponse({"error": "key and valid ns required."}, status=400)
+    if not key:
+        return JsonResponse({"error": "key required."}, status=400)
 
-    head = object_head(ns, key)
+    head = object_head(key)
     if head is None:
         return JsonResponse(
             {"error": "File not found in storage. Upload may have failed or expired."},
@@ -591,19 +579,19 @@ def upload_confirm(request):
     actual_size = head["size"]
 
     if not storage_ok(request.user, actual_size):
-        delete_from_b2(ns, key)
+        delete_from_b2(key)
         return JsonResponse({"error": "Storage quota exceeded."}, status=507)
 
     paid = is_paid_user(request.user)
 
-    existing = Drop.objects.filter(ns=ns, key=key).first()
+    existing = Drop.objects.filter(key=key).first()
     if existing and existing.is_expired():
         existing.hard_delete()
         existing = None
 
     if existing:
         old_size = existing.filesize
-        existing.file_public_id = b2_object_key(ns, key)
+        existing.file_public_id = b2_object_key(key)
         existing.file_url       = ""
         existing.filename       = filename
         existing.filesize       = actual_size
@@ -645,8 +633,8 @@ def upload_confirm(request):
 
         owner = request.user if request.user.is_authenticated else None
         drop = Drop.objects.create(
-            ns=ns, key=key, kind=Drop.FILE,
-            file_public_id=b2_object_key(ns, key),
+            key=key, kind=Drop.FILE,
+            file_public_id=b2_object_key(key),
             file_url="",
             filename=filename,
             filesize=actual_size,
@@ -655,7 +643,7 @@ def upload_confirm(request):
             locked=paid,
             locked_until=locked_until,
             expires_at=expires_at,
-            max_lifetime_secs=max_lifetime_secs(request.user, ns),
+            max_lifetime_secs=max_lifetime_secs(request.user, Drop.FILE),
             anon_token=anon_token,
             burn=burn,
             visible_from=visible_from,
@@ -673,9 +661,8 @@ def upload_confirm(request):
 
     return JsonResponse({
         "key":               drop.key,
-        "ns":                drop.ns,
         "kind":              drop.kind,
-        "url":               f"/f/{drop.key}/",
+        "url":               f"/{drop.key}/",
         "new":               existing is None,
         "burn":              drop.burn,
         "password_protected": drop.is_password_protected,
@@ -732,8 +719,7 @@ def upload_from_url(request):
     if ssrf_err:
         return JsonResponse({"error": f"Blocked URL: {ssrf_err}"}, status=400)
 
-    ns  = "f"
-    key = (data.get("key") or "").strip() or gen_key(ns)
+    key = (data.get("key") or "").strip() or gen_key()
 
     if key in _get_reserved_keys():
         return JsonResponse({"error": f'"{key}" is a reserved key.'}, status=400)
@@ -803,7 +789,7 @@ def upload_from_url(request):
         return JsonResponse({"error": "Storage quota exceeded."}, status=507)
 
     # ── Handle existing drop ──────────────────────────────────────────────
-    existing = Drop.objects.filter(ns=ns, key=key).first()
+    existing = Drop.objects.filter(key=key).first()
     if existing and existing.is_expired():
         existing.hard_delete()
         existing = None
@@ -819,7 +805,7 @@ def upload_from_url(request):
 
     # ── Upload to B2 ─────────────────────────────────────────────────────
     buf.seek(0)
-    upload_to_b2(buf, ns, key, content_type)
+    upload_to_b2(buf, key, content_type)
     buf.close()
 
     paid = is_paid_user(request.user)
@@ -839,7 +825,7 @@ def upload_from_url(request):
 
     if existing:
         old_size = existing.filesize
-        existing.file_public_id = b2_object_key(ns, key)
+        existing.file_public_id = b2_object_key(key)
         existing.file_url       = ""
         existing.filename       = filename
         existing.filesize       = total
@@ -873,8 +859,8 @@ def upload_from_url(request):
         notify_secs = _parse_notify(notify) if paid and notify else None
 
         drop = Drop.objects.create(
-            ns=ns, key=key, kind=Drop.FILE,
-            file_public_id=b2_object_key(ns, key),
+            key=key, kind=Drop.FILE,
+            file_public_id=b2_object_key(key),
             file_url="",
             filename=filename,
             filesize=total,
@@ -882,7 +868,7 @@ def upload_from_url(request):
             owner=request.user,
             locked=paid,
             expires_at=expires_at,
-            max_lifetime_secs=max_lifetime_secs(request.user, ns),
+            max_lifetime_secs=max_lifetime_secs(request.user, Drop.FILE),
             burn=False,
             visible_from=visible_from,
             webhook_url=wh,
@@ -898,9 +884,8 @@ def upload_from_url(request):
 
     return JsonResponse({
         "key":               drop.key,
-        "ns":                drop.ns,
         "kind":              drop.kind,
-        "url":               f"/f/{drop.key}/",
+        "url":               f"/{drop.key}/",
         "filename":          drop.filename,
         "filesize":          drop.filesize,
         "new":               existing is None,
@@ -919,7 +904,7 @@ def _password_required_response(request, drop):
     """
     if "application/json" in request.headers.get("Accept", ""):
         return JsonResponse(
-            {"error": "password_required", "key": drop.key, "ns": drop.ns},
+            {"error": "password_required", "key": drop.key},
             status=401,
         )
     return render(request, "password_prompt.html", {
@@ -951,7 +936,7 @@ def _check_drop_password(request, drop):
     # CLI / JSON path: password in header
     header_pw = request.headers.get("X-Drop-Password", "")
     if header_pw:
-        allowed, remaining = check_password_attempt_rate(request, drop.key, drop.ns)
+        allowed, remaining = check_password_attempt_rate(request, drop.key)
         if not allowed:
             return JsonResponse({"error": "Too many password attempts. Try again later."}, status=429)
         if drop.check_password(header_pw):
@@ -961,7 +946,7 @@ def _check_drop_password(request, drop):
     if request.method == "POST":
         form_pw = request.POST.get("drop_password", "")
         if form_pw:
-            allowed, remaining = check_password_attempt_rate(request, drop.key, drop.ns)
+            allowed, remaining = check_password_attempt_rate(request, drop.key)
             if not allowed:
                 return JsonResponse({"error": "Too many password attempts. Try again later."}, status=429)
             if drop.check_password(form_pw):
@@ -973,7 +958,7 @@ def _check_drop_password(request, drop):
 
 # ── View drop ─────────────────────────────────────────────────────────────────
 
-def _drop_response(request, drop):
+def _drop_response(request, drop, folder_item=None):
     if drop.is_expired():
         drop.hard_delete()
         if "application/json" in request.headers.get("Accept", ""):
@@ -996,9 +981,16 @@ def _drop_response(request, drop):
     _fire_webhook(drop)
 
     if "application/json" in request.headers.get("Accept", ""):
+        # Resolve folder path for JSON too
+        _fi = None
+        if folder_item:
+            _fi = folder_item
+        elif drop.owner_id:
+            from core.models import FolderItem
+            _fi = FolderItem.objects.filter(key=drop.key, folder__owner_id=drop.owner_id).first()
+
         data = {
             "key":               drop.key,
-            "ns":                drop.ns,
             "kind":              drop.kind,
             "burn":              drop.burn,
             "password_protected": drop.is_password_protected,
@@ -1014,6 +1006,8 @@ def _drop_response(request, drop):
             "tags":              drop.tags,
             "like_count":        drop.likes.count(),
         }
+        if _fi:
+            data["folder_path"] = _fi.folder_url
         if drop.kind == Drop.TEXT:
             # Live API reference — fetch fresh content from source_url
             if drop.source_url:
@@ -1076,7 +1070,7 @@ def _drop_response(request, drop):
         else:
             data["filename"] = drop.filename
             data["filesize"]  = drop.filesize
-            data["download"] = f"/f/{drop.key}/download/"
+            data["download"] = f"/{drop.key}/download/"
             try:
                 data["presigned_url"] = drop.download_url(expires_in=3600)
             except Exception:
@@ -1089,12 +1083,25 @@ def _drop_response(request, drop):
 
     plan = user_plan(request.user)
     is_owner = _is_owner(request, drop)
+
+    # Build folder-path URL if this drop was reached via a folder item
+    folder_path_url = None
+    if folder_item:
+        folder_path_url = folder_item.folder_url
+    elif is_owner and drop.owner_id:
+        # Check if drop belongs to any folder for the share toggle
+        from core.models import FolderItem
+        fi = FolderItem.objects.filter(key=drop.key, folder__owner_id=drop.owner_id).first()
+        if fi:
+            folder_path_url = fi.folder_url
+
     response = render(request, "drop.html", {
         "drop":            drop,
         "can_edit":        drop.can_edit(request.user),
         "is_owner":        is_owner,
         "is_paid_owner":   is_owner and request.user.profile.is_paid,
         "max_expiry_days": Plan.get(plan, "max_expiry_days"),
+        "folder_path_url": folder_path_url,
     })
 
     if should_burn:
@@ -1103,31 +1110,15 @@ def _drop_response(request, drop):
     return response
 
 
-def clipboard_view(request, key):
+def drop_view(request, key):
     # Handle password prompt POST
     if request.method == "POST" and "drop_password" in request.POST:
-        drop = Drop.objects.filter(ns=Drop.NS_CLIPBOARD, key=key).first()
+        drop = Drop.objects.filter(key=key).first()
         if not drop:
             raise Http404
         return _drop_response(request, drop)
 
-    drop = Drop.objects.filter(ns=Drop.NS_CLIPBOARD, key=key).first()
-    if not drop:
-        if "application/json" in request.headers.get("Accept", ""):
-            return JsonResponse({"error": "Drop not found."}, status=404)
-        raise Http404
-    return _drop_response(request, drop)
-
-
-def file_view(request, key):
-    # Handle password prompt POST
-    if request.method == "POST" and "drop_password" in request.POST:
-        drop = Drop.objects.filter(ns=Drop.NS_FILE, key=key).first()
-        if not drop:
-            raise Http404
-        return _drop_response(request, drop)
-
-    drop = Drop.objects.filter(ns=Drop.NS_FILE, key=key).first()
+    drop = Drop.objects.filter(key=key).first()
     if not drop:
         if "application/json" in request.headers.get("Accept", ""):
             return JsonResponse({"error": "Drop not found."}, status=404)
@@ -1138,7 +1129,7 @@ def file_view(request, key):
 # ── Raw text view ─────────────────────────────────────────────────────────────
 
 def raw_view(request, key):
-    drop = Drop.objects.filter(ns=Drop.NS_CLIPBOARD, key=key).first()
+    drop = Drop.objects.filter(key=key, kind=Drop.TEXT).first()
     if not drop:
         return HttpResponse("not found\n", content_type="text/plain", status=404)
 
@@ -1173,7 +1164,7 @@ def raw_view(request, key):
 
 def raw_file(request, key):
     """Stream file content through Django for in-browser rendering (avoids B2 CORS)."""
-    drop = Drop.objects.filter(ns=Drop.NS_FILE, key=key).first()
+    drop = Drop.objects.filter(key=key, kind=Drop.FILE).first()
     if not drop:
         raise Http404
     if drop.is_expired():
@@ -1199,7 +1190,7 @@ def raw_file(request, key):
 
 
 def download_drop(request, key):
-    drop = Drop.objects.filter(ns=Drop.NS_FILE, key=key).first()
+    drop = Drop.objects.filter(key=key, kind=Drop.FILE).first()
     if not drop:
         raise Http404
     if drop.is_expired():
@@ -1230,9 +1221,9 @@ def download_drop(request, key):
 
 # ── Set / remove drop password ────────────────────────────────────────────────
 
-def set_drop_password(request, ns, key):
+def set_drop_password(request, key):
     """
-    POST /key/set-password/ or /f/key/set-password/
+    POST /<key>/set-password/
 
     Paid owners only. Body (JSON):
       {"password": "new-password"}   — set/change password
@@ -1241,7 +1232,7 @@ def set_drop_password(request, ns, key):
     if request.method != "POST":
         return JsonResponse({"error": "POST required."}, status=405)
 
-    drop = Drop.objects.filter(ns=ns, key=key).first()
+    drop = Drop.objects.filter(key=key).first()
     if not drop:
         return JsonResponse({"error": "Drop not found."}, status=404)
 
@@ -1277,12 +1268,7 @@ def embed_view(request, key):
     GET /embed/<key>/ — minimal iframe-friendly view for text/code/image drops.
     No chrome, no nav, no edit controls. Read-only.
     """
-    # Try clipboard first, then file
-    drop = Drop.objects.filter(ns=Drop.NS_CLIPBOARD, key=key).first()
-    ns = "c"
-    if not drop:
-        drop = Drop.objects.filter(ns=Drop.NS_FILE, key=key).first()
-        ns = "f"
+    drop = Drop.objects.filter(key=key).first()
     if not drop:
         return HttpResponse("not found", status=404, content_type="text/plain")
     if drop.is_expired():
@@ -1297,5 +1283,4 @@ def embed_view(request, key):
 
     return render(request, "embed.html", {
         "drop": drop,
-        "ns": ns,
     })

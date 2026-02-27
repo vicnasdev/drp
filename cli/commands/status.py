@@ -50,12 +50,12 @@ def cmd_status(args):
             )
             if res.ok:
                 data        = res.json()
-                server_keys = {(d.get('ns'), d.get('key')) for d in data.get('drops', [])}
+                server_keys = {d.get('key') for d in data.get('drops', [])}
                 server_count = len(server_keys)
                 local_drops  = config.load_local_drops()
                 local_only   = sum(
                     1 for d in local_drops
-                    if (d.get('ns'), d.get('key')) not in server_keys
+                    if d.get('key') not in server_keys
                 )
         except Exception:
             pass
@@ -86,8 +86,7 @@ def cmd_status(args):
 def _drop_status(args, key):
     cfg, host, session = load_context()
 
-    ns  = 'f' if getattr(args, 'file', False) and not getattr(args, 'clip', False) else 'c'
-    url = f'{host}/f/{key}/' if ns == 'f' else f'{host}/{key}/'
+    url = f'{host}/{key}/'
 
     from cli.spinner import Spinner
     from cli.format import dim, green, bold
@@ -112,12 +111,11 @@ def _drop_status(args, key):
 
     data   = res.json()
     from cli.format import human_time
-    prefix = 'f/' if ns == 'f' else ''
     views  = data.get('view_count', 0)
     last   = data.get('last_viewed_at')
 
-    sep = dim('─' * (len(key) + len(prefix) + 3))
-    print(f'  {bold("/" + prefix + key + "/")}')
+    sep = dim('─' * (len(key) + 3))
+    print(f'  {bold("/" + key + "/")}')
     print(f'  {sep}')
 
     kind_str = data.get("kind", "?")

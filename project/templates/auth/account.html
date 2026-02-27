@@ -10,7 +10,7 @@
     <p class="muted">{{ user.email }}</p>
     <p class="muted" style="font-size:.85rem">
       @{{ user.username }} ·
-      <a href="/@{{ user.username }}/">your collections</a>
+      <a href="/@{{ user.username }}/">your folders</a>
     </p>
   </div>
 
@@ -77,8 +77,8 @@
         <li>📅 explicit expiry dates</li>
         <li>📦 {{ plan_limits.max_file_mb }}MB per file · {{ plan_limits.storage_gb }}GB total</li>
         <li>📁
-          {% if plan_limits.max_collections %}up to {{ plan_limits.max_collections }} collections
-          {% else %}unlimited collections{% endif %}
+          {% if plan_limits.max_folders %}up to {{ plan_limits.max_folders }} folders
+          {% else %}unlimited folders{% endif %}
           · <a href="/@{{ user.username }}/">view yours</a>
         </li>
       </ul>
@@ -106,7 +106,7 @@
           <li>Drops locked to your account</li>
           <li>Renewable drops</li>
           <li>🔑 Password-protect drops</li>
-          <li>📁 Up to 10 collections</li>
+          <li>📁 Up to 10 folders</li>
         </ul>
         <a href="/billing/checkout/starter/"
            class="btn" style="margin-top:1rem;display:block;text-align:center">upgrade →</a>
@@ -122,7 +122,7 @@
           <li>Drops locked to your account</li>
           <li>Renewable drops</li>
           <li>🔑 Password-protect drops</li>
-          <li>📁 Unlimited collections</li>
+          <li>📁 Unlimited folders</li>
         </ul>
         <a href="/billing/checkout/pro/"
            class="btn" style="margin-top:1rem;display:block;text-align:center">upgrade →</a>

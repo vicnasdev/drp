@@ -171,16 +171,6 @@
   background: var(--surface);
 }
 
-/* ── Web diff output ── */
-#diffOutput {
-  margin-top: .5rem;
-  border-radius: var(--radius);
-  overflow: hidden;
-  font-size: .82rem;
-}
-#diffOutput .d2h-wrapper { border-radius: var(--radius); }
-#diffOutput .d2h-file-header { display: none; }  /* we show our own key labels */
-
 /* ── Responsive ── */
 @media (max-width: 600px) {
   .share-url { flex-wrap: wrap; gap: .4rem; font-size: .82rem; }

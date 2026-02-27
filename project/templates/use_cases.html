@@ -91,13 +91,13 @@
     </div>
   </section>
 
-  <!-- ── 8. Collections ───────────────────────────────────────────────────── -->
+  <!-- ── 8. Folders ───────────────────────────────────────────────────────────────── -->
   <section class="uc-section">
     <div class="uc-text">
-      <h2>📁 collections</h2>
-      <p>Group related drops into named collections. Share an entire set of files or snippets with one link. Perfect for organizing projects.</p>
+      <h2>📁 folders</h2>
+      <p>Group related drops into folders. Share an entire set with one link. Invite members with reader, writer, or admin roles.</p>
     </div>
-    <div class="term" data-delay="3300" data-scene="collections">
+    <div class="term" data-delay="3300" data-scene="folders">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>
@@ -263,26 +263,28 @@ const SCENES = {
     { type: 'wait',  ms: 500 },
     { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/k8m2p1/</span>  <span class="t-output">(burn after reading)</span>' },
   ],
-  collections: [
-    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp collection create</span> <span class="t-string">"project-docs"</span>', speed: 30 },
+  folders: [
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp shell</span>', speed: 30 },
     { type: 'wait',  ms: 500 },
-    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-output">collection #4 created</span>' },
-    { type: 'wait',  ms: 600 },
-    { type: 'print', text: '' },
-    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">api-spec.yaml</span> <span class="t-flag">--collection 4</span>', speed: 30 },
-    { type: 'wait',  ms: 500 },
-    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-output">added to project-docs</span>' },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-output">entering drp shell</span>' },
     { type: 'wait',  ms: 400 },
-    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">readme.md</span> <span class="t-flag">--collection 4</span>', speed: 30 },
+    { type: 'type',  text: '<span class="t-prompt">drp:/></span> <span class="t-cmd">mkdir</span> <span class="t-string">project-docs</span>', speed: 30 },
     { type: 'wait',  ms: 500 },
-    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-output">added to project-docs</span>' },
-    { type: 'wait',  ms: 600 },
-    { type: 'print', text: '' },
-    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp collection list</span> <span class="t-string">4</span>', speed: 35 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-output">created project-docs/</span>' },
     { type: 'wait',  ms: 400 },
-    { type: 'print', text: '<span class="t-output">  project-docs (2 drops)</span>' },
-    { type: 'print', text: '<span class="t-output">    api-spec.yaml   f/abc12</span>' },
-    { type: 'print', text: '<span class="t-output">    readme.md       def34</span>' },
+    { type: 'type',  text: '<span class="t-prompt">drp:/></span> <span class="t-cmd">cp</span> <span class="t-string">./api-spec.yaml</span> <span class="t-string">project-docs/</span>', speed: 30 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-output">uploaded to project-docs/</span>' },
+    { type: 'wait',  ms: 400 },
+    { type: 'type',  text: '<span class="t-prompt">drp:/></span> <span class="t-cmd">cp</span> <span class="t-string">./readme.md</span> <span class="t-string">project-docs/</span>', speed: 30 },
+    { type: 'wait',  ms: 500 },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-output">uploaded to project-docs/</span>' },
+    { type: 'wait',  ms: 600 },
+    { type: 'type',  text: '<span class="t-prompt">drp:/></span> <span class="t-cmd">ls</span> <span class="t-string">project-docs/</span>', speed: 35 },
+    { type: 'wait',  ms: 400 },
+    { type: 'print', text: '<span class="t-output">  project-docs/ (2 drops)</span>' },
+    { type: 'print', text: '<span class="t-output">    api-spec.yaml</span>' },
+    { type: 'print', text: '<span class="t-output">    readme.md</span>' },
   ],
   embeds: [
     { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">"v2.1.0 — breaking changes listed below"</span> <span class="t-flag">--key</span> <span class="t-string">changelog</span>', speed: 25 },
@@ -311,7 +313,7 @@ const SCENES = {
     { type: 'wait',  ms: 1200 },
     { type: 'print', text: '<span class="t-output">  Free — 200 MB files, 7-day clipboard expiry.</span>' },
     { type: 'print', text: '<span class="t-output">  Starter (CA$5/mo) — 1 GB files, 5 GB storage, custom expiry.</span>' },
-    { type: 'print', text: '<span class="t-output">  Pro (CA$10/mo) — 5 GB files, 20 GB storage, unlimited collections.</span>' },
+    { type: 'print', text: '<span class="t-output">  Pro (CA$10/mo) — 5 GB files, 20 GB storage, unlimited folders.</span>' },
   ],
   smartget: [
     { type: 'print', text: '<span class="t-comment"># upload some JSON</span>' },

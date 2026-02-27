@@ -5,7 +5,7 @@ Custom template filters for drop-related logic.
 """
 
 from django import template
-from core.models import SavedDrop
+from core.models import Folder, FolderItem
 
 register = template.Library()
 
@@ -23,8 +23,11 @@ def is_saved_by(drop, user):
     """
     Usage: {% if drop|is_saved_by:user %}
 
-    Returns True if the given user has bookmarked this drop.
+    Returns True if the given user has saved this drop to their root folder.
     """
     if not user or not user.is_authenticated:
         return False
-    return SavedDrop.objects.filter(user=user, ns=drop.ns, key=drop.key).exists()
+    root = Folder.objects.filter(owner=user, parent=None, slug="drops").first()
+    if not root:
+        return False
+    return FolderItem.objects.filter(folder=root, key=drop.key).exists()

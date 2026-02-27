@@ -156,14 +156,14 @@
       </div>
       {% endif %}
 
-      {% if collections %}
-      <h3 style="margin-top:1.2rem;margin-bottom:.4rem">collections</h3>
+      {% if folders %}
+      <h3 style="margin-top:1.2rem;margin-bottom:.4rem">folders</h3>
       <div class="drop-list">
-        {% for col in collections %}
+        {% for folder in folders %}
         <div class="drop-item">
           <span class="drop-icon">📂</span>
-          <a href="{{ col.url_path }}" class="drop-key">{{ col.slug }}</a>
-          <span class="drop-label muted">{{ col.memberships.count }} drop{{ col.memberships.count|pluralize }}</span>
+          <a href="/@{{ user.username }}/{{ folder.slug }}/" class="drop-key">{{ folder.slug }}</a>
+          <span class="drop-label muted">{{ folder.items.count }} drop{{ folder.items.count|pluralize }}</span>
         </div>
         {% endfor %}
       </div>
@@ -198,7 +198,7 @@
           <li>✓ 48h idle timeout (vs 24h)</li>
           <li>✓ 30-day max lifetime (vs 7d)</li>
           <li>✓ save &amp; bookmark others' drops</li>
-          <li>✓ export &amp; import collections</li>
+          <li>✓ export &amp; import folders</li>
         </ul>
         <div style="display:flex;gap:.5rem;margin-top:.6rem;flex-wrap:wrap">
           <a href="/auth/register/" class="btn" style="font-size:.82rem;padding:.4rem .9rem">sign up free</a>

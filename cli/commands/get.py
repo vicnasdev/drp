@@ -1,11 +1,9 @@
 """
-drp get — fetch a clipboard drop, download a file, or fetch an external URL.
+drp get — fetch a drop, download a file, or fetch an external URL.
 
-  drp get <key>                  print clipboard to stdout
+  drp get <key>                  print text to stdout / download file
   drp get <key> --url            print the drop URL without fetching content
-  drp get -f <key>               download file (saves to current directory)
-  drp get -f <key> -o name       download with custom filename
-  drp get -f <key> --url         print the file drop URL without downloading
+  drp get <key> -o name          download with custom filename
   drp get <key> --timing         show per-phase timing breakdown
   drp get <key> --password PW    supply password for protected drops
   drp get <key> --parse          auto-detect format and print parsed output
@@ -52,10 +50,7 @@ def cmd_get(args):
         if not host:
             print('  ✗ Not configured. Run: drp setup')
             import sys; sys.exit(1)
-        if getattr(args, 'file', False) and not getattr(args, 'clip', False):
-            print(f'{host}/f/{args.key}/')
-        else:
-            print(f'{host}/{args.key}/')
+        print(f'{host}/{args.key}/')
         return
 
     cfg, host, session = load_context()
@@ -71,113 +66,185 @@ def cmd_get(args):
         password = ''
 
     parse = getattr(args, 'parse', False)
-    if getattr(args, 'file', False) and not getattr(args, 'clip', False):
-        _get_file(args, host, session, t, password, parse=parse, field=field)
-    else:
-        _get_clipboard(args, host, session, t, password, parse=parse, field=field)
+    _get_drop(args, host, session, t, password, parse=parse, field=field)
 
 
-# ── Clipboard ─────────────────────────────────────────────────────────────────
+# ── Drop fetch ────────────────────────────────────────────────────────────────
 
-def _get_clipboard(args, host, session, t, password='', parse=False, field=''):
+def _get_drop(args, host, session, t, password='', parse=False, field=''):
+    """Fetch a drop — auto-detects text vs file from server response."""
     from cli.spinner import Spinner
 
+    # First try the unified endpoint
     with Spinner('fetching'):
-        kind, content = api.get_clipboard(host, session, args.key,
-                                          timer=t, password=password)
+        res = session.get(
+            f'{host}/{args.key}/',
+            headers=_headers(password),
+            timeout=30,
+        )
 
-    if kind == 'password_required':
+    if res.status_code == 401:
         try:
             password = getpass.getpass(f'  Password for /{args.key}/: ')
         except (KeyboardInterrupt, EOFError):
             print()
             sys.exit(1)
         with Spinner('fetching'):
-            kind, content = api.get_clipboard(host, session, args.key,
-                                              timer=t, password=password)
-        if kind == 'password_required':
+            res = session.get(
+                f'{host}/{args.key}/',
+                headers=_headers(password),
+                timeout=30,
+            )
+        if res.status_code == 401:
             print('  ✗ Wrong password.', file=sys.stderr)
             t.print()
             sys.exit(1)
 
-    if kind == 'binary_ref':
-        # The live reference points to binary content — don't dump it
-        data = content  # content is the full JSON dict here
-        url = data.get('source_url', '')
-        ct  = data.get('content_type', 'binary')
-        sz  = data.get('content_length')
+    if not res.ok:
         t.print()
-        print(f'  ↳ Live reference points to binary content ({ct})')
-        if sz:
-            print(f'    Size: {sz:,} bytes')
-        print(f'    URL:  {url}')
-        print(f'  Tip: download directly with  curl -Lo file "{url}"')
-        print(f'       or re-upload with        drp up "{url}" --remote')
-        return
-    if kind == 'live_error':
-        # Live reference exists but the source URL couldn't be fetched
-        data = content
-        url  = data.get('source_url', '?')
-        err_msg = data.get('fetch_error', 'unknown error')
-        t.print()
-        print(f'  \u2717 Live reference fetch failed', file=sys.stderr)
-        print(f'    URL:   {url}', file=sys.stderr)
-        print(f'    Error: {err_msg}', file=sys.stderr)
+        if res.status_code == 404:
+            print(f'  ✗ Drop /{args.key}/ not found.', file=sys.stderr)
+        elif res.status_code == 410:
+            print(f'  ✗ Drop /{args.key}/ has expired.', file=sys.stderr)
+        else:
+            print(f'  ✗ Server returned {res.status_code}.', file=sys.stderr)
         sys.exit(1)
-    if kind == 'text':
+
+    data = res.json()
+    kind = data.get('kind')
+
+    if kind == 'file':
+        _handle_file_download(args, host, session, data, t, password, parse=parse, field=field)
+    elif kind == 'text':
         t.print()
-        # Smart parse / field extraction
+        content = data.get('content', '')
+
+        # Handle special text sub-types
+        if data.get('source_url') and data.get('content_type', '').startswith(('image/', 'application/')):
+            # Binary live reference
+            url = data.get('source_url', '')
+            ct  = data.get('content_type', 'binary')
+            sz  = data.get('content_length')
+            print(f'  ↳ Live reference points to binary content ({ct})')
+            if sz:
+                print(f'    Size: {sz:,} bytes')
+            print(f'    URL:  {url}')
+            print(f'  Tip: download directly with  curl -Lo file "{url}"')
+            print(f'       or re-upload with        drp up "{url}" --remote')
+            return
+        if data.get('fetch_error'):
+            url  = data.get('source_url', '?')
+            err_msg = data.get('fetch_error', 'unknown error')
+            print(f'  ✗ Live reference fetch failed', file=sys.stderr)
+            print(f'    URL:   {url}', file=sys.stderr)
+            print(f'    Error: {err_msg}', file=sys.stderr)
+            sys.exit(1)
+
         if parse or field:
             _print_smart(content, field)
         else:
-            # Check if it's a live reference (source_url)
-            # The API returns source_url when the drop is a live ref
             print(content)
-        return
-
-    if kind is None and content is None:
-        try:
-            with Spinner('checking'):
-                res = session.get(
-                    f'{host}/f/{args.key}/',
-                    headers={'Accept': 'application/json'},
-                    timeout=10,
-                )
-            if res.ok and res.json().get('kind') == 'file':
-                t.print()
-                print(f'  ↳ This is a file drop. Use: drp get -f {args.key}')
-                return
-        except Exception:
-            pass
-
+    else:
         t.print()
+        print(f'  ✗ Unknown drop kind: {kind}', file=sys.stderr)
         sys.exit(1)
 
 
-# ── File ──────────────────────────────────────────────────────────────────────
+def _headers(password=''):
+    h = {'Accept': 'application/json'}
+    if password:
+        h['X-Drop-Password'] = password
+    return h
 
-def _get_file(args, host, session, t, password='', parse=False, field=''):
-    kind, result = api.get_file(host, session, args.key, password=password)
 
-    if kind == 'password_required':
-        try:
-            password = getpass.getpass(f'  Password for /f/{args.key}/: ')
-        except (KeyboardInterrupt, EOFError):
-            print()
-            sys.exit(1)
-        kind, result = api.get_file(host, session, args.key, password=password)
-        if kind == 'password_required':
-            print('  ✗ Wrong password.', file=sys.stderr)
+def _handle_file_download(args, host, session, data, t, password='', parse=False, field=''):
+    """Download a file drop given the JSON metadata from the server."""
+    from cli.progress import ProgressBar
+    import requests as _requests
+
+    key = args.key
+    filename = data.get('filename', key)
+    filesize = data.get('filesize', 0)
+    b2_url = data.get('presigned_url')
+
+    if not b2_url:
+        download_path = data.get('download')
+        if not download_path:
             t.print()
+            print(f'  ✗ No download URL for /{key}/.', file=sys.stderr)
+            sys.exit(1)
+        dl_res = session.get(
+            f'{host}{download_path}',
+            timeout=10,
+            allow_redirects=False,
+        )
+        if dl_res.status_code == 401:
+            t.print()
+            print('  ✗ Password required.', file=sys.stderr)
+            sys.exit(1)
+        if dl_res.status_code in (301, 302, 303, 307, 308):
+            b2_url = dl_res.headers['Location']
+        elif dl_res.ok:
+            content = dl_res.content
+            if parse or field:
+                try:
+                    text = content.decode('utf-8')
+                except (UnicodeDecodeError, AttributeError):
+                    t.print()
+                    print('  ✗ File is binary — --parse only works on text-based files.', file=sys.stderr)
+                    sys.exit(1)
+                t.print()
+                _print_smart(text, field, filename=filename or '')
+                return
+            output_name = getattr(args, 'output', None) or filename or key
+            t.checkpoint('download complete')
+            with open(output_name, 'wb') as f:
+                f.write(content)
+            t.print()
+            print(f'  ✓ Saved {output_name}')
+            return
+        else:
+            t.print()
+            print(f'  ✗ Download redirect failed (HTTP {dl_res.status_code}).', file=sys.stderr)
             sys.exit(1)
 
-    if kind != 'file' or result is None:
-        t.print()
-        sys.exit(1)
+    # Stream from B2
+    bar = ProgressBar(max(filesize, 1), label='downloading')
+    chunks = []
+    downloaded = 0
+    retries = 3
+    CHUNK = 256 * 1024
 
-    content, filename = result
+    for attempt in range(retries + 1):
+        req_headers = {}
+        if downloaded:
+            req_headers['Range'] = f'bytes={downloaded}-'
+        try:
+            with _requests.get(b2_url, stream=True, timeout=30,
+                               headers=req_headers) as stream:
+                if stream.status_code not in (200, 206):
+                    t.print()
+                    print(f'  ✗ B2 download failed (HTTP {stream.status_code}).', file=sys.stderr)
+                    sys.exit(1)
+                for chunk in stream.iter_content(chunk_size=CHUNK):
+                    if chunk:
+                        chunks.append(chunk)
+                        downloaded += len(chunk)
+                        bar.update(len(chunk))
+            break
+        except (_requests.exceptions.ChunkedEncodingError,
+                _requests.exceptions.ConnectionError) as exc:
+            if attempt < retries:
+                import time as _time
+                _time.sleep(1)
+                continue
+            t.print()
+            print(f'  ✗ Download failed after {retries + 1} attempts: {exc}', file=sys.stderr)
+            sys.exit(1)
 
-    # --parse / --field: try to decode as text and smart-parse
+    bar.done()
+    content = b''.join(chunks)
+
     if parse or field:
         try:
             text = content.decode('utf-8')
@@ -189,8 +256,7 @@ def _get_file(args, host, session, t, password='', parse=False, field=''):
         _print_smart(text, field, filename=filename or '')
         return
 
-    output_name = getattr(args, 'output', None) or filename or args.key
-
+    output_name = getattr(args, 'output', None) or filename or key
     t.checkpoint('download complete')
 
     try:

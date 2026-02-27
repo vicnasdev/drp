@@ -49,7 +49,6 @@ def upload_file(host, session, filepath, key=None, expiry_days=None, password=No
         "filename":     filename,
         "size":         size,
         "content_type": content_type,
-        "ns":           "f",
     }
     if key:
         payload["key"] = key
@@ -123,7 +122,6 @@ def upload_file(host, session, filepath, key=None, expiry_days=None, password=No
     # ── Step 3: confirm ───────────────────────────────────────────────────────
     confirm_payload = {
         "key":          drop_key,
-        "ns":           "f",
         "filename":     filename,
         "content_type": content_type,
     }
@@ -184,7 +182,7 @@ def get_file(host, session, key, password=''):
 
     try:
         res = session.get(
-            f"{host}/f/{key}/",
+            f"{host}/{key}/",
             headers=headers,
             timeout=30,
         )
@@ -200,7 +198,7 @@ def get_file(host, session, key, password=''):
 
         data = res.json()
         if data.get("kind") != "file":
-            err(f"/f/{key}/ is not a file drop.")
+            err(f"/{key}/ is not a file drop.")
             return None, None
 
         filename = data.get("filename", key)
@@ -211,7 +209,7 @@ def get_file(host, session, key, password=''):
         if not b2_url:
             download_path = data.get("download")
             if not download_path:
-                err(f"No download URL in response for /f/{key}/.")
+                err(f"No download URL in response for /{key}/.")
                 _report("get", "missing both presigned_url and download fields")
                 return None, None
 
@@ -282,9 +280,9 @@ def _handle_error(res, prefix):
 
 def _handle_http_error(res, key):
     if res.status_code == 404:
-        err(f"File /f/{key}/ not found.")
+        err(f"Drop /{key}/ not found.")
     elif res.status_code == 410:
-        err(f"File /f/{key}/ has expired.")
+        err(f"Drop /{key}/ has expired.")
     else:
         msg = f"Server returned {res.status_code}"
         err(f"{msg}.")

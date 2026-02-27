@@ -3,11 +3,11 @@ from django.contrib.auth import views as auth_views
 from core import views
 from core.views.error_reporting import report_error
 from core.views.github_webhook import github_webhook
-from core.views.drops import raw_view, raw_file, set_drop_password, embed_view, public_feed
+from core.views.drops import raw_view, raw_file, set_drop_password, embed_view, public_feed, drop_view
 from core.views.helpers import qr_view
 from core.views.legal import privacy_view, terms_view
-from core.views.groups import (
-    resolve_handle, create_group, create_invite, join_group,
+from core.views.folders import (
+    resolve_handle, create_folder, create_invite, join_folder,
     change_member_role, remove_member,
 )
 from core.views.tokens import create_token, list_tokens, revoke_token
@@ -85,44 +85,35 @@ urlpatterns = [
              template_name="registration/password_reset_complete.html",
          ),
          name="password_reset_complete"),
-    # Groups
-    path("groups/create/",                              create_group,          name="group_create"),
-    path("groups/join/",                                join_group,            name="group_join"),
-    path("groups/<int:group_id>/invite/",               create_invite,         name="group_invite"),
-    path("groups/<int:group_id>/members/<int:user_id>/role/",    change_member_role, name="group_member_role"),
-    path("groups/<int:group_id>/members/<int:user_id>/remove/",  remove_member,      name="group_member_remove"),
-    # Collections — must be before the /<key>/ catch-all
-    path("collections/create/",                   views.create_collection,        name="collection_create"),
-    path("collections/<int:collection_id>/add/",   views.add_to_collection,        name="collection_add"),
-    path("collections/<int:collection_id>/remove/", views.remove_from_collection,  name="collection_remove"),
-    path("collections/<int:collection_id>/rename/", views.rename_collection,       name="collection_rename"),
-    path("collections/<int:collection_id>/delete/", views.delete_collection,       name="collection_delete"),
-    path("collections/<int:collection_id>/toggle-inbox/", views.toggle_inbox,     name="collection_toggle_inbox"),
+    # Folders — must be before the /<key>/ catch-all
+    path("folders/create/",                   views.create_folder,        name="folder_create"),
+    path("folders/join/",                     join_folder,                name="folder_join"),
+    path("folders/<int:folder_id>/add/",      views.add_to_folder,        name="folder_add"),
+    path("folders/<int:folder_id>/remove/",   views.remove_from_folder,   name="folder_remove"),
+    path("folders/<int:folder_id>/rename/",   views.rename_folder,        name="folder_rename"),
+    path("folders/<int:folder_id>/delete/",   views.delete_folder,        name="folder_delete"),
+    path("folders/<int:folder_id>/toggle-inbox/", views.toggle_inbox,     name="folder_toggle_inbox"),
+    path("folders/<int:folder_id>/invite/",   create_invite,              name="folder_invite"),
+    path("folders/<int:folder_id>/members/<int:user_id>/role/",    change_member_role, name="folder_member_role"),
+    path("folders/<int:folder_id>/members/<int:user_id>/remove/",  remove_member,      name="folder_member_remove"),
     re_path(r"^@(?P<handle>[^/]+)/$",                    resolve_handle,         name="resolve_handle"),
-    re_path(r"^@(?P<username>[^/]+)/(?P<path>.+)/$", views.collection_or_alias_view, name="collection_view"),
-    re_path(rf"^f/{KEY}/download/$",      views.download_drop,                         name="download_drop"),
-    re_path(rf"^f/{KEY}/raw/$",            raw_file,                                    name="raw_file"),
-    re_path(rf"^f/{KEY}/rename/$",        views.rename_drop,    {"ns": "f"},           name="rename_file"),
-    re_path(rf"^f/{KEY}/delete/$",        views.delete_drop,    {"ns": "f"},           name="delete_file"),
-    re_path(rf"^f/{KEY}/renew/$",         views.renew_drop,     {"ns": "f"},           name="renew_file"),
-    re_path(rf"^f/{KEY}/copy/$",          views.copy_drop,      {"ns": "f"},           name="copy_file"),
-    re_path(rf"^f/{KEY}/switch/$",        views.switch_drop,    {"ns": "f"},           name="switch_file"),
-    re_path(rf"^f/{KEY}/save/$",          views.save_bookmark,  {"ns": "f"},           name="save_bookmark_file"),
-    re_path(rf"^f/{KEY}/unsave/$",        views.unsave_bookmark, {"ns": "f"},          name="unsave_bookmark_file"),
-    re_path(rf"^f/{KEY}/set-password/$",  set_drop_password,    {"ns": "f"},           name="set_password_file"),
-    re_path(rf"^f/{KEY}/send/$",          send_transfer,        {"ns": "f"},           name="send_file"),
-    re_path(rf"^f/{KEY}/like/$",          toggle_like,          {"ns": "f"},           name="like_file"),
-    re_path(rf"^f/{KEY}/$",               views.file_view,                             name="file_view"),
-    re_path(rf"^{KEY}/rename/$",       views.rename_drop,    {"ns": "c"},              name="rename_clipboard"),
-    re_path(rf"^{KEY}/delete/$",       views.delete_drop,    {"ns": "c"},              name="delete_clipboard"),
-    re_path(rf"^{KEY}/renew/$",        views.renew_drop,     {"ns": "c"},              name="renew_clipboard"),
-    re_path(rf"^{KEY}/copy/$",         views.copy_drop,      {"ns": "c"},              name="copy_clipboard"),
-    re_path(rf"^{KEY}/switch/$",       views.switch_drop,    {"ns": "c"},              name="switch_clipboard"),
-    re_path(rf"^{KEY}/save/$",         views.save_bookmark,  {"ns": "c"},              name="save_bookmark_clipboard"),
-    re_path(rf"^{KEY}/unsave/$",       views.unsave_bookmark, {"ns": "c"},             name="unsave_bookmark_clipboard"),
-    re_path(rf"^{KEY}/set-password/$", set_drop_password,    {"ns": "c"},              name="set_password_clipboard"),
-    re_path(rf"^{KEY}/send/$",         send_transfer,        {"ns": "c"},              name="send_clipboard"),
-    re_path(rf"^{KEY}/like/$",         toggle_like,          {"ns": "c"},              name="like_clipboard"),
-    path("claim/<str:token>/",          claim_transfer,                                name="claim_transfer"),
-    re_path(rf"^{KEY}/$",              views.clipboard_view,                            name="clipboard_view"),
+    re_path(r"^@(?P<username>[^/]+)/(?P<path>.+)/$", views.folder_or_alias_view, name="folder_view"),
+    # Legacy /f/ prefix — redirect to unified /<key>/ URL
+    re_path(rf"^f/{KEY}/download/$",      views.download_drop,       name="download_drop_legacy"),
+    re_path(rf"^f/{KEY}/raw/$",           raw_file,                  name="raw_file_legacy"),
+    re_path(rf"^f/{KEY}/$",              drop_view,                  name="file_view_legacy"),
+    # Unified drop actions (no more /f/ prefix)
+    re_path(rf"^{KEY}/download/$",     views.download_drop,          name="download_drop"),
+    re_path(rf"^{KEY}/raw/$",          raw_file,                     name="raw_file"),
+    re_path(rf"^{KEY}/rename/$",       views.rename_drop,            name="rename_drop"),
+    re_path(rf"^{KEY}/delete/$",       views.delete_drop,            name="delete_drop"),
+    re_path(rf"^{KEY}/renew/$",        views.renew_drop,             name="renew_drop"),
+    re_path(rf"^{KEY}/copy/$",         views.copy_drop,              name="copy_drop"),
+    re_path(rf"^{KEY}/save/$",         views.save_bookmark,          name="save_bookmark"),
+    re_path(rf"^{KEY}/unsave/$",       views.unsave_bookmark,        name="unsave_bookmark"),
+    re_path(rf"^{KEY}/set-password/$", set_drop_password,            name="set_password"),
+    re_path(rf"^{KEY}/send/$",         send_transfer,                name="send_transfer"),
+    re_path(rf"^{KEY}/like/$",         toggle_like,                  name="toggle_like"),
+    path("claim/<str:token>/",         claim_transfer,               name="claim_transfer"),
+    re_path(rf"^{KEY}/$",             drop_view,                     name="drop_view"),
 ]

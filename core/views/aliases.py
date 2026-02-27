@@ -31,16 +31,12 @@ def create_alias(request):
 
     alias_name = (data.get("alias") or "").strip()
     key = (data.get("key") or "").strip()
-    ns = data.get("ns", Drop.NS_CLIPBOARD)
 
     if not alias_name or not key:
         return JsonResponse({"error": "alias and key required."}, status=400)
 
-    if ns not in (Drop.NS_CLIPBOARD, Drop.NS_FILE):
-        return JsonResponse({"error": "Invalid ns."}, status=400)
-
     # Verify the drop exists
-    if not Drop.objects.filter(ns=ns, key=key).exists():
+    if not Drop.objects.filter(key=key).exists():
         return JsonResponse({"error": "Drop not found."}, status=404)
 
     # Check for duplicates
@@ -50,14 +46,12 @@ def create_alias(request):
     alias = Alias.objects.create(
         owner=request.user,
         alias=alias_name,
-        ns=ns,
         key=key,
     )
 
     return JsonResponse({
         "id": alias.pk,
         "alias": alias.alias,
-        "ns": alias.ns,
         "key": alias.key,
     }, status=201)
 
@@ -73,7 +67,6 @@ def list_aliases(request):
             {
                 "id": a.pk,
                 "alias": a.alias,
-                "ns": a.ns,
                 "key": a.key,
                 "created_at": a.created_at.isoformat(),
             }
@@ -111,6 +104,4 @@ def resolve_alias(request, username, alias_name):
     if not alias:
         raise Http404
 
-    if alias.ns == Drop.NS_FILE:
-        return redirect(f"/f/{alias.key}/")
     return redirect(f"/{alias.key}/")

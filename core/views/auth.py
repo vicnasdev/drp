@@ -13,7 +13,7 @@ from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_POST
 
-from core.models import Drop, Plan, SavedDrop
+from core.models import Drop, Folder, FolderItem, Plan
 from .helpers import check_signup_rate, user_plan, claim_anon_drops, validate_username
 
 ANON_COOKIE = 'drp_anon'
@@ -129,11 +129,12 @@ def account_view(request):
             d.hard_delete()
 
     drops = Drop.objects.filter(owner=request.user).order_by('-created_at')
-    saved = SavedDrop.objects.filter(user=request.user).order_by('-saved_at')
+    root = Folder.objects.filter(owner=request.user, parent=None, slug="drops").first()
+    saved_items = FolderItem.objects.filter(folder=root).order_by('-added_at') if root else FolderItem.objects.none()
     plan_limits = Plan.LIMITS.get(profile.plan, Plan.LIMITS[Plan.FREE])
 
     if 'application/json' in request.headers.get('Accept', ''):
-        collections = request.user.collections.prefetch_related('memberships').order_by('-created_at')
+        folders = request.user.folders.prefetch_related('members').order_by('-created_at')
         return JsonResponse({
             'username':            request.user.username,
             'email':               request.user.email,
@@ -142,18 +143,18 @@ def account_view(request):
             'storage_quota_bytes': profile.storage_quota_bytes,
             'plan_limits':         plan_limits,
             'drops': [_drop_dict(d) for d in drops],
-            'saved': [_saved_dict(s) for s in saved],
-            'collections': [
+            'saved': [{'key': i.key, 'saved_at': i.added_at.isoformat()} for i in saved_items],
+            'folders': [
                 {
-                    'id':   col.pk,
-                    'name': col.name,
-                    'slug': col.slug,
-                    'path': col.full_path,
-                    'parent_id': col.parent_id,
-                    'children': list(col.children.values_list('slug', flat=True)),
-                    'drops': [{'ns': m.ns, 'key': m.key} for m in col.memberships.all()],
+                    'id':   f.pk,
+                    'name': f.name,
+                    'slug': f.slug,
+                    'path': f.full_path,
+                    'parent_id': f.parent_id,
+                    'children': list(f.children.values_list('slug', flat=True)),
+                    'drops': [{'key': m.key} for m in f.members.all()],
                 }
-                for col in collections
+                for f in folders
             ],
         })
 
@@ -168,8 +169,8 @@ def account_view(request):
 
 @login_required
 def manage_view(request):
-    """Manage page — bulk actions on drops, saved drops, collections."""
-    from core.models import Collection
+    """Manage page — bulk actions on drops, saved drops, folders."""
+    from core.models import Folder
 
     profile = request.user.profile
     profile.recalc_storage()
@@ -179,16 +180,17 @@ def manage_view(request):
             d.hard_delete()
 
     drops = Drop.objects.filter(owner=request.user).order_by('-created_at')
-    saved = SavedDrop.objects.filter(user=request.user).order_by('-saved_at')
-    collections = request.user.collections.annotate(
-        drop_count=models.Count('memberships')
+    root = Folder.objects.filter(owner=request.user, parent=None, slug="drops").first()
+    saved_items = FolderItem.objects.filter(folder=root).order_by('-added_at') if root else FolderItem.objects.none()
+    folders = request.user.folders.annotate(
+        drop_count=models.Count('members')
     ).order_by('-created_at')
 
     return render(request, 'auth/manage.html', {
         'profile': profile,
         'drops': drops,
-        'saved': saved,
-        'collections': collections,
+        'saved': saved_items,
+        'folders': folders,
     })
 
 
@@ -207,39 +209,39 @@ def update_account_settings(request):
 @login_required
 def export_drops(request):
     drops = Drop.objects.filter(owner=request.user).order_by('-created_at')
-    saved = SavedDrop.objects.filter(user=request.user).order_by('-saved_at')
-    collections = request.user.collections.prefetch_related('memberships').order_by('-created_at')
+    root = Folder.objects.filter(owner=request.user, parent=None, slug="drops").first()
+    saved_items = FolderItem.objects.filter(folder=root).order_by('-added_at') if root else FolderItem.objects.none()
+    folders = request.user.folders.prefetch_related('members').order_by('-created_at')
 
     owned_data = []
     for d in drops:
         entry = _drop_dict(d)
-        url = (
-            f'{settings.SITE_URL}/f/{d.key}/'
-            if d.ns == Drop.NS_FILE
-            else f'{settings.SITE_URL}/{d.key}/'
-        )
+        url = f'{settings.SITE_URL}/{d.key}/'
         entry.update({'url': url, 'host': settings.SITE_URL})
         owned_data.append(entry)
 
-    saved_data = [_saved_dict(s, host=settings.SITE_URL) for s in saved]
+    saved_data = [
+        {'key': i.key, 'saved_at': i.added_at.isoformat(), 'url': f'{settings.SITE_URL}/{i.key}/'}
+        for i in saved_items
+    ]
 
-    collections_data = [
+    folders_data = [
         {
-            'name': col.name,
-            'slug': col.slug,
-            'path': col.full_path,
-            'parent_id': col.parent_id,
-            'url':  f'{settings.SITE_URL}/@{request.user.username}/{col.full_path}/',
+            'name': f.name,
+            'slug': f.slug,
+            'path': f.full_path,
+            'parent_id': f.parent_id,
+            'url':  f'{settings.SITE_URL}/@{request.user.username}/{f.full_path}/',
             'drops': [
-                {'ns': m.ns, 'key': m.key}
-                for m in col.memberships.all()
+                {'key': m.key}
+                for m in f.members.all()
             ],
         }
-        for col in collections
+        for f in folders
     ]
 
     response = JsonResponse(
-        {'drops': owned_data, 'saved': saved_data, 'collections': collections_data},
+        {'drops': owned_data, 'saved': saved_data, 'folders': folders_data},
         json_dumps_params={'indent': 2},
     )
     response['Content-Disposition'] = 'attachment; filename="drp-export.json"'
@@ -267,18 +269,23 @@ def import_drops(request):
 
     for entry in entries:
         key = (entry.get('key') or '').strip()
-        ns = entry.get('ns', 'c')
 
-        if not key or ns not in ('c', 'f'):
+        if not key:
             skipped += 1
             continue
 
-        if Drop.objects.filter(ns=ns, key=key, owner=request.user).exists():
+        if Drop.objects.filter(key=key, owner=request.user).exists():
             skipped += 1
             continue
 
-        _, created = SavedDrop.objects.get_or_create(
-            user=request.user, ns=ns, key=key,
+        root = Folder.objects.filter(owner=request.user, parent=None, slug="drops").first()
+        if not root:
+            root, _ = Folder.objects.get_or_create(
+                owner=request.user, parent=None, slug="drops",
+                defaults={"name": "My Drops"},
+            )
+        _, created = FolderItem.objects.get_or_create(
+            folder=root, key=key,
         )
         if created:
             imported += 1
@@ -293,7 +300,6 @@ def import_drops(request):
 def _drop_dict(d):
     return {
         'key':            d.key,
-        'ns':             d.ns,
         'kind':           d.kind,
         'created_at':     d.created_at.isoformat(),
         'last_accessed_at': d.last_accessed_at.isoformat() if d.last_accessed_at else None,
@@ -307,14 +313,4 @@ def _drop_dict(d):
         'password_protected': d.is_password_protected,
         'is_public':      d.is_public,
         'tags':           d.tags,
-    }
-
-
-def _saved_dict(s, host=None):
-    url_path = f'/f/{s.key}/' if s.ns == Drop.NS_FILE else f'/{s.key}/'
-    return {
-        'key':      s.key,
-        'ns':       s.ns,
-        'saved_at': s.saved_at.isoformat(),
-        'url':      f'{host}{url_path}' if host else url_path,
     }

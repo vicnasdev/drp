@@ -28,7 +28,11 @@ def forbidden(request, exception=None, *args, **kwargs):
 
 
 def not_found(request, exception=None, *args, **kwargs):
-    return render(request, 'error.html', {'code': 404, 'message': "This page doesn't exist."}, status=404)
+    try:
+        return render(request, 'error.html', {'code': 404, 'message': "This page doesn't exist."}, status=404)
+    except Exception:
+        from django.http import HttpResponse
+        return HttpResponse("404 — not found", status=404, content_type="text/plain")
 
 
 def server_error(request, *args, **kwargs):
@@ -37,4 +41,8 @@ def server_error(request, *args, **kwargs):
         report_server_error(request, exc)
     except Exception:
         pass  # never let the reporter crash the error page
-    return render(request, 'error.html', {'code': 500, 'message': "Something went wrong on our end. It's been reported."}, status=500)
+    try:
+        return render(request, 'error.html', {'code': 500, 'message': "Something went wrong on our end. It's been reported."}, status=500)
+    except Exception:
+        from django.http import HttpResponse
+        return HttpResponse("500 — internal server error", status=500, content_type="text/plain")

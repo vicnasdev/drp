@@ -3,14 +3,12 @@
 <div class="bookmark-btn-wrap" style="display:inline-block;margin-left:.5rem">
   {% if drop|is_saved_by:user %}
     <button class="btn-sm bookmark-btn bookmarked"
-            data-ns="{{ ns }}"
             data-key="{{ key }}"
             data-saved="true">
       🔖 saved
     </button>
   {% else %}
     <button class="btn-sm bookmark-btn"
-            data-ns="{{ ns }}"
             data-key="{{ key }}"
             data-saved="false">
       🔖 save
@@ -21,11 +19,9 @@
 <script>
 document.querySelectorAll('.bookmark-btn').forEach(btn => {
   btn.addEventListener('click', async function () {
-    const ns    = this.dataset.ns;
     const key   = this.dataset.key;
     const saved = this.dataset.saved === 'true';
-    const base  = ns === 'f' ? `/f/${key}` : `/${key}`;
-    const action = `${base}/${saved ? 'unsave' : 'save'}/`;
+    const action = `/${key}/${saved ? 'unsave' : 'save'}/`;
 
     const res = await fetch(action, {
       method: 'POST',

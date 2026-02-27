@@ -52,19 +52,18 @@ class Command(BaseCommand):
             if profile and not profile.email_verified:
                 continue
 
-            prefix = "f/" if drop.ns == Drop.NS_FILE else ""
-            drop_url = f"{settings.DOMAIN}/{prefix}{drop.key}/"
+            drop_url = f"{settings.DOMAIN}/{drop.key}/"
             expires_str = drop.expires_at.strftime("%b %d, %Y at %H:%M UTC")
 
             from core.models import EmailTemplate
             tpl = EmailTemplate.get('expiry_notification')
             if tpl:
-                ctx = dict(prefix=prefix, key=drop.key, drop_url=drop_url, expires_str=expires_str)
+                ctx = dict(key=drop.key, drop_url=drop_url, expires_str=expires_str)
                 subject = tpl.render_subject(**ctx)
                 message = tpl.render_text(**ctx)
                 from_email = tpl.get_from_email()
             else:
-                subject = f"drp: your drop /{prefix}{drop.key}/ expires soon"
+                subject = f"drp: your drop /{drop.key}/ expires soon"
                 message = (
                     f"Your drop is expiring on {expires_str}.\n\n"
                     f"  {drop_url}\n\n"

@@ -31,8 +31,7 @@ class Plan:
             "storage_gb":                 None,
             "renewals":                   0,
             "password_protection":        False,
-            "max_collections":            0,
-            "max_groups":                 0,
+            "max_folders":                0,
             "webhooks":                   False,
             "api_keys":                   0,
             "scheduled_drops":            0,
@@ -53,8 +52,7 @@ class Plan:
             "storage_gb":                 None,
             "renewals":                   0,
             "password_protection":        False,
-            "max_collections":            0,
-            "max_groups":                 0,
+            "max_folders":                0,
             "webhooks":                   False,
             "api_keys":                   0,
             "scheduled_drops":            0,
@@ -75,8 +73,7 @@ class Plan:
             "storage_gb":                 5,
             "renewals":                   None,
             "password_protection":        True,
-            "max_collections":            10,
-            "max_groups":                 3,
+            "max_folders":                10,
             "webhooks":                   True,
             "api_keys":                   5,
             "scheduled_drops":            10,
@@ -97,8 +94,7 @@ class Plan:
             "storage_gb":                 20,
             "renewals":                   None,
             "password_protection":        True,
-            "max_collections":            None,
-            "max_groups":                 None,
+            "max_folders":                None,
             "webhooks":                   True,
             "api_keys":                   None,
             "scheduled_drops":            None,
@@ -141,9 +137,7 @@ class PlanLimit(models.Model):
     renewals                   = models.PositiveIntegerField(null=True, blank=True,
                                      help_text="null = unlimited, 0 = none")
     password_protection        = models.BooleanField(default=False)
-    max_collections            = models.PositiveIntegerField(null=True, blank=True,
-                                     help_text="null = unlimited, 0 = none")
-    max_groups                 = models.PositiveIntegerField(null=True, blank=True, default=0,
+    max_folders                = models.PositiveIntegerField(null=True, blank=True,
                                      help_text="null = unlimited, 0 = none")
     webhooks                   = models.BooleanField(default=False)
     api_keys                   = models.PositiveIntegerField(null=True, blank=True, default=0,
@@ -178,8 +172,7 @@ class PlanLimit(models.Model):
             "storage_gb":                  self.storage_gb,
             "renewals":                    self.renewals,
             "password_protection":         self.password_protection,
-            "max_collections":             self.max_collections,
-            "max_groups":                  self.max_groups,
+            "max_folders":                 self.max_folders,
             "webhooks":                    self.webhooks,
             "api_keys":                    self.api_keys,
             "scheduled_drops":             self.scheduled_drops,
@@ -300,34 +293,27 @@ class UserProfile(models.Model):
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
         UserProfile.objects.get_or_create(user=instance)
+        Folder.objects.get_or_create(
+            owner=instance, parent=None, slug="drops",
+            defaults={"name": "My Drops"},
+        )
 
 
 
 # ── Drop ──────────────────────────────────────────────────────────────────────
 
 class Drop(models.Model):
-    NS_CLIPBOARD = "c"
-    NS_FILE      = "f"
-    NS_CHOICES   = [("c", "Clipboard"), ("f", "File")]
-
     TEXT = "text"
     FILE = "file"
     TYPE_CHOICES = [(TEXT, "Text"), (FILE, "File")]
 
-    ns   = models.CharField(max_length=1, choices=NS_CHOICES, default=NS_CLIPBOARD, db_index=True)
-    key  = models.CharField(max_length=120, db_index=True)
+    key  = models.CharField(max_length=120, unique=True)
     kind = models.CharField(max_length=4, choices=TYPE_CHOICES)
 
     owner = models.ForeignKey(
         User, null=True, blank=True,
         on_delete=models.SET_NULL,
         related_name="drops",
-    )
-    owner_group = models.ForeignKey(
-        "Group", null=True, blank=True,
-        on_delete=models.SET_NULL,
-        related_name="drops",
-        help_text="Group that owns this drop (alongside or instead of user owner).",
     )
 
     anon_token = models.CharField(max_length=64, null=True, blank=True, db_index=True)
@@ -400,11 +386,10 @@ class Drop(models.Model):
     last_viewed_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
-        unique_together = [("ns", "key")]
+        pass
 
     def __str__(self):
-        prefix = "f/" if self.ns == self.NS_FILE else ""
-        return f"/{prefix}{self.key}/ ({self.kind})"
+        return f"/{self.key}/ ({self.kind})"
 
     @property
     def is_password_protected(self):
@@ -451,8 +436,9 @@ class Drop(models.Model):
             if (now - self.created_at).total_seconds() > self.max_lifetime_secs:
                 return True
 
-        if self.ns == self.NS_CLIPBOARD:
-            plan = self.owner_plan if self.owner_id else Plan.ANON
+        plan = self.owner_plan if self.owner_id else Plan.ANON
+
+        if self.kind == self.TEXT:
             idle_hours = Plan.get(plan, "clipboard_idle_hours")
             if idle_hours is None:
                 return False  # Paid plans: no idle expiry
@@ -461,7 +447,6 @@ class Drop(models.Model):
 
         # File drop fallback: check plan's anon_file_lifetime_days.
         # Paid plans return None (never expire by time — quota is the constraint).
-        plan = self.owner_plan if self.owner_id else Plan.ANON
         max_days = Plan.get(plan, "anon_file_lifetime_days")
         if max_days is None:
             return False
@@ -511,15 +496,15 @@ class Drop(models.Model):
         so cleanup can retry on the next run.
         The pre_delete signal is a safety net for admin / queryset deletes.
         """
-        if self.ns == self.NS_FILE:
+        if self.kind == self.FILE:
             from core.views.b2 import delete_object
             try:
-                if not delete_object(self.ns, self.key,
+                if not delete_object(self.key,
                                      b2_key=self.b2_object_key()):
                     return False
             except Exception:
                 logger.error(
-                    "hard_delete: B2 error for %s/%s", self.ns, self.key,
+                    "hard_delete: B2 error for %s", self.key,
                 )
                 return False
             # Flag so pre_delete signal won't attempt a second B2 call.
@@ -541,13 +526,13 @@ class Drop(models.Model):
         if self.file_public_id:
             return self.file_public_id
         from core.views.b2 import object_key
-        return object_key(self.ns, self.key)
+        return object_key(self.key)
 
     def download_url(self, expires_in: int = 3600) -> str:
-        if self.ns != self.NS_FILE:
+        if self.kind != self.FILE:
             raise ValueError("download_url() called on non-file drop")
         from core.views.b2 import presigned_get
-        return presigned_get(self.ns, self.key, filename=self.filename,
+        return presigned_get(self.key, filename=self.filename,
                      expires_in=expires_in,
                      b2_key=self.file_public_id or "")
 
@@ -562,20 +547,20 @@ def delete_b2_object_on_delete(sender, instance, **kwargs):
     """
     if getattr(instance, '_b2_cleaned', False):
         return
-    if instance.ns == Drop.NS_FILE:
+    if instance.kind == Drop.FILE:
         try:
             from core.views.b2 import delete_object
-            ok = delete_object(instance.ns, instance.key,
+            ok = delete_object(instance.key,
                                b2_key=instance.b2_object_key())
             if not ok:
                 logger.error(
-                    "pre_delete: B2 delete failed for %s/%s (b2_key=%s)",
-                    instance.ns, instance.key, instance.b2_object_key(),
+                    "pre_delete: B2 delete failed for %s (b2_key=%s)",
+                    instance.key, instance.b2_object_key(),
                 )
         except Exception as e:
             logger.error(
-                "pre_delete: unexpected error deleting B2 object %s/%s: %s",
-                instance.ns, instance.key, e,
+                "pre_delete: unexpected error deleting B2 object %s: %s",
+                instance.key, e,
             )
 
 
@@ -604,34 +589,31 @@ def update_storage_on_delete(sender, instance, **kwargs):
 
 
 @receiver(post_delete, sender=Drop)
-def cleanup_collection_memberships(sender, instance, **kwargs):
-    """Remove any CollectionMembership rows pointing at a deleted drop."""
-    # Import here to avoid circular reference at module load time
-    from core.models import CollectionMembership
-    CollectionMembership.objects.filter(ns=instance.ns, key=instance.key).delete()
+def cleanup_folder_items(sender, instance, **kwargs):
+    """Remove any FolderItem rows pointing at a deleted drop."""
+    from core.models import FolderItem
+    FolderItem.objects.filter(key=instance.key).delete()
 
 
-# ── Collection ────────────────────────────────────────────────────────────────
+# ── Folder ────────────────────────────────────────────────────────────────────
 
-class Collection(models.Model):
-    owner      = models.ForeignKey(User, on_delete=models.CASCADE, related_name="collections")
-    owner_group = models.ForeignKey(
-        "Group", null=True, blank=True,
-        on_delete=models.SET_NULL,
-        related_name="collections",
-        help_text="Group that owns this collection (alongside or instead of user owner).",
-    )
+class Folder(models.Model):
+    """
+    Unified organiser: nesting (sub-folders) + optional member sharing.
+    Replaces the old Collection + Group models.
+    """
+    owner      = models.ForeignKey(User, on_delete=models.CASCADE, related_name="folders")
     parent     = models.ForeignKey(
         "self", null=True, blank=True,
         on_delete=models.CASCADE,
         related_name="children",
-        help_text="Parent collection for nesting (sub-collections).",
+        help_text="Parent folder for nesting (sub-folders).",
     )
     slug       = models.SlugField(max_length=60)
     name       = models.CharField(max_length=120)
     public_inbox = models.BooleanField(
         default=False,
-        help_text="Anyone can drop into this collection; only owner/members can read.",
+        help_text="Anyone can drop into this folder; only owner/members can read.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -657,7 +639,10 @@ class Collection(models.Model):
         return f"/@{self.owner.username}/{self.full_path}/"
 
     def can_edit(self, user):
-        return getattr(user, "is_authenticated", False) and self.owner_id == user.pk
+        """Owner or admin member can edit."""
+        if getattr(user, "is_authenticated", False) and self.owner_id == user.pk:
+            return True
+        return self.members.filter(user=user, role=FolderMember.ROLE_ADMIN).exists()
 
     def get_ancestors(self):
         """Return list of ancestors from root to self (excluding self)."""
@@ -670,66 +655,125 @@ class Collection(models.Model):
 
     @classmethod
     def resolve_path(cls, owner, path):
-        """Resolve a slash-separated path to a Collection. Returns None if not found."""
+        """Resolve a slash-separated path to a Folder. Returns None if not found."""
         parts = [p for p in path.strip('/').split('/') if p]
         if not parts:
             return None
         parent = None
-        collection = None
+        folder = None
         for slug in parts:
-            collection = cls.objects.filter(owner=owner, parent=parent, slug=slug).first()
-            if collection is None:
+            folder = cls.objects.filter(owner=owner, parent=parent, slug=slug).first()
+            if folder is None:
                 return None
-            parent = collection
-        return collection
+            parent = folder
+        return folder
+
+    @classmethod
+    def resolve_item(cls, owner, path):
+        """Resolve a path whose last segment is a FolderItem label.
+
+        Returns (folder, FolderItem) or (None, None).
+        Example: resolve_item(alice, 'photos/sunset.jpg')
+          → walks 'photos' as a Folder, then looks up 'sunset.jpg' as label.
+        """
+        parts = [p for p in path.strip('/').split('/') if p]
+        if len(parts) < 2:
+            return None, None
+        folder_parts, item_label = parts[:-1], parts[-1]
+        folder = cls.resolve_path(owner, '/'.join(folder_parts))
+        if folder is None:
+            return None, None
+        item = folder.items.filter(label=item_label).first()
+        return (folder, item) if item else (None, None)
 
 
-class CollectionMembership(models.Model):
-    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, related_name="memberships")
-    ns         = models.CharField(max_length=1, choices=Drop.NS_CHOICES)
+class FolderItem(models.Model):
+    """A drop that belongs to a folder (many-to-many through table)."""
+    folder     = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name="items")
     key        = models.CharField(max_length=120)
+    label      = models.CharField(
+        max_length=255, blank=True, default="",
+        help_text="Display name in folder path URLs. Defaults to filename or key.",
+    )
     added_at   = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = [("collection", "ns", "key")]
+        unique_together = [("folder", "key")]
         ordering = ["-added_at"]
 
     def __str__(self):
-        prefix = "f/" if self.ns == Drop.NS_FILE else ""
-        return f"{self.collection} → /{prefix}{self.key}/"
+        return f"{self.folder} → {self.display_label}"
+
+    @property
+    def display_label(self):
+        """The label shown in folder-path URLs."""
+        if self.label:
+            return self.label
+        drop = self.drop
+        if drop and drop.kind == Drop.FILE and drop.filename:
+            return drop.filename
+        return self.key
 
     @property
     def drop(self):
-        return Drop.objects.filter(ns=self.ns, key=self.key).first()
+        return Drop.objects.filter(key=self.key).first()
 
     @property
     def url_path(self):
-        if self.ns == Drop.NS_FILE:
-            return f"/f/{self.key}/"
         return f"/{self.key}/"
 
+    @property
+    def folder_url(self):
+        """The clean folder-based URL (key hidden)."""
+        return f"{self.folder.url_path}{self.display_label}"
 
-# ── SavedDrop ─────────────────────────────────────────────────────────────────
 
-class SavedDrop(models.Model):
-    user     = models.ForeignKey(User, on_delete=models.CASCADE, related_name="saved_drops")
-    ns       = models.CharField(max_length=1, choices=Drop.NS_CHOICES, default=Drop.NS_CLIPBOARD)
-    key      = models.CharField(max_length=120)
-    saved_at = models.DateTimeField(auto_now_add=True)
+class FolderMember(models.Model):
+    """A user who has been shared access to a folder with a specific role."""
+    ROLE_READER = "reader"
+    ROLE_WRITER = "writer"
+    ROLE_ADMIN  = "admin"
+    ROLE_CHOICES = [
+        (ROLE_READER, "Reader"),
+        (ROLE_WRITER, "Writer"),
+        (ROLE_ADMIN,  "Admin"),
+    ]
+
+    folder   = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name="members")
+    user     = models.ForeignKey(User, on_delete=models.CASCADE, related_name="folder_memberships")
+    role     = models.CharField(max_length=8, choices=ROLE_CHOICES, default=ROLE_READER)
+    joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = [("user", "ns", "key")]
-        ordering = ["-saved_at"]
+        unique_together = [("folder", "user")]
+        ordering = ["role", "joined_at"]
 
     def __str__(self):
-        prefix = "f/" if self.ns == Drop.NS_FILE else ""
-        return f"{self.user.email} → /{prefix}{self.key}/"
+        return f"{self.user.username} → @{self.folder.owner.username}/{self.folder.slug} [{self.role}]"
 
-    @property
-    def url_path(self):
-        if self.ns == Drop.NS_FILE:
-            return f"/f/{self.key}/"
-        return f"/{self.key}/"
+
+class FolderInviteToken(models.Model):
+    """A single-use or limited-use invite token for sharing folder access."""
+    folder     = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name="invite_tokens")
+    token      = models.CharField(max_length=64, unique=True, db_index=True)
+    role       = models.CharField(max_length=8, choices=FolderMember.ROLE_CHOICES,
+                                  default=FolderMember.ROLE_READER)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    max_uses   = models.PositiveIntegerField(null=True, blank=True,
+                                             help_text="null = unlimited, 1 = single-use")
+    use_count  = models.PositiveIntegerField(default=0)
+
+    def is_expired(self):
+        if self.expires_at and timezone.now() > self.expires_at:
+            return True
+        if self.max_uses is not None and self.use_count >= self.max_uses:
+            return True
+        return False
+
+    def __str__(self):
+        return f"Invite to @{self.folder.owner.username}/{self.folder.slug} [{self.role}]"
 
 
 # ── EmailVerification ─────────────────────────────────────────────────────────
@@ -780,71 +824,6 @@ class BugReport(models.Model):
         return f'[{self.category}] by {self.user.email if self.user else "anon"} @ {self.created_at:%Y-%m-%d}'
 
 
-# ── Group ────────────────────────────────────────────────────────────────────────
-
-class Group(models.Model):
-    """A named group that can own drops and collections."""
-    handle     = models.CharField(max_length=60, unique=True, db_index=True,
-                                  help_text="Unique @handle for the group.")
-    name       = models.CharField(max_length=120)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
-                                   related_name="created_groups")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"@{self.handle}"
-
-
-class GroupMembership(models.Model):
-    ROLE_READER = "reader"
-    ROLE_WRITER = "writer"
-    ROLE_ADMIN  = "admin"
-    ROLE_CHOICES = [
-        (ROLE_READER, "Reader"),
-        (ROLE_WRITER, "Writer"),
-        (ROLE_ADMIN,  "Admin"),
-    ]
-
-    group    = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="memberships")
-    user     = models.ForeignKey(User, on_delete=models.CASCADE, related_name="group_memberships")
-    role     = models.CharField(max_length=8, choices=ROLE_CHOICES, default=ROLE_READER)
-    joined_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = [("group", "user")]
-        ordering = ["role", "joined_at"]
-
-    def __str__(self):
-        return f"{self.user.username} → @{self.group.handle} [{self.role}]"
-
-
-class GroupInviteToken(models.Model):
-    """A single-use or limited-use invite token for joining a group."""
-    group      = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="invite_tokens")
-    token      = models.CharField(max_length=64, unique=True, db_index=True)
-    role       = models.CharField(max_length=8, choices=GroupMembership.ROLE_CHOICES,
-                                  default=GroupMembership.ROLE_READER)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField(null=True, blank=True)
-    max_uses   = models.PositiveIntegerField(null=True, blank=True,
-                                             help_text="null = unlimited, 1 = single-use")
-    use_count  = models.PositiveIntegerField(default=0)
-
-    def is_expired(self):
-        if self.expires_at and timezone.now() > self.expires_at:
-            return True
-        if self.max_uses is not None and self.use_count >= self.max_uses:
-            return True
-        return False
-
-    def __str__(self):
-        return f"Invite to @{self.group.handle} [{self.role}]"
-
-
 # ── APIToken (paid) ─────────────────────────────────────────────────────────────
 
 class APIToken(models.Model):
@@ -875,7 +854,6 @@ class Alias(models.Model):
     """Server-side alias: /@handle/alias → a drop key."""
     owner      = models.ForeignKey(User, on_delete=models.CASCADE, related_name="aliases")
     alias      = models.CharField(max_length=120)
-    ns         = models.CharField(max_length=1, choices=Drop.NS_CHOICES, default=Drop.NS_CLIPBOARD)
     key        = models.CharField(max_length=120, help_text="Drop key this alias points to.")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -890,10 +868,8 @@ class Alias(models.Model):
 # ── DropTemplate ──────────────────────────────────────────────────────────────────
 
 class DropTemplate(models.Model):
-    """Reusable drop template. User or group owned."""
+    """Reusable drop template. User owned."""
     owner       = models.ForeignKey(User, null=True, blank=True,
-                                    on_delete=models.CASCADE, related_name="drop_templates")
-    owner_group = models.ForeignKey(Group, null=True, blank=True,
                                     on_delete=models.CASCADE, related_name="drop_templates")
     slug        = models.SlugField(max_length=60)
     name        = models.CharField(max_length=120)
@@ -909,7 +885,7 @@ class DropTemplate(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        owner = self.owner.username if self.owner else (f"@{self.owner_group.handle}" if self.owner_group else "?")
+        owner = self.owner.username if self.owner else "?"
         return f"{owner}/{self.slug}"
 
 

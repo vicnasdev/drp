@@ -30,13 +30,13 @@ def check_signup_rate(request):
     return True
 
 
-def check_password_attempt_rate(request, drop_key: str, ns: str = "c"):
+def check_password_attempt_rate(request, drop_key: str):
     """
     Rate limit password attempts on protected drops.
     Max 10 attempts per IP per drop per hour.
     Returns (allowed: bool, remaining: int).
     """
-    key = f"pw_attempt:{client_ip(request)}:{ns}:{drop_key}"
+    key = f"pw_attempt:{client_ip(request)}:{drop_key}"
     count = cache.get(key, 0)
     max_attempts = 10
     if count >= max_attempts:
@@ -126,108 +126,69 @@ def is_paid_user(user):
     return user.is_authenticated and user_plan(user) in (Plan.STARTER, Plan.PRO)
 
 
-def can_user_access_collection(user, collection):
+def can_user_access_folder(user, folder):
     """
-    Check if user can access a collection they own.
+    Check if user can access a folder they own.
     Returns (allowed: bool, reason: str | None).
     
     Based on plan quotas:
-      - Free: 0 collections (cannot access any owned collections)
-      - Starter: up to 10 collections
+      - Free: 0 folders (cannot access any owned folders)
+      - Starter: up to 10 folders
       - Pro: unlimited
       
-    If user is downgraded and over quota, they cannot access excess collections.
+    If user is downgraded and over quota, they cannot access excess folders.
+    Members (non-owners) always have access — quota only applies to the owner.
     """
-    if not user.is_authenticated or collection.owner_id != user.id:
-        return False, "You don't own this collection."
+    if not user.is_authenticated:
+        return False, "You don't own this folder."
+    
+    # Members always have access — quota only constrains the owner
+    if folder.owner_id != user.id:
+        from core.models import FolderMember
+        if folder.members.filter(user=user).exists():
+            return True, None
+        return False, "You don't have access to this folder."
     
     plan = user_plan(user)
-    max_allowed = Plan.get(plan, "max_collections")
+    max_allowed = Plan.get(plan, "max_folders")
     
     if max_allowed == 0:
-        return False, "Collections are a paid feature. Upgrade to Starter or Pro to access this collection."
+        return False, "Folders are a paid feature. Upgrade to Starter or Pro to access this folder."
     
     if max_allowed is None:
         # Pro: unlimited
         return True, None
     
     # Starter: check if user is within their quota
-    # Count collections *in order of creation* so they keep access to oldest ones
-    owned_count = collection.owner.collections.filter(parent=None).count()
+    owned_count = folder.owner.folders.filter(parent=None).count()
     if owned_count <= max_allowed:
         return True, None
     
-    # User is over quota — deny access to collections beyond the limit
-    # Get the cut-off date: the created_at of the max_allowed-th oldest collection
+    # User is over quota — deny access to folders beyond the limit
     accessible_ids = list(
-        collection.owner.collections
+        folder.owner.folders
         .filter(parent=None)
         .order_by('created_at')
         .values_list('pk', flat=True)[:max_allowed]
     )
     
-    if collection.pk in accessible_ids:
+    if folder.pk in accessible_ids:
         return True, None
     
     return (
         False,
-        f"You've exceeded your collection limit ({max_allowed}). "
-        "Upgrade to Pro for unlimited collections, or delete some collections to regain access."
+        f"You've exceeded your folder limit ({max_allowed}). "
+        "Upgrade to Pro for unlimited folders, or delete some folders to regain access."
     )
 
 
-def can_user_access_group(user, group):
-    """
-    Check if user can access a group they created/own.
-    Returns (allowed: bool, reason: str | None).
-    
-    Based on plan quotas:
-      - Free: 0 groups (cannot access any owned groups)
-      - Starter: up to 3 groups
-      - Pro: unlimited
-    """
-    if not user.is_authenticated or group.created_by_id != user.id:
-        return False, "You don't own this group."
-    
-    plan = user_plan(user)
-    max_allowed = Plan.get(plan, "max_groups")
-    
-    if max_allowed == 0:
-        return False, "Groups are a paid feature. Upgrade to Starter or Pro to access this group."
-    
-    if max_allowed is None:
-        # Pro: unlimited
-        return True, None
-    
-    # Starter: check if user is within their quota
-    owned_count = group.created_by.created_groups.count()
-    if owned_count <= max_allowed:
-        return True, None
-    
-    # User is over quota — deny access to groups beyond the limit
-    oldest_accessible = (
-        group.created_by.created_groups
-        .order_by('created_at')[:max_allowed]
-        .last()
-    )
-    
-    if oldest_accessible and group.created_at <= oldest_accessible.created_at:
-        return True, None
-    
-    return (
-        False,
-        f"You've exceeded your group limit ({max_allowed}). "
-        "Upgrade to Pro for unlimited groups, or delete some groups to regain access."
-    )
-
-
-def max_lifetime_secs(user, ns):
+def max_lifetime_secs(user, kind):
     """
     Max total lifetime in seconds for activity-based expiry.
-    Only applies to clipboard (ns='c') anon/free drops.
+    Only applies to text drops.
     Reads clipboard_max_lifetime_days from the DB-driven PlanLimit.
     """
-    if ns != Drop.NS_CLIPBOARD:
+    if kind != Drop.TEXT:
         return None
     plan = user_plan(user)
     days = Plan.get(plan, "clipboard_max_lifetime_days")
@@ -287,30 +248,29 @@ def invalid_key_message(key: str) -> str | None:
     return None
 
 
-def gen_key(ns):
+def gen_key():
     key = secrets.token_urlsafe(6)
-    # token_urlsafe never produces @, but be explicit for safety
-    while Drop.objects.filter(ns=ns, key=key).exists() or not is_valid_drop_key(key):
+    while Drop.objects.filter(key=key).exists() or not is_valid_drop_key(key):
         key = secrets.token_urlsafe(6)
     return key
 
 
 # ── B2 storage (thin wrappers kept here for import compatibility) ─────────────
 
-def upload_to_b2(file_obj, ns: str, drop_key: str,
+def upload_to_b2(file_obj, drop_key: str,
                  content_type: str = "application/octet-stream") -> str:
     """
     Upload a Django InMemoryUploadedFile / TemporaryUploadedFile to B2.
     Returns the B2 object key.  Raises on failure.
     """
     from core.views.b2 import upload_fileobj
-    return upload_fileobj(file_obj, ns, drop_key, content_type)
+    return upload_fileobj(file_obj, drop_key, content_type)
 
 
-def delete_from_b2(ns: str, drop_key: str) -> bool:
+def delete_from_b2(drop_key: str) -> bool:
     """Delete a file from B2. Returns True on success or already-gone."""
     from core.views.b2 import delete_object
-    return delete_object(ns, drop_key)
+    return delete_object(drop_key)
 
 
 # ── Storage accounting ────────────────────────────────────────────────────────
@@ -350,7 +310,7 @@ def claim_anon_drops(user, token):
         locked_until=None,
         anon_token=None,
         max_lifetime_secs=db_models.Case(
-            db_models.When(ns=Drop.NS_CLIPBOARD, then=free_lifetime_secs),
+            db_models.When(kind=Drop.TEXT, then=free_lifetime_secs),
             default=None,
             output_field=db_models.IntegerField(),
         ),

@@ -1,5 +1,8 @@
 """
 Backblaze B2 storage helpers (S3-compatible via boto3).
+
+All file objects are stored under ``drops/f/<key>``.
+Text drops have no B2 storage (content lives in the database).
 """
 
 import boto3
@@ -28,16 +31,16 @@ def _b2():
     return _client, _bucket
 
 
-def object_key(ns: str, drop_key: str) -> str:
-    return f"drops/{ns}/{drop_key}"
+def object_key(drop_key: str) -> str:
+    return f"drops/f/{drop_key}"
 
 
-def presigned_put(ns: str, drop_key: str, content_type: str = "application/octet-stream",
+def presigned_put(drop_key: str, content_type: str = "application/octet-stream",
                   size: int = 0, expires_in: int = 3600) -> str:
     client, bucket = _b2()
     params = {
         "Bucket": bucket,
-        "Key": object_key(ns, drop_key),
+        "Key": object_key(drop_key),
         "ContentType": content_type,
     }
     if size:
@@ -47,29 +50,26 @@ def presigned_put(ns: str, drop_key: str, content_type: str = "application/octet
     )
 
 
-def presigned_get(ns: str, drop_key: str, filename: str = "",
+def presigned_get(drop_key: str, filename: str = "",
                   expires_in: int = 3600, b2_key: str = "") -> str:
     """
     Return a presigned GET URL for a B2 object with proper filename encoding.
     """
     import urllib.parse
-    
+
     client, bucket = _b2()
-    b2_obj_key = b2_key if b2_key else object_key(ns, drop_key)
+    b2_obj_key = b2_key if b2_key else object_key(drop_key)
     params     = {"Bucket": bucket, "Key": b2_obj_key}
-    
+
     if filename:
-        # RFC 5987: Use RFC 2231 encoding for non-ASCII or special chars
-        # For simplicity, encode all special chars to be safe
         safe_name = urllib.parse.quote(filename, safe='')
-        # Use RFC 2231 syntax: filename*=UTF-8''<encoded_name>
         params["ResponseContentDisposition"] = f'attachment; filename*=UTF-8\'\'{safe_name}'
     return client.generate_presigned_url(
         "get_object", Params=params, ExpiresIn=expires_in,
     )
 
 
-def invalidate_presigned(ns: str, drop_key: str, filename: str = "", b2_key: str = "") -> None:
+def invalidate_presigned(drop_key: str, filename: str = "", b2_key: str = "") -> None:
     """No-op — kept so call sites in actions.py don't need updating."""
     pass
 
@@ -94,11 +94,11 @@ def copy_object(src_key: str, dst_key: str) -> bool:
         return False
 
 
-def upload_fileobj(file_obj, ns: str, drop_key: str,
+def upload_fileobj(file_obj, drop_key: str,
                    content_type: str = "application/octet-stream") -> str:
     from boto3.s3.transfer import TransferConfig
     client, bucket = _b2()
-    key = object_key(ns, drop_key)
+    key = object_key(drop_key)
     config = TransferConfig(
         multipart_threshold=100 * 1024 * 1024,
         multipart_chunksize=50 * 1024 * 1024,
@@ -113,14 +113,13 @@ def upload_fileobj(file_obj, ns: str, drop_key: str,
     return key
 
 
-def object_head(ns: str, drop_key: str) -> dict | None:
+def object_head(drop_key: str) -> dict | None:
     """
     Single HEAD request. Returns {"exists": True, "size": int} or None if not found.
-    Replaces separate object_exists() + object_size() calls.
     """
     client, bucket = _b2()
     try:
-        resp = client.head_object(Bucket=bucket, Key=object_key(ns, drop_key))
+        resp = client.head_object(Bucket=bucket, Key=object_key(drop_key))
         return {"exists": True, "size": resp.get("ContentLength", 0)}
     except ClientError as e:
         if e.response["Error"]["Code"] in ("404", "NoSuchKey"):
@@ -128,10 +127,10 @@ def object_head(ns: str, drop_key: str) -> dict | None:
         raise
 
 
-def object_exists(ns: str, drop_key: str) -> bool:
+def object_exists(drop_key: str) -> bool:
     client, bucket = _b2()
     try:
-        client.head_object(Bucket=bucket, Key=object_key(ns, drop_key))
+        client.head_object(Bucket=bucket, Key=object_key(drop_key))
         return True
     except ClientError as e:
         if e.response["Error"]["Code"] in ("404", "NoSuchKey"):
@@ -139,22 +138,21 @@ def object_exists(ns: str, drop_key: str) -> bool:
         raise
 
 
-def object_size(ns: str, drop_key: str) -> int:
+def object_size(drop_key: str) -> int:
     client, bucket = _b2()
     try:
-        resp = client.head_object(Bucket=bucket, Key=object_key(ns, drop_key))
+        resp = client.head_object(Bucket=bucket, Key=object_key(drop_key))
         return resp.get("ContentLength", 0)
     except ClientError:
         return 0
 
 
-def delete_object(ns: str, drop_key: str, b2_key: str = "") -> bool:
-    """Delete a B2 object. If b2_key is provided, use it directly instead of
-    computing from ns/drop_key."""
+def delete_object(drop_key: str, b2_key: str = "") -> bool:
+    """Delete a B2 object. If b2_key is provided, use it directly."""
     import logging
     logger = logging.getLogger(__name__)
     client, bucket = _b2()
-    key = b2_key if b2_key else object_key(ns, drop_key)
+    key = b2_key if b2_key else object_key(drop_key)
     try:
         client.delete_object(Bucket=bucket, Key=key)
         return True

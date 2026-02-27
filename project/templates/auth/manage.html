@@ -10,7 +10,7 @@
     <p class="muted" style="font-size:.85rem">
       @{{ user.username }} ·
       <a href="/auth/account/">account</a> ·
-      <a href="/@{{ user.username }}/">collections</a>
+      <a href="/@{{ user.username }}/">folders</a>
     </p>
   </div>
 
@@ -21,14 +21,14 @@
     {% if profile.is_paid %}
     <button class="btn-sm" onclick="bulkRenew()">renew</button>
     {% endif %}
-    {% if collections %}
-    <select id="bulk-collection" style="font-size:.82rem;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:.2rem .5rem">
-      <option value="">add to collection…</option>
-      {% for col in collections %}
-      <option value="{{ col.id }}">{{ col.name }}</option>
+    {% if folders %}
+    <select id="bulk-folder" style="font-size:.82rem;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:.2rem .5rem">
+      <option value="">add to folder…</option>
+      {% for folder in folders %}
+      <option value="{{ folder.id }}">{{ folder.name }}</option>
       {% endfor %}
     </select>
-    <button class="btn-sm" onclick="bulkAddToCollection()">add</button>
+    <button class="btn-sm" onclick="bulkAddToFolder()">add</button>
     {% endif %}
   </div>
 
@@ -119,10 +119,10 @@
   </div>
   {% endif %}
 
-  <!-- Collections quick-manage -->
-  {% if collections %}
+  <!-- Folders quick-manage -->
+  {% if folders %}
   <div class="account-section">
-    <h2>collections <span class="muted" style="font-weight:400;font-size:.75rem">({{ collections|length }})</span></h2>
+    <h2>folders <span class="muted" style="font-weight:400;font-size:.75rem">({{ folders|length }})</span></h2>
     <table class="drops-table">
       <thead>
         <tr>
@@ -133,13 +133,13 @@
         </tr>
       </thead>
       <tbody>
-        {% for col in collections %}
+        {% for folder in folders %}
         <tr>
-          <td><a href="/@{{ user.username }}/{{ col.full_path }}/" class="mono">{{ col.name }}</a></td>
-          <td class="muted">{{ col.drop_count }}</td>
-          <td class="muted">{% if col.public_inbox %}✓{% else %}—{% endif %}</td>
+          <td><a href="/@{{ user.username }}/{{ folder.slug }}/" class="mono">{{ folder.name }}</a></td>
+          <td class="muted">{{ folder.items.count }}</td>
+          <td class="muted">{% if folder.public_inbox %}✓{% else %}—{% endif %}</td>
           <td>
-            <a href="/@{{ user.username }}/{{ col.full_path }}/" class="btn-sm">open →</a>
+            <a href="/@{{ user.username }}/{{ folder.slug }}/" class="btn-sm">open →</a>
           </td>
         </tr>
         {% endfor %}
@@ -220,11 +220,11 @@ async function bulkRenew() {
   if (ok > 0) setTimeout(function() { location.reload(); }, 800);
 }
 
-async function bulkAddToCollection() {
-  var sel = document.getElementById('bulk-collection');
+async function bulkAddToFolder() {
+  var sel = document.getElementById('bulk-folder');
   if (!sel) return;
-  var colId = sel.value;
-  if (!colId) { showToast('Select a collection first.'); return; }
+  var folderId = sel.value;
+  if (!folderId) { showToast('Select a folder first.'); return; }
 
   var items = getSelected();
   if (!items.length) return;
@@ -233,7 +233,7 @@ async function bulkAddToCollection() {
   for (var i = 0; i < items.length; i++) {
     var item = items[i];
     try {
-      var res = await fetch('/collections/' + colId + '/add/', {
+      var res = await fetch('/folders/' + folderId + '/add/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
         body: JSON.stringify({ ns: item.ns, key: item.key }),
@@ -243,7 +243,7 @@ async function bulkAddToCollection() {
   }
   sel.value = '';
   updateBulkBar();
-  showToast(ok + ' added to collection' + (fail ? ', ' + fail + ' failed' : ''));
+  showToast(ok + ' added to folder' + (fail ? ', ' + fail + ' failed' : ''));
 }
 
 async function unsave(ns, key, rowId) {

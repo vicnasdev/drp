@@ -48,7 +48,7 @@ def save_local_drops(drops):
     DROPS_FILE.write_text(json.dumps(drops, indent=2) + '\n')
 
 
-def record_drop(key, kind, ns='c', filename=None, host=None):
+def record_drop(key, kind, filename=None, host=None):
     """Add or update a drop in the local list."""
     drops = load_local_drops()
     # Remove any existing entry for this key
@@ -56,7 +56,6 @@ def record_drop(key, kind, ns='c', filename=None, host=None):
     entry = {
         'key': key,
         'kind': kind,
-        'ns': ns,
         'created_at': datetime.now(timezone.utc).isoformat(),
         'host': host or '',
     }

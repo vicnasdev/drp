@@ -9,7 +9,7 @@
   <!-- Key + URL header -->
   <div class="drop-header">
     <div class="key-row">
-      <span class="prefix">drp /{% if drop.ns == 'f' %}f/{% endif %}</span>
+      <span class="prefix">drp /</span>
       <input type="text" id="keyInput" value="{{ drop.key }}"
              autocomplete="off" spellcheck="false"
              {% if not can_edit %}disabled{% endif %}/>
@@ -22,6 +22,9 @@
     <div class="share-url">
       <span id="urlDisplay">{{ request.build_absolute_uri }}</span>
       <button class="btn-sm" onclick="copyUrl()">copy link</button>
+      {% if folder_path_url %}
+      <button class="btn-sm" id="linkToggle" onclick="toggleLinkType()">relative</button>
+      {% endif %}
       <button class="btn-sm" id="qrToggle" onclick="toggleQr()" title="Show QR code">QR</button>
     </div>
 
@@ -70,7 +73,7 @@
         <button class="btn-sm" onclick="downloadText()">download .txt</button>
         {% if can_edit %}<button class="btn-sm" onclick="toggleEdit()">edit</button>{% endif %}
         {% load drop_tags %}
-        {% include "partials/bookmark_btn.html" with drop=drop ns=drop.ns key=drop.key %}
+        {% include "partials/bookmark_btn.html" with drop=drop key=drop.key %}
       </div>
     </div>
 
@@ -116,7 +119,7 @@
     {% endif %}
     <div class="clip-actions">
       {% load drop_tags %}
-      {% include "partials/bookmark_btn.html" with drop=drop ns=drop.ns key=drop.key %}
+      {% include "partials/bookmark_btn.html" with drop=drop key=drop.key %}
     </div>
     {% if can_edit %}
     <p class="muted" style="margin-top:.8rem;font-size:.85rem">replace file:</p>
@@ -183,22 +186,42 @@
 
 <script>
 const KEY      = '{{ drop.key }}';
-const NS       = '{{ drop.ns }}';
 const BASE     = window.location.origin;
 const CAN_EDIT = {{ can_edit|yesno:"true,false" }};
 const IS_OWNER = {{ is_owner|yesno:"true,false" }};
 const DROP_URL = '{{ request.build_absolute_uri }}';
+const FOLDER_PATH_URL = '{{ folder_path_url|default:"" }}';
+let linkMode = 'global';
 
 function actionUrl(action) {
-  return NS === 'f' ? `/f/${KEY}/${action}/` : `/${KEY}/${action}/`;
+  return `/${KEY}/${action}/`;
 }
 function checkKeyUrl(key) {
-  return `/check-key/?key=${encodeURIComponent(key)}&ns=${NS}`;
+  return `/check-key/?key=${encodeURIComponent(key)}`;
+}
+
+function activeUrl() {
+  if (linkMode === 'relative' && FOLDER_PATH_URL) return BASE + FOLDER_PATH_URL;
+  return DROP_URL;
 }
 
 function copyUrl() {
-  navigator.clipboard.writeText(document.getElementById('urlDisplay').textContent);
+  navigator.clipboard.writeText(activeUrl());
   showToast('link copied!');
+}
+
+function toggleLinkType() {
+  const btn = document.getElementById('linkToggle');
+  const display = document.getElementById('urlDisplay');
+  if (linkMode === 'global') {
+    linkMode = 'relative';
+    display.textContent = BASE + FOLDER_PATH_URL;
+    btn.textContent = 'global';
+  } else {
+    linkMode = 'global';
+    display.textContent = DROP_URL;
+    btn.textContent = 'relative';
+  }
 }
 function toggleEdit() {
   document.getElementById('editForm').classList.toggle('hidden');
@@ -223,7 +246,7 @@ function toggleQr() {
   const isHidden = panel.classList.toggle('hidden');
   if (!isHidden && !qrGenerated) {
     new QRCode(document.getElementById('qrCode'), {
-      text: DROP_URL, width: 160, height: 160,
+      text: activeUrl(), width: 160, height: 160,
       colorDark: '#e8e8e8', colorLight: '#1a1a1a',
       correctLevel: QRCode.CorrectLevel.M,
     });
@@ -320,8 +343,7 @@ if (CAN_EDIT) {
   keyInput.addEventListener('input', () => {
     clearTimeout(keyTimer);
     const val = keyInput.value.trim();
-    const prefix = NS === 'f' ? `/f/` : `/`;
-    document.getElementById('urlDisplay').textContent = `${BASE}${prefix}${val}/`;
+    document.getElementById('urlDisplay').textContent = `${BASE}/${val}/`;
     keyTimer = setTimeout(async () => {
       if (!val || val === KEY) { keyStatus.textContent = ''; return; }
       const res = await fetch(checkKeyUrl(val));

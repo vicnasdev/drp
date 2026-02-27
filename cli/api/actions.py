@@ -1,9 +1,7 @@
 """
 Drop action API calls: delete, rename, renew, list, key_exists, save_bookmark.
 
-URL conventions:
-  Clipboard:  /key/delete|rename|renew|save/
-  File:       /f/key/delete|rename|renew|save/
+URL convention:  /<key>/<action>/
 
 Return value conventions for callers (manage.py):
   rename() → new_key string   on success
@@ -17,70 +15,60 @@ from .auth import get_csrf
 from .helpers import err
 
 
-def _url(host, ns, key, action):
-    if ns == 'f':
-        return f'{host}/f/{key}/{action}/'
+def _url(host, key, action):
     return f'{host}/{key}/{action}/'
 
 
-def delete(host, session, key, ns='c'):
+def delete(host, session, key):
     csrf = get_csrf(host, session)
     try:
         res = session.delete(
-            _url(host, ns, key, 'delete'),
+            _url(host, key, 'delete'),
             headers={'X-CSRFToken': csrf},
             timeout=10,
         )
         if res.ok:
             return True
         if res.status_code == 404:
-            err(f'Drop not found. If this is a file drop, use: drp rm -f {key}')
-            _report_http('rm', 404, f'delete ns={ns} — likely wrong namespace')
+            err(f'Drop /{key}/ not found.')
+            _report_http('rm', 404, 'delete — not found')
             return False
         _handle_error(res, 'Delete failed')
-        _report_http('rm', res.status_code, f'delete ns={ns}')
+        _report_http('rm', res.status_code, 'delete')
     except Exception as e:
         err(f'Delete error: {e}')
     return False
 
 
-def rename(host, session, key, new_key, ns='c'):
+def rename(host, session, key, new_key):
     """
     Rename a drop key.
 
     Returns:
       str   — the new key on success
       False — a known error that has already been printed and reported
-               (404 wrong-namespace, 409 key taken, 403 locked, 400 bad input)
+               (404, 409 key taken, 403 locked, 400 bad input)
       None  — an unexpected error (network failure, unhandled status code)
                caller should file a SilentFailure report
     """
     csrf = get_csrf(host, session)
     try:
         res = session.post(
-            _url(host, ns, key, 'rename'),
+            _url(host, key, 'rename'),
             data={'new_key': new_key, 'csrfmiddlewaretoken': csrf},
             timeout=10,
         )
         if res.ok:
             return res.json().get('key')
 
-        # ── Known errors — print a helpful message and report, then return
-        # False so the caller knows not to file a redundant SilentFailure. ──
         if res.status_code == 404:
-            ns_flag = '-f ' if ns == 'f' else ''
-            other_flag = '' if ns == 'f' else '-f '
-            err(
-                f'Drop /{ns_flag}{key}/ not found. '
-                f'If this is a {"file" if ns == "c" else "clipboard"} drop, '
-                f'use: drp mv {other_flag}{key} {new_key}'
-            )
-            _report_http('mv', 404, f'rename ns={ns} — likely wrong namespace')
+            err(f'Drop /{key}/ not found.')
+            _report_http('mv', 404, 'rename — not found')
             return False
 
         if res.status_code == 409:
             err(f'Key "{new_key}" is already taken.')
-            _report_http('mv', 409, f'rename ns={ns} key conflict')
+            _report_http('mv', 409, 'rename key conflict')
             return False
 
         if res.status_code == 403:
@@ -89,17 +77,16 @@ def rename(host, session, key, new_key, ns='c'):
             except Exception:
                 msg = 'Permission denied.'
             err(f'Rename blocked: {msg}')
-            _report_http('mv', 403, f'rename ns={ns}')
+            _report_http('mv', 403, 'rename')
             return False
 
         if res.status_code == 400:
             _handle_error(res, 'Rename failed')
-            _report_http('mv', 400, f'rename ns={ns}')
+            _report_http('mv', 400, 'rename')
             return False
 
-        # Unexpected status — let caller decide whether to report
         _handle_error(res, 'Rename failed')
-        _report_http('mv', res.status_code, f'rename ns={ns}')
+        _report_http('mv', res.status_code, 'rename')
 
     except Exception as e:
         err(f'Rename error: {e}')
@@ -107,11 +94,11 @@ def rename(host, session, key, new_key, ns='c'):
     return None
 
 
-def renew(host, session, key, ns='c'):
+def renew(host, session, key):
     csrf = get_csrf(host, session)
     try:
         res = session.post(
-            _url(host, ns, key, 'renew'),
+            _url(host, key, 'renew'),
             data={'csrfmiddlewaretoken': csrf},
             timeout=10,
         )
@@ -119,13 +106,113 @@ def renew(host, session, key, ns='c'):
             data = res.json()
             return data.get('expires_at'), data.get('renewals')
         _handle_error(res, 'Renew failed')
-        _report_http('renew', res.status_code, f'renew ns={ns}')
+        _report_http('renew', res.status_code, 'renew')
     except Exception as e:
         err(f'Renew error: {e}')
     return None, None
 
 
-def save_bookmark(host, session, key, ns='c'):
+def copy_drop(host, session, key, new_key=None):
+    """
+    Server-side copy of a drop.
+    Returns the new key string on success, False on known error, None on unexpected error.
+    """
+    csrf = get_csrf(host, session)
+    payload = {'csrfmiddlewaretoken': csrf}
+    if new_key:
+        payload['new_key'] = new_key
+    try:
+        res = session.post(
+            _url(host, key, 'copy'),
+            data=payload,
+            timeout=10,
+        )
+        if res.ok:
+            return res.json().get('key', new_key)
+        if res.status_code == 404:
+            err(f'Drop /{key}/ not found.')
+            _report_http('cp', 404, 'copy — not found')
+            return False
+        if res.status_code == 409:
+            err(f'Key "{new_key}" is already taken.')
+            _report_http('cp', 409, 'copy key conflict')
+            return False
+        if res.status_code == 403:
+            try:
+                msg = res.json().get('error', 'Permission denied.')
+            except Exception:
+                msg = 'Permission denied.'
+            err(f'Copy blocked: {msg}')
+            _report_http('cp', 403, 'copy')
+            return False
+        _handle_error(res, 'Copy failed')
+        _report_http('cp', res.status_code, 'copy')
+    except Exception as e:
+        err(f'Copy error: {e}')
+    return None
+
+
+def lock_drop(host, session, key, password=None, remove=False):
+    """
+    Set or remove password on a drop.
+    Returns True on success, False on failure.
+    """
+    csrf = get_csrf(host, session)
+    payload = {'csrfmiddlewaretoken': csrf}
+    if remove:
+        payload['action'] = 'remove'
+    elif password:
+        payload['password'] = password
+    try:
+        res = session.post(
+            _url(host, key, 'set-password'),
+            data=payload,
+            timeout=10,
+        )
+        if res.ok:
+            return True
+        if res.status_code == 404:
+            err(f'Drop /{key}/ not found.')
+            return False
+        if res.status_code == 403:
+            err('Password protection requires a paid plan.')
+            return False
+        _handle_error(res, 'Lock failed')
+        _report_http('lock', res.status_code, 'lock')
+    except Exception as e:
+        err(f'Lock error: {e}')
+    return False
+
+
+def create_folder(host, session, name, parent_id=None):
+    """
+    Create a folder. Returns the folder dict on success, None on failure.
+    """
+    csrf = get_csrf(host, session)
+    import json
+    payload = {'name': name}
+    if parent_id:
+        payload['parent_id'] = parent_id
+    try:
+        res = session.post(
+            f'{host}/folders/create/',
+            data=json.dumps(payload),
+            headers={'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
+            timeout=10,
+        )
+        if res.status_code == 201 or res.ok:
+            return res.json()
+        if res.status_code == 409:
+            err(f'Folder "{name}" already exists.')
+            return None
+        _handle_error(res, 'Create folder failed')
+        _report_http('mkdir', res.status_code, 'create_folder')
+    except Exception as e:
+        err(f'Create folder error: {e}')
+    return None
+
+
+def save_bookmark(host, session, key):
     """
     Bookmark a drop. Returns True if saved, False on failure.
     Requires login — server returns 403 if not authenticated.
@@ -133,7 +220,7 @@ def save_bookmark(host, session, key, ns='c'):
     csrf = get_csrf(host, session)
     try:
         res = session.post(
-            _url(host, ns, key, 'save'),
+            _url(host, key, 'save'),
             data={'csrfmiddlewaretoken': csrf},
             timeout=10,
             allow_redirects=False,
@@ -150,7 +237,7 @@ def save_bookmark(host, session, key, ns='c'):
             err(f'Drop /{key}/ not found.')
             return False
         _handle_error(res, 'Save failed')
-        _report_http('save', res.status_code, f'save_bookmark ns={ns}')
+        _report_http('save', res.status_code, 'save_bookmark')
     except Exception as e:
         err(f'Save error: {e}')
     return False
@@ -174,11 +261,11 @@ def list_drops(host, session):
     return None
 
 
-def key_exists(host, session, key, ns='c'):
+def key_exists(host, session, key):
     try:
         res = session.get(
             f'{host}/check-key/',
-            params={'key': key, 'ns': ns},
+            params={'key': key},
             timeout=10,
         )
         if res.ok:

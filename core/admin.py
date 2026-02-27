@@ -9,7 +9,7 @@ from django.utils.html import format_html
 
 from .models import (
     UserProfile, PlanLimit,
-    Group, GroupMembership,
+    Folder, FolderMember,
     EmailTemplate,
 )
 
@@ -197,7 +197,7 @@ class PlanLimitAdmin(admin.ModelAdmin):
     list_display = (
         'plan', 'label', 'price_monthly',
         'max_file_mb', 'max_text_kb', 'storage_gb',
-        'max_collections', 'max_groups', 'webhooks', 'api_keys', 'scheduled_drops',
+        'max_folders', 'webhooks', 'api_keys', 'scheduled_drops',
         'password_protection', 'remote_upload',
     )
     ordering = ('price_monthly',)
@@ -211,27 +211,27 @@ class PlanLimitAdmin(admin.ModelAdmin):
         PlanLimit.invalidate_cache()
 
 
-# ── Group admin ─────────────────────────────────────────────────────────────────
+# ── Folder admin ────────────────────────────────────────────────────────────────
 
-class GroupMembershipInline(admin.TabularInline):
-    model = GroupMembership
+class FolderMemberInline(admin.TabularInline):
+    model = FolderMember
     extra = 0
     fields = ('user', 'role', 'joined_at')
     readonly_fields = ('joined_at',)
     raw_id_fields = ('user',)
 
 
-@admin.register(Group)
-class GroupAdmin(admin.ModelAdmin):
-    list_display = ('handle', 'name', 'created_by', 'member_count', 'created_at')
-    search_fields = ('handle', 'name')
+@admin.register(Folder)
+class FolderAdmin(admin.ModelAdmin):
+    list_display = ('slug', 'name', 'owner', 'member_count', 'created_at')
+    search_fields = ('slug', 'name')
     readonly_fields = ('created_at',)
-    raw_id_fields = ('created_by',)
-    inlines = (GroupMembershipInline,)
+    raw_id_fields = ('owner',)
+    inlines = (FolderMemberInline,)
 
     @admin.display(description='members')
     def member_count(self, obj):
-        return obj.memberships.count()
+        return obj.members.count()
 
 
 # ── EmailTemplate admin ────────────────────────────────────────────────────────

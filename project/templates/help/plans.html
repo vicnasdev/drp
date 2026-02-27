@@ -44,7 +44,7 @@
       <li class="plan-no">No custom expiry</li>
       <li class="plan-no">No locked drops</li>
       <li class="plan-no">No password protection</li>
-      <li class="plan-no">No collections</li>
+      <li class="plan-no">No folders</li>
     </ul>
   </div>
 
@@ -64,7 +64,7 @@
       <li>Password-protected drops</li>
       <li>Unlimited renewals</li>
       <li>Bookmarks, export / import</li>
-      <li>Up to <strong>{{ lim.max_collections }} collections</strong></li>
+      <li>Up to <strong>{{ lim.max_folders }} folders</strong></li>
     </ul>
   </div>
 
@@ -84,10 +84,10 @@
       <li>Password-protected drops</li>
       <li>Unlimited renewals</li>
       <li>Bookmarks, export / import</li>
-      {% if lim.max_collections is None %}
-      <li><strong>Unlimited collections</strong></li>
+      {% if lim.max_folders is None %}
+      <li><strong>Unlimited folders</strong></li>
       {% else %}
-      <li><strong>{{ lim.max_collections }} collections</strong></li>
+      <li><strong>{{ lim.max_folders }} folders</strong></li>
       {% endif %}
     </ul>
   </div>
@@ -111,8 +111,8 @@
 <h2>password protection</h2>
 <p>Paid accounts can add a password to any drop they own. Stored as a PBKDF2 hash — never in plain text. Browsers remember unlocked drops for the session. The CLI prompts automatically.</p>
 
-<h2>collections</h2>
-<p>Collections let you group drops under a shareable URL: <code>/@username/collection-name/</code>. Anyone can view a collection you share — individual password-protected drops still require their password when opened. Free accounts can view collections but cannot create them. Starter accounts get up to 10 collections; Pro accounts get unlimited.</p>
+<h2>folders</h2>
+<p>Folders let you group drops under a shareable URL: <code>/@username/folder-name/</code>. Anyone can view a folder you share — individual password-protected drops still require their password when opened. Invite members with reader, writer, or admin roles using folder tokens. Free accounts can view folders but cannot create them. Starter accounts get up to 10 folders; Pro accounts get unlimited.</p>
 
 <h2>billing</h2>
 <p>Paid plans bill monthly via <a href="https://www.lemonsqueezy.com" rel="noopener">Lemon Squeezy</a>. Upgrade from your <a href="/auth/account/">account page</a>. Cancelling returns you to the free plan at the end of the billing period — drops are not deleted, but paid-only limits no longer apply to new uploads. Manage or cancel anytime in the <a href="/billing/portal/">billing portal</a>.</p>

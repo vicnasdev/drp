@@ -19,14 +19,14 @@ from core.models import Drop, TransferToken
 TRANSFER_TTL_HOURS = 24
 
 
-def send_transfer(request, key, ns="c"):
+def send_transfer(request, key):
     """Generate a one-time transfer token for a drop. Owner only."""
     if request.method != "POST":
         return JsonResponse({"error": "POST required."}, status=405)
     if not request.user.is_authenticated:
         return JsonResponse({"error": "Login required."}, status=401)
 
-    drop = Drop.objects.filter(ns=ns, key=key, owner=request.user).first()
+    drop = Drop.objects.filter(key=key, owner=request.user).first()
     if not drop:
         return JsonResponse({"error": "Drop not found or not yours."}, status=404)
 
@@ -47,7 +47,7 @@ def send_transfer(request, key, ns="c"):
         "token": token,
         "expires_in": f"{TRANSFER_TTL_HOURS}h",
         "key": drop.key,
-        "ns": drop.ns,
+        "kind": drop.kind,
     })
 
 
@@ -82,10 +82,9 @@ def claim_transfer(request, token):
     tt.claimed_at = timezone.now()
     tt.save(update_fields=["claimed_by", "claimed_at"])
 
-    prefix = "f/" if drop.ns == Drop.NS_FILE else ""
     return JsonResponse({
         "key": drop.key,
-        "ns": drop.ns,
-        "url": f"/{prefix}{drop.key}/",
+        "kind": drop.kind,
+        "url": f"/{drop.key}/",
         "from": old_owner.username if old_owner else None,
     })
