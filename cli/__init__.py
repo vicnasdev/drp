@@ -2,8 +2,6 @@
 
 Drop, share, and manage text snippets and files from the terminal.
 https://drp.fyi
-
-Pricing: Starter CA$5/mo, Pro CA$10/mo.
 """
 
 # VERSION file holds major.minor (e.g. "1.0") — only bumped manually.
