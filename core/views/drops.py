@@ -1005,6 +1005,8 @@ def _drop_response(request, drop, folder_item=None):
             "is_public":         drop.is_public,
             "tags":              drop.tags,
             "like_count":        drop.likes.count(),
+            "is_owner":          _is_owner(request, drop),
+            "owner":             drop.owner.username if drop.owner else None,
         }
         if _fi:
             data["folder_path"] = _fi.folder_url

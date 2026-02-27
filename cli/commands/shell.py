@@ -43,11 +43,12 @@ _BUILTIN_CMDS = [
     'ls', 'cat', 'rm', 'cp', 'mv', 'add', 'open', 'status',
     'save', 'renew', 'lock', 'mkdir', 'info', 'rekey',
     'cd', 'pwd', 'clear', 'help', 'exit', 'quit', 'link', 'getlink',
+    'cache', 'rmcache', 'get',
 ]
 
 # Delegated drp commands (handled by the top-level CLI parser/handlers)
 _DELEGATED_CMDS = [
-    'up', 'get', 'ls',
+    'up', 'ls',
     'token', 'ask', 'ping',
     'setup', 'login', 'logout',
 ]
@@ -62,7 +63,7 @@ _SUB_CMDS = {
 # Commands whose first positional arg is a drop key
 _KEY_CMDS = {
     'cat', 'rm', 'cp', 'mv', 'add', 'open', 'status',
-    'get', 'save', 'renew', 'lock',
+    'get', 'save', 'renew', 'lock', 'rmcache',
 }
 
 # Commands whose first positional arg is a folder slug
@@ -408,6 +409,20 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
             local_path = os.path.expanduser(src)
             if not os.path.exists(local_path):
                 return [f'  {red("✗")} File not found: {src}']
+            # Verify session is authenticated before uploading
+            # (upload endpoints accept anon — drop would get owner=None
+            # and be invisible in 'ls' if session expired)
+            try:
+                _check = session.get(
+                    f'{host}/auth/account/',
+                    headers={'Accept': 'application/json'},
+                    timeout=8, allow_redirects=False,
+                )
+                if _check.status_code != 200:
+                    from cli.session import ensure_authenticated
+                    ensure_authenticated(host, session, cfg)
+            except Exception:
+                pass  # best-effort — upload will still be attempted
             try:
                 from cli.api.file import upload_file
                 result = upload_file(host, session, local_path)
@@ -630,6 +645,137 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
                 return [f'  {red("✗")} {e}']
         return [f'  {cyan(host + "/" + key + "/")}']
 
+    # ── get — fetch and display/download a drop ─────────────────────────────
+    if cmd == 'get':
+        if not rest:
+            return [f'  {red("✗")} Usage: get <key> [-o filename]']
+        key = rest[0]
+        output_file = None
+        if '-o' in rest:
+            idx = rest.index('-o')
+            if idx + 1 < len(rest):
+                output_file = rest[idx + 1]
+
+        try:
+            from cli.spinner import Spinner
+            with Spinner('fetching'):
+                res = session.get(
+                    f'{host}/{key}/',
+                    headers={'Accept': 'application/json'},
+                    timeout=30,
+                )
+            if res.status_code == 401:
+                import getpass as _gp
+                try:
+                    pw = _gp.getpass(f'  Password for /{key}/: ')
+                except (EOFError, KeyboardInterrupt):
+                    return [f'  {dim("[cancelled]")}']
+                with Spinner('fetching'):
+                    res = session.get(
+                        f'{host}/{key}/',
+                        headers={'Accept': 'application/json',
+                                 'X-Drop-Password': pw},
+                        timeout=30,
+                    )
+                if res.status_code == 401:
+                    return [f'  {red("✗")} wrong password.']
+
+            if not res.ok:
+                if res.status_code == 404:
+                    return [f'  {red("✗")} drop /{key}/ not found.']
+                if res.status_code == 410:
+                    return [f'  {red("✗")} drop /{key}/ has expired.']
+                return [f'  {red("✗")} server returned {res.status_code}.']
+
+            data = res.json()
+            kind = data.get('kind')
+            is_mine = data.get('is_owner', False)
+            lines = []
+
+            if kind == 'file':
+                # File drop — download to local dir
+                filename = data.get('filename', key)
+                if output_file:
+                    filename = output_file
+                try:
+                    from cli.api.file import get_file
+                    result = get_file(host, session, key)
+                    if result[0] == 'file':
+                        content, server_fn = result[1]
+                        if not output_file:
+                            filename = server_fn or filename
+                        import os
+                        with open(filename, 'wb') as f:
+                            f.write(content)
+                        lines.append(f'  {green("✓")} saved {filename}')
+                    else:
+                        lines.append(f'  {red("✗")} download failed.')
+                except Exception as e:
+                    lines.append(f'  {red("✗")} {e}')
+            else:
+                # Text drop — print content (or save with -o)
+                content = data.get('content', '')
+                if output_file:
+                    import os
+                    with open(output_file, 'w') as f:
+                        f.write(content)
+                    lines.append(f'  {green("✓")} saved {output_file}')
+                else:
+                    lines.extend(content.splitlines())
+
+            # Ownership hint
+            if is_mine:
+                lines.append(f'  {dim("(yours — rm to delete, renew to extend)")}')
+            elif data.get('owner'):
+                lines.append(f'  {dim("(by @" + data["owner"] + " — save to bookmark)")}')
+
+            # Record in cache for tab-complete
+            from cli.completion import record_key
+            record_key(key)
+            return lines
+        except Exception as e:
+            return [f'  {red("✗")} {e}']
+
+    # ── cache — manage the local key cache ────────────────────────────────
+    if cmd == 'cache':
+        from cli.completion import _load_cache, record_key
+        if not rest:
+            # List all cached keys
+            data = _load_cache()
+            keys = data.get('keys', [])
+            folders = data.get('folders', [])
+            lines = []
+            if keys:
+                lines.append(f'  {bold("keys")} ({len(keys)})')
+                for k in keys:
+                    lines.append(f'    {cyan(k)}')
+            if folders:
+                if keys:
+                    lines.append('')
+                lines.append(f'  {bold("folders")} ({len(folders)})')
+                for s in folders:
+                    lines.append(f'    {magenta(s)}')
+            if not keys and not folders:
+                lines.append(dim('  (cache empty)'))
+            return lines
+        else:
+            # cache <key> — manually add a key
+            for k in rest:
+                record_key(k)
+            return [f'  {green("✓")} added {", ".join(rest)} to cache']
+
+    # ── rmcache — remove from cache ────────────────────────────────────────
+    if cmd == 'rmcache':
+        from cli.completion import _load_cache, _save_cache, remove_key
+        if not rest:
+            # Clear entire cache
+            _save_cache({'keys': [], 'folders': []})
+            return [f'  {green("✓")} cache cleared']
+        else:
+            for k in rest:
+                remove_key(k)
+            return [f'  {green("✓")} removed {", ".join(rest)} from cache']
+
     # ── status — delegate to CLI handler ─────────────────────────────────────
     if cmd == 'status':
         _delegate_to_cli(cmd, rest, cwd=cwd, host=host, session=session, username=username)
@@ -844,8 +990,11 @@ def _print_shell_help():
         ('ls [-l]',           'list drops'),
         ('ls --col',          'list folders'),
         ('cat <key>',         'print clipboard content'),
+        ('get <key>',         'fetch drop (text printed, file saved)'),
+        ('get <key> -o f',    'save to specific filename'),
         ('rm <key>',          'delete a drop'),
         ('cp <key> [new]',    'duplicate a drop'),
+        ('cp <file> .',       'upload local file as new drop'),
         ('mv <key> <new>',    'rename a drop'),
         ('save <key>',        'bookmark a drop'),
         ('renew <key>',       'renew expiry'),
@@ -861,6 +1010,10 @@ def _print_shell_help():
         ('open <key>',        'print drop URL'),
         ('link <key>',        'shareable link (--relative for folder path)'),
         ('status <key>',      'view count and last seen'),
+        ('cache',             'list cached keys and folders'),
+        ('cache <key>',       'add key to cache manually'),
+        ('rmcache',           'clear the entire cache'),
+        ('rmcache <key>',     'remove key from cache'),
         ('clear',             'clear the screen'),
         ('exit',              'leave the shell'),
     ]
@@ -873,7 +1026,6 @@ def _print_shell_help():
     print(f'  {dim("─" * 40)}')
     delegated = [
         ('up <target>',        'upload text or file'),
-        ('get <key>',          'fetch a drop'),
         ('serve <targets>',    'upload dir / file list'),
         ('token <cmd>',        'manage API tokens'),
         ('ask <question>',     'ask the help bot'),

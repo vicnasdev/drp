@@ -799,3 +799,230 @@ class TestCompletionScoping:
 
     def test_empty_returns_nothing(self):
         assert _complete_local_paths('') == []
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# get — fetch and display/download drops
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestGetCommand:
+    """get <key> should print text, download files, handle passwords, and
+    show ownership hints."""
+
+    def test_get_no_args(self):
+        lines = _dispatch('get', [], HOST, _session_ok(), _cfg(), None, USER)
+        assert any('Usage' in l for l in lines)
+
+    def test_get_text_prints_content(self):
+        """get <key> for a text drop prints the content."""
+        sess = _session_ok(json_data={
+            'kind': 'text', 'content': 'line1\nline2', 'is_owner': False,
+        })
+        with patch('cli.completion.record_key'):
+            lines = _dispatch('get', ['abc'], HOST, sess, _cfg(), None, USER)
+        assert 'line1' in lines
+        assert 'line2' in lines
+
+    def test_get_text_save_to_file(self, tmp_path, monkeypatch):
+        """get <key> -o out.txt saves text to file."""
+        monkeypatch.chdir(tmp_path)
+        sess = _session_ok(json_data={
+            'kind': 'text', 'content': 'saved text', 'is_owner': False,
+        })
+        with patch('cli.completion.record_key'):
+            lines = _dispatch('get', ['abc', '-o', 'out.txt'], HOST, sess, _cfg(), None, USER)
+        assert any('✓' in l for l in lines)
+        assert (tmp_path / 'out.txt').read_text() == 'saved text'
+
+    def test_get_file_downloads(self, tmp_path, monkeypatch):
+        """get <key> for a file drop downloads the file."""
+        monkeypatch.chdir(tmp_path)
+        sess = _session_ok(json_data={
+            'kind': 'file', 'filename': 'photo.png', 'is_owner': False,
+        })
+        with patch('cli.api.file.get_file', return_value=('file', (b'\x89PNG', 'photo.png'))), \
+             patch('cli.completion.record_key'):
+            lines = _dispatch('get', ['abc'], HOST, sess, _cfg(), None, USER)
+        assert any('✓' in l for l in lines)
+        assert (tmp_path / 'photo.png').exists()
+
+    def test_get_file_save_custom_name(self, tmp_path, monkeypatch):
+        """get <key> -o custom.png saves with the custom name."""
+        monkeypatch.chdir(tmp_path)
+        sess = _session_ok(json_data={
+            'kind': 'file', 'filename': 'photo.png', 'is_owner': False,
+        })
+        with patch('cli.api.file.get_file', return_value=('file', (b'\x89PNG', 'photo.png'))), \
+             patch('cli.completion.record_key'):
+            lines = _dispatch('get', ['abc', '-o', 'custom.png'], HOST, sess, _cfg(), None, USER)
+        assert any('✓' in l for l in lines)
+        assert (tmp_path / 'custom.png').exists()
+
+    def test_get_password_prompt(self, monkeypatch):
+        """get should prompt for password on 401, then retry."""
+        sess = MagicMock()
+        first_resp = MagicMock(ok=False, status_code=401)
+        second_resp = MagicMock(ok=True, status_code=200)
+        second_resp.json.return_value = {
+            'kind': 'text', 'content': 'secret', 'is_owner': False,
+        }
+        sess.get.side_effect = [first_resp, second_resp]
+        monkeypatch.setattr('getpass.getpass', lambda prompt='': 'hunter2')
+        with patch('cli.completion.record_key'):
+            lines = _dispatch('get', ['locked'], HOST, sess, _cfg(), None, USER)
+        assert 'secret' in lines
+
+    def test_get_password_wrong(self, monkeypatch):
+        """get with wrong password shows error."""
+        sess = MagicMock()
+        resp = MagicMock(ok=False, status_code=401)
+        sess.get.return_value = resp
+        monkeypatch.setattr('getpass.getpass', lambda prompt='': 'bad')
+        lines = _dispatch('get', ['locked'], HOST, sess, _cfg(), None, USER)
+        assert any('wrong password' in l for l in lines)
+
+    def test_get_not_found(self):
+        lines = _dispatch('get', ['nope'], HOST, _session_err(404), _cfg(), None, USER)
+        assert any('not found' in l for l in lines)
+
+    def test_get_expired(self):
+        lines = _dispatch('get', ['old'], HOST, _session_err(410), _cfg(), None, USER)
+        assert any('expired' in l for l in lines)
+
+    def test_get_ownership_hint_mine(self):
+        """get shows (yours) hint for owned drops."""
+        sess = _session_ok(json_data={
+            'kind': 'text', 'content': 'hi', 'is_owner': True,
+        })
+        with patch('cli.completion.record_key'):
+            lines = _dispatch('get', ['mine'], HOST, sess, _cfg(), None, USER)
+        assert any('yours' in l for l in lines)
+
+    def test_get_ownership_hint_other(self):
+        """get shows (by @owner) hint for others' drops."""
+        sess = _session_ok(json_data={
+            'kind': 'text', 'content': 'hi',
+            'is_owner': False, 'owner': 'bob',
+        })
+        with patch('cli.completion.record_key'):
+            lines = _dispatch('get', ['bobs'], HOST, sess, _cfg(), None, USER)
+        assert any('@bob' in l for l in lines)
+
+    def test_get_records_key_in_cache(self):
+        """get should call record_key for tab completion cache."""
+        sess = _session_ok(json_data={
+            'kind': 'text', 'content': 'cached', 'is_owner': False,
+        })
+        with patch('cli.completion.record_key') as m:
+            _dispatch('get', ['mykey'], HOST, sess, _cfg(), None, USER)
+        m.assert_called_once_with('mykey')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# cache / rmcache — local completion cache management
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestCacheCommands:
+    """cache / rmcache manage the local key completion cache."""
+
+    def test_cache_list_empty(self):
+        """cache with empty cache shows (cache empty)."""
+        with patch('cli.completion._load_cache', return_value={'keys': [], 'folders': []}):
+            lines = _dispatch('cache', [], HOST, _session_ok(), _cfg(), None, USER)
+        assert any('empty' in l for l in lines)
+
+    def test_cache_list_with_keys(self):
+        """cache lists existing keys."""
+        with patch('cli.completion._load_cache',
+                   return_value={'keys': ['abc', 'def'], 'folders': []}):
+            lines = _dispatch('cache', [], HOST, _session_ok(), _cfg(), None, USER)
+        text = '\n'.join(lines)
+        assert 'abc' in text
+        assert 'def' in text
+
+    def test_cache_list_with_folders(self):
+        """cache lists existing folders."""
+        with patch('cli.completion._load_cache',
+                   return_value={'keys': [], 'folders': ['notes', 'work']}):
+            lines = _dispatch('cache', [], HOST, _session_ok(), _cfg(), None, USER)
+        text = '\n'.join(lines)
+        assert 'notes' in text
+        assert 'work' in text
+
+    def test_cache_add_key(self):
+        """cache <key> adds it to the cache."""
+        with patch('cli.completion.record_key') as m:
+            lines = _dispatch('cache', ['newkey'], HOST, _session_ok(), _cfg(), None, USER)
+        m.assert_called_once_with('newkey')
+        assert any('✓' in l for l in lines)
+
+    def test_cache_add_multiple_keys(self):
+        """cache k1 k2 adds both."""
+        with patch('cli.completion.record_key') as m:
+            lines = _dispatch('cache', ['k1', 'k2'], HOST, _session_ok(), _cfg(), None, USER)
+        assert m.call_count == 2
+        assert any('✓' in l for l in lines)
+
+    def test_rmcache_clear_all(self):
+        """rmcache with no args clears entire cache."""
+        with patch('cli.completion._save_cache') as m:
+            lines = _dispatch('rmcache', [], HOST, _session_ok(), _cfg(), None, USER)
+        m.assert_called_once_with({'keys': [], 'folders': []})
+        assert any('cleared' in l for l in lines)
+
+    def test_rmcache_specific_key(self):
+        """rmcache <key> removes that key."""
+        with patch('cli.completion.remove_key') as m:
+            lines = _dispatch('rmcache', ['old'], HOST, _session_ok(), _cfg(), None, USER)
+        m.assert_called_once_with('old')
+        assert any('✓' in l for l in lines)
+
+    def test_rmcache_multiple_keys(self):
+        """rmcache k1 k2 removes both."""
+        with patch('cli.completion.remove_key') as m:
+            lines = _dispatch('rmcache', ['k1', 'k2'], HOST, _session_ok(), _cfg(), None, USER)
+        assert m.call_count == 2
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# cp — auth check before upload
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestCpAuthCheck:
+    """cp <local_file> . should verify the session before uploading."""
+
+    def test_cp_reauths_on_stale_session(self, tmp_path, monkeypatch):
+        """If /auth/account/ returns non-200, ensure_authenticated is called."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'test.txt').write_text('hi')
+
+        sess = MagicMock()
+        # First call: auth check returns 302 (stale)
+        auth_resp = MagicMock(ok=False, status_code=302)
+        # Second call: the upload_file does its own session calls
+        sess.get.return_value = auth_resp
+
+        with patch('cli.session.ensure_authenticated') as auth_mock, \
+             patch('cli.api.file.upload_file', return_value='k1') as upload_mock, \
+             patch('cli.config.record_drop'), \
+             patch('cli.completion.record_key'):
+            lines = _dispatch('cp', ['test.txt', '.'], HOST, sess, _cfg(), None, USER)
+
+        auth_mock.assert_called_once()
+        upload_mock.assert_called_once()
+        assert any('✓' in l for l in lines)
+
+    def test_cp_skips_reauth_on_valid_session(self, tmp_path, monkeypatch):
+        """If /auth/account/ returns 200, no re-auth needed."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'test.txt').write_text('hi')
+
+        sess = _session_ok()  # returns 200 for everything
+
+        with patch('cli.session.ensure_authenticated') as auth_mock, \
+             patch('cli.api.file.upload_file', return_value='k1'), \
+             patch('cli.config.record_drop'), \
+             patch('cli.completion.record_key'):
+            _dispatch('cp', ['test.txt', '.'], HOST, sess, _cfg(), None, USER)
+
+        auth_mock.assert_not_called()
