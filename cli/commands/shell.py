@@ -47,8 +47,8 @@ _BUILTIN_CMDS = [
 
 # Delegated drp commands (handled by the top-level CLI parser/handlers)
 _DELEGATED_CMDS = [
-    'up', 'get', 'rm', 'mv', 'cp', 'renew', 'save', 'lock', 'mkdir',
-    'serve', 'token', 'ask', 'ping',
+    'up', 'get', 'ls',
+    'token', 'ask', 'ping',
     'setup', 'login', 'logout',
 ]
 
@@ -346,12 +346,44 @@ def _dispatch(cmd, rest, host, session, cfg, cwd, username):
         except Exception as e:
             return [f'  {red("✗")} {e}']
 
-    # ── cp — copy drop inline ───────────────────────────────────────────────
+    # ── cp — copy drop or upload local file ───────────────────────────────
     if cmd == 'cp':
         if not rest:
-            return [f'  {red("✗")} Usage: cp <key> [new_key]']
-        key = rest[0]
-        new_key = rest[1] if len(rest) > 1 else None
+            return [f'  {red("✗")} Usage: cp <key> [new_key]  or  cp <local_file> .']
+        src = rest[0]
+        dst = rest[1] if len(rest) > 1 else None
+
+        # Detect local file paths: ./foo, ../foo, /abs/path, ~/path,
+        # or anything containing / or with a file extension
+        import os
+        is_local = (
+            src.startswith('./')  or src.startswith('../')
+            or src.startswith('/') or src.startswith('~')
+            or (os.sep in src and os.path.exists(os.path.expanduser(src)))
+        )
+        if is_local:
+            # Upload local file as a drop
+            local_path = os.path.expanduser(src)
+            if not os.path.exists(local_path):
+                return [f'  {red("✗")} File not found: {src}']
+            try:
+                from cli.api.file import upload_file
+                result = upload_file(host, session, local_path)
+                if result:
+                    new_key = result if isinstance(result, str) else result.get('key', '?')
+                    from cli import config as _config
+                    _config.record_drop(new_key, 'file', host=host)
+                    # Auto-add to current folder if cd'd
+                    if cwd and username:
+                        _folder_add(host, session, username, cwd, new_key)
+                    return [f'  {green("✓")} uploaded {os.path.basename(local_path)} → /{new_key}/']
+                return [f'  {red("✗")} Upload failed.']
+            except Exception as e:
+                return [f'  {red("✗")} {e}']
+
+        # Server-side copy of existing drop
+        key = src
+        new_key = dst
         try:
             from cli.api.actions import copy_drop
             result = copy_drop(host, session, key, new_key)

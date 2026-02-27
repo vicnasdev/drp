@@ -14,6 +14,7 @@ from cli.commands.token import cmd_token
 from cli.commands.ask import cmd_ask
 from cli.commands.getlink import cmd_getlink
 from cli.commands.manage import cmd_rm, cmd_mv, cmd_renew, cmd_cp, cmd_save, cmd_lock, cmd_mkdir
+from cli.commands.ls import cmd_ls
 
 COMMANDS = [
     ('setup',      cmd_setup,       'Configure host and log in'),
@@ -23,6 +24,7 @@ COMMANDS = [
     ('status',     cmd_status,      'Show config / view stats for a drop'),
     ('up',         cmd_up,          'Upload clipboard text or a file'),
     ('get',        cmd_get,         'Print clipboard, download file, or fetch URL'),
+    ('ls',         cmd_ls,          'List drops, saved items, and folders'),
     ('rm',         cmd_rm,          'Delete a drop'),
     ('mv',         cmd_mv,          'Rename a drop (change its URL key)'),
     ('cp',         cmd_cp,          'Duplicate a drop (server-side copy)'),
@@ -44,7 +46,7 @@ COMMAND_GROUPS = [
     ('upload / download',  ['up', 'get', 'getlink']),
     ('manage',             ['rm', 'mv', 'cp', 'renew', 'save', 'lock', 'mkdir']),
     ('account',            ['token']),
-    ('info',               ['status', 'ping']),
+    ('info',               ['ls', 'status', 'ping']),
     ('help',               ['ask']),
     ('setup',              ['setup', 'login', 'logout']),
     ('shell',              ['shell']),
@@ -270,7 +272,22 @@ def _configure_subparsers(sub):
     p_mkdir.add_argument('name', help='Folder name')
     p_mkdir.add_argument('--parent', default=None, metavar='SLUG',
                          help='Parent folder slug (creates nested folder)')
-
+    # ── ls ────────────────────────────────────────────────────────────────────
+    p_ls = sub._name_parser_map['ls']
+    p_ls.add_argument('-l', '--long', action='store_true',
+                      help='Long format with size, time, expiry')
+    p_ls.add_argument('--bytes', action='store_true',
+                      help='Show raw byte counts instead of human-readable')
+    p_ls.add_argument('--col', action='store_true',
+                      help='Show folders instead of drops')
+    p_ls.add_argument('-t', '--type', default=None, choices=['text', 'file', 's'],
+                      help='Filter: text, file, or s (saved)')
+    p_ls.add_argument('-s', '--sort', default=None, choices=['name', 'size', 'time'],
+                      help='Sort by name, size, or time')
+    p_ls.add_argument('--reverse', '-r', action='store_true',
+                      help='Reverse sort order')
+    p_ls.add_argument('--export', action='store_true',
+                      help='Export as JSON')
 
 _HANDLERS = {name: handler for name, handler, _ in COMMANDS}
 

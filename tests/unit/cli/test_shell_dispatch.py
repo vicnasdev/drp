@@ -85,6 +85,31 @@ class TestShellCp:
             lines = _dispatch('cp', ['src'], HOST, _session_ok(), _cfg(), None, USER)
         assert any('src-1' in l for l in lines)
 
+    def test_cp_local_file_upload(self, tmp_path):
+        """cp ./some_file . should upload the local file."""
+        f = tmp_path / 'test.txt'
+        f.write_text('hello')
+        with patch('cli.api.file.upload_file', return_value='test-abc') as mock_up, \
+             patch('cli.config.record_drop'):
+            lines = _dispatch('cp', [str(f), '.'], HOST, _session_ok(), _cfg(), None, USER)
+        assert any('✓' in l for l in lines)
+        assert any('test-abc' in l for l in lines)
+        mock_up.assert_called_once()
+
+    def test_cp_local_dotslash(self, tmp_path):
+        """cp ./foo.txt should detect as local path."""
+        f = tmp_path / 'foo.txt'
+        f.write_text('data')
+        with patch('cli.api.file.upload_file', return_value='foo-xyz') as mock_up, \
+             patch('cli.config.record_drop'):
+            lines = _dispatch('cp', [str(f)], HOST, _session_ok(), _cfg(), None, USER)
+        assert any('✓' in l for l in lines)
+
+    def test_cp_local_missing_file(self):
+        """cp /nonexistent/path should say file not found."""
+        lines = _dispatch('cp', ['/nonexistent/no-such-file.txt'], HOST, _session_ok(), _cfg(), None, USER)
+        assert any('not found' in l.lower() or '✗' in l for l in lines)
+
 
 # ── mv ────────────────────────────────────────────────────────────────────────
 

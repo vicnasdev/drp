@@ -95,10 +95,49 @@ class TestNewSubcommands:
         assert args.name == 'sub'
         assert args.parent == 'docs'
 
+    # ── ls parser ────────────────────────────────────────────────────────────
+    def test_ls_no_args(self):
+        args = self.parser.parse_args(['ls'])
+        assert args.command == 'ls'
+        assert args.long is False
+
+    def test_ls_long(self):
+        args = self.parser.parse_args(['ls', '-l'])
+        assert args.long is True
+
+    def test_ls_col(self):
+        args = self.parser.parse_args(['ls', '--col'])
+        assert args.col is True
+
+    def test_ls_type_filter(self):
+        args = self.parser.parse_args(['ls', '-t', 'file'])
+        assert args.type == 'file'
+
+    def test_ls_sort(self):
+        args = self.parser.parse_args(['ls', '-s', 'name'])
+        assert args.sort == 'name'
+
+    def test_ls_export(self):
+        args = self.parser.parse_args(['ls', '--export'])
+        assert args.export is True
+
 
 # ── COMMANDS / COMMAND_GROUPS consistency ─────────────────────────────────────
 
 class TestNewCommandsConsistency:
+    def test_ls_in_commands(self):
+        names = {n for n, _, _ in COMMANDS}
+        assert 'ls' in names
+
+    def test_ls_in_info_group(self):
+        info_cmds = None
+        for label, cmds in COMMAND_GROUPS:
+            if label == 'info':
+                info_cmds = set(cmds)
+                break
+        assert info_cmds is not None
+        assert 'ls' in info_cmds
+
     def test_rm_in_commands(self):
         names = {n for n, _, _ in COMMANDS}
         assert 'rm' in names
