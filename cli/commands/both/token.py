@@ -13,7 +13,7 @@ from cli.base import BaseCommand, AuthCommand
 from cli.api import APIClient, tokens as tokens_api
 
 
-class TokenCommand(BaseCommand, AuthCommand):
+class TokenCommand(AuthCommand):
     name        = "token"
     description = "Manage API tokens (create / list / revoke)"
 
