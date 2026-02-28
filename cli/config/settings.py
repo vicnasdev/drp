@@ -49,26 +49,25 @@ def load() -> dict:
     if not CONFIG_FILE.exists():
         return _deep_merge({}, _DEFAULTS)
 
-    if tomllib is None:
-        return _deep_merge({}, _DEFAULTS)
-
     try:
-        with open(CONFIG_FILE, "rb") as f:
-            data = tomllib.load(f)
+        if tomllib is not None:
+            with open(CONFIG_FILE, "rb") as f:
+                data = tomllib.load(f)
+        else:
+            data = _read_manual()
         return _deep_merge(data, _DEFAULTS)
     except Exception:
         return _deep_merge({}, _DEFAULTS)
 
 
 def save(config: dict) -> None:
-    """Persist config to disk. Silently fails if tomli_w not available."""
+    """Persist config to disk."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    if tomli_w is None:
-        # Fallback: write minimal INI-style TOML manually
+    if tomli_w is not None:
+        with open(CONFIG_FILE, "wb") as f:
+            tomli_w.dump(config, f)
+    else:
         _write_manual(config)
-        return
-    with open(CONFIG_FILE, "wb") as f:
-        tomli_w.dump(config, f)
 
 
 def set_auth(username: str, token: str) -> None:
@@ -103,6 +102,7 @@ def _deep_merge(data: dict, defaults: dict) -> dict:
 
 
 def _write_manual(config: dict) -> None:
+    """Write a minimal but valid TOML file without tomli_w."""
     lines = []
     for section, values in config.items():
         lines.append(f"[{section}]")
@@ -111,9 +111,39 @@ def _write_manual(config: dict) -> None:
                 if isinstance(v, bool):
                     lines.append(f"{k} = {'true' if v else 'false'}")
                 elif isinstance(v, str):
-                    escaped = v.replace('"', '\\"')
+                    escaped = v.replace("\\", "\\\\").replace('"', '\\"')
                     lines.append(f'{k} = "{escaped}"')
                 else:
                     lines.append(f"{k} = {v}")
-        lines.append("")
-    CONFIG_FILE.write_text("\n".join(lines))
+        lines.append("")   # blank line between sections
+    CONFIG_FILE.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _read_manual() -> dict:
+    """Parse the simple TOML subset written by _write_manual."""
+    data:    dict = {}
+    section: str  = ""
+    for raw in CONFIG_FILE.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+            data.setdefault(section, {})
+            continue
+        if "=" in line and section:
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip()
+            if val.lower() == "true":
+                data[section][key] = True
+            elif val.lower() == "false":
+                data[section][key] = False
+            elif val.startswith('"') and val.endswith('"'):
+                data[section][key] = val[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+            else:
+                try:
+                    data[section][key] = int(val)
+                except ValueError:
+                    data[section][key] = val
+    return data

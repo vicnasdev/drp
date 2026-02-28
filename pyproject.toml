@@ -26,7 +26,12 @@ readme = "PYPI_DEV_README.md"
 # The server code in this repo is licensed separately — see LICENSE.
 license = {text = "MIT"}
 requires-python = ">=3.10"
-dependencies = ["requests>=2.28", "pygments>=2.14"]
+dependencies = [
+    "requests>=2.28",
+    "pygments>=2.14",
+    "tomli>=2.0; python_version < '3.11'",
+    "tomli-w>=1.0",
+]
 authors = [{name = "Vic Nas"}]
 keywords = ["cli", "file-sharing", "pastebin", "drops"]
 classifiers = [
