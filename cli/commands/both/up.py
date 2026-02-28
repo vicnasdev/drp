@@ -43,6 +43,13 @@ class UpCommand(SpinnerCommand, AuthCommand):
         if len(targets) == 1 and targets[0].is_file():
             return self._upload_single(client, None, str(targets[0]), opts)
 
+        # not a real path
+        if len(targets) == 1 and not targets[0].exists():
+            if opts.text:
+                import io
+                return self._upload_single(client, io.BytesIO(opts.target.encode()), "<text>", opts)
+            self.bail(f"'{opts.target}' not found — use --text to upload a string")
+
         # directory or glob → folder upload
         return self._upload_folder(client, targets, opts)
 
@@ -117,7 +124,7 @@ def _ensure_folder(client, slug: str, confirm_fn) -> int | None:
     except Exception:
         if confirm_fn(f"folder '{slug}' already exists. append?", default=False):
             result = folders_api.list_root(client)
-            match  = next((f for f in result.get("results", []) if f["slug"] == slug), None)
+            match  = next((f for f in result.get("folders", []) if f["slug"] == slug), None)
             return match["id"] if match else None
         return None
 
@@ -155,4 +162,5 @@ def _parse(args):
     p.add_argument("--tag",            action="append")
     p.add_argument("--schedule",       default=None)
     p.add_argument("--webhook",        default=None)
+    p.add_argument("--text",           action="store_true", help="treat target as literal text content")
     return p.parse_args(args)
