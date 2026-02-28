@@ -173,7 +173,7 @@ def files_upload(request):
 
     # create File record
     drop = File.objects.create(
-        key           = custom_key or None,
+        key           = custom_key or generate_key(),
         owner         = user,
         anon_token    = "" if user else "",
         b2_name       = b2_name,
