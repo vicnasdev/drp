@@ -67,18 +67,26 @@ class LsCommand(SpinnerCommand, AuthCommand):
         client    = APIClient.from_config(self.config, authed=True)
         folder_id = self.config.get("shell", {}).get("cwd_id")
 
+        # If a folder argument was given (e.g. `ls temp/`), resolve it to a folder_id
+        # instead of defaulting to the current cwd.
+        if opts.folder:
+            slug = opts.folder.rstrip("/")
+            try:
+                data  = folders_api.list_contents(client, folder_id) if folder_id \
+                        else folders_api.list_root(client)
+                match = next((f for f in data.get("folders", []) if f["slug"] == slug), None)
+                if match is None:
+                    self.err(f"folder not found: {opts.folder}")
+                    return 1
+                folder_id = match["id"]
+            except Exception:
+                self.err(f"could not resolve folder: {opts.folder}")
+                return 1
+
         with self.spin("Loading"):
             if folder_id:
-                # Inside a specific folder — show its contents only
                 data = folders_api.list_contents(client, folder_id)
             else:
-                # FIX: at root, the original code called list_root() which only
-                # returned folder objects — uploads never appeared because loose
-                # drops aren't in any folder. Now we show subfolders AND loose
-                # drops, but we do NOT merge in ALL user drops indiscriminately
-                # (the previous "fix" did that, making ls show duplicate filenames
-                # with different keys which was confusing). We fetch loose drops
-                # separately from the folder listing.
                 data = folders_api.list_root(client)
 
         subfolders = data.get("folders", [])

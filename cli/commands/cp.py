@@ -21,13 +21,24 @@ from cli.api import APIClient, files as files_api, folders as folders_api
 from cli import cache
 
 
+def _fmt_size(n: int) -> str:
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024:
+            return f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} TB"
+
+
 def _is_real(path: str) -> bool:
     """True if the path refers to the real filesystem.
 
     "." alone always means the current drp virtual folder (like a shell `.`).
     Only "../" prefix, "./" prefix, "/" prefix, or bare ".." are real-FS paths.
     This lets `cp ../file.txt .` work: src is real FS, dest is current drp folder.
+    Paths starting with "@" are always drp paths (e.g. @vicnas/).
     """
+    if path.startswith("@"):
+        return False
     return path.startswith("../") or path.startswith("./") or path.startswith("/") \
            or path == ".."
 
@@ -50,6 +61,16 @@ class CpCommand(SpinnerCommand, AuthCommand):
 
         src_real  = _is_real(opts.src)
         dest_real = _is_real(opts.dest)
+
+        # cp only makes sense inside the shell — outside the shell there is no
+        # virtual CWD to anchor relative drp paths against, so drp→drp copies
+        # silently target the wrong folder.  Direct the user to `drp up` instead.
+        if not self.in_shell and not src_real and not dest_real:
+            self.err(
+                "cp between drp paths requires the shell.\n"
+                "  Use: drp up <file>  to upload from the filesystem."
+            )
+            return 1
 
         if src_real and not dest_real:
             return self._upload(client, opts.src, opts.dest)
@@ -135,7 +156,7 @@ class CpCommand(SpinnerCommand, AuthCommand):
         cache.add({
             "key":      result["key"],
             "filename": filename,
-            "size":     str(size),
+            "size":     _fmt_size(size),
             "exp":      result.get("expires_at", ""),
             "owner":    "",
         })
@@ -211,7 +232,7 @@ class CpCommand(SpinnerCommand, AuthCommand):
         cache.add({
             "key":      result["key"],
             "filename": filename,
-            "size":     str(len(raw)),
+            "size":     _fmt_size(len(raw)),
             "exp":      result.get("expires_at", ""),
             "owner":    "",
         })
@@ -237,6 +258,9 @@ class CpCommand(SpinnerCommand, AuthCommand):
         """Return folder_id for the destination, or current folder if dest is '.'"""
         if dest in (".", "./"):
             return self.config.get("shell", {}).get("cwd_id")
+        # @username/ or @username — treat as the user's root (no folder)
+        if dest.startswith("@"):
+            return None
         if _is_drp_dir(dest) and not _is_real(dest):
             slug = dest.strip("/")
             try:
