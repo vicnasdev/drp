@@ -6,6 +6,7 @@ All methods are mixed into BaseCommand — not instantiated directly.
 """
 from __future__ import annotations
 import sys
+import time
 from .color import Color
 from .highlight import Highlight
 
@@ -73,6 +74,82 @@ class OutputMixin:
             self.out(Color.dim("│") + line + Color.dim("│"))
         self.out(Color.dim("└" + bot_line + "┘"))
 
+    def progress_reader(self, file_obj, size: int, label: str):
+        """
+        Wrap a file-like object so reading it draws a live progress bar with speed.
+        Returns an object suitable for passing to requests multipart upload.
+        """
+        done  = [0]
+        start = [time.monotonic()]
+
+        def _draw(n: int) -> None:
+            try:
+                elapsed = time.monotonic() - start[0]
+                pct     = n / size if size else 1
+                filled  = int(30 * pct)
+                bar     = "=" * filled + "-" * (30 - filled)
+                speed   = (_fmt_size(int(n / elapsed)) + "/s") if elapsed > 0.2 else "---"
+                sys.stderr.write(
+                    f"\r  {Color.dim(label)}  [{Color.wrap(bar, Color.CYAN)}]"
+                    f"  {Color.dim(_fmt_size(n) + '/' + _fmt_size(size) + '  ' + speed)}"
+                )
+                sys.stderr.flush()
+            except Exception:
+                pass
+
+        class _Reader:
+            def read(self, n=-1):
+                try:
+                    chunk = file_obj.read(n)
+                    if chunk:
+                        done[0] += len(chunk)
+                        _draw(done[0])
+                    return chunk
+                except Exception:
+                    return b""
+            def __len__(self):
+                return size
+
+        _draw(0)
+        return _Reader()
+
+    def progress_clear(self) -> None:
+        """Clear the progress line after an upload/download finishes."""
+        try:
+            sys.stderr.write("\r\033[K")
+            sys.stderr.flush()
+        except Exception:
+            pass
+
+    def progress_stream(self, resp, dest_path, size: int, label: str) -> None:
+        """Stream a requests Response to dest_path while drawing a live progress bar."""
+        done  = 0
+        start = time.monotonic()
+
+        def _draw(n: int) -> None:
+            try:
+                elapsed = time.monotonic() - start
+                pct     = n / size if size else 1
+                filled  = int(30 * pct)
+                bar     = "=" * filled + "-" * (30 - filled)
+                speed   = (_fmt_size(int(n / elapsed)) + "/s") if elapsed > 0.2 else "---"
+                sys.stderr.write(
+                    f"\r  {Color.dim(label)}  [{Color.wrap(bar, Color.CYAN)}]"
+                    f"  {Color.dim(_fmt_size(n) + ('/' + _fmt_size(size) if size else '') + '  ' + speed)}"
+                )
+                sys.stderr.flush()
+            except Exception:
+                pass
+
+        _draw(0)
+        with open(dest_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=65536):
+                if chunk:
+                    f.write(chunk)
+                    done += len(chunk)
+                    _draw(done)
+        self.progress_clear()
+
     def print_drop_table(self, drops: list[dict]) -> None:
         """
         Specialised table for ls output.
@@ -118,3 +195,10 @@ class OutputMixin:
         if not answer:
             return default
         return answer in ("y", "yes")
+
+def _fmt_size(n: int) -> str:
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024:
+            return f"{n:.0f} {unit}"
+        n /= 1024
+    return f"{n:.1f} TB"

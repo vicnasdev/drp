@@ -153,25 +153,33 @@ def _setup_readline(config: dict) -> None:
 
         cmds = list(cmd_registry.ALL.keys()) + ["help", "exit"]
 
-        # Build a per-command flag list by inspecting each command's source for
-        # add_argument() calls. Done once at shell startup — zero runtime cost.
+        # Build per-command flag list by scanning source for add_argument() calls.
+        # Run in a thread with a hard 2s timeout — a missing/slow source file
+        # must never block shell startup.
         _cmd_flags: dict[str, list[str]] = {}
-        for cmd_name, klass in cmd_registry.ALL.items():
-            flags: list[str] = []
-            try:
-                for src in [inspect.getsource(klass.run)]:
-                    flags += _re.findall(r'add_argument\(["\'](-{1,2}[\w\-]+)["\']', src)
-                mod = inspect.getmodule(klass)
-                if mod and hasattr(mod, "_parse"):
-                    flags += _re.findall(
-                        r'add_argument\(["\'](-{1,2}[\w\-]+)["\']',
-                        inspect.getsource(mod._parse),
-                    )
-            except Exception:
-                pass
-            _cmd_flags[cmd_name] = list(dict.fromkeys(flags))
+
+        def _build_flags() -> None:
+            for cmd_name, klass in cmd_registry.ALL.items():
+                flags: list[str] = []
+                try:
+                    srcs = [inspect.getsource(klass.run)]
+                    mod  = inspect.getmodule(klass)
+                    if mod and hasattr(mod, "_parse"):
+                        srcs.append(inspect.getsource(mod._parse))
+                    for src in srcs:
+                        flags += _re.findall(r'add_argument\(["\'](-{1,2}[\w\-]+)["\']', src)
+                except Exception:
+                    pass
+                _cmd_flags[cmd_name] = list(dict.fromkeys(flags))
+
+        import threading as _threading
+        _ft = _threading.Thread(target=_build_flags, daemon=True)
+        _ft.start()
+        _ft.join(timeout=2)
 
         def completer(text, state):
+            # Must never raise — any unhandled exception from readline's C layer
+            # corrupts terminal state and freezes the shell.
             try:
                 buf      = readline.get_line_buffer()
                 parts    = buf.lstrip().split()
@@ -201,21 +209,22 @@ def _setup_readline(config: dict) -> None:
                         else:
                             entries = os.listdir(launch_dir)
                             prefix  = text.lstrip("./")
-                            matches = [
-                                ("../" + e) if text.startswith("../") else ("./" + e)
-                                for e in entries if e.startswith(prefix)
-                            ]
+                            pfx     = "../" if text.startswith("../") else "./"
+                            matches = [pfx + e for e in entries if e.startswith(prefix)]
                     except Exception:
                         matches = []
                     return matches[state] if state < len(matches) else None
 
-                # drp path — read from in-memory cache only, zero I/O
+                # drp path — in-memory cache only, zero I/O
                 cwd_id  = config.get("shell", {}).get("cwd_id")
                 names   = drive_cache.get_names(cwd_id)
                 matches = [n for n in names if n.startswith(text)]
                 return matches[state] if state < len(matches) else None
 
-            except Exception:
+            except BaseException:
+                # Catch BaseException, not just Exception — readline's C layer
+                # can trigger SystemExit/KeyboardInterrupt paths that would
+                # otherwise escape and corrupt terminal state.
                 return None
 
         readline.set_completer(completer)
