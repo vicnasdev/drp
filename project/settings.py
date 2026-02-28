@@ -162,6 +162,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ── Advertising ───────────────────────────────────────────────────────────────
 ADSENSE_CLIENT = os.environ.get("ADSENSE_CLIENT", "")
 ADSENSE_SLOT   = os.environ.get("ADSENSE_SLOT", "")
+
 # ── Cloudflare Turnstile ──────────────────────────────────────────────────────
 # (Turnstile is currently disabled. Keys kept for easy re-enable.)
 TURNSTILE_SITE_KEY   = os.environ.get('TURNSTILE_SITE_KEY', '')

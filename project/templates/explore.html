@@ -28,13 +28,13 @@
     {% for drop in drops %}
     <div style="padding:.6rem 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
-        <a href="/{% if drop.ns == 'f' %}f/{% endif %}{{ drop.key }}/"
+        <a href="/{{ drop.key }}/"
            style="color:var(--text);text-decoration:none;font-weight:500">
-          {% if drop.kind == 'text' %}📋{% else %}📎{% endif %}
-          /{% if drop.ns == 'f' %}f/{% endif %}{{ drop.key }}/
+          {% if drop.content_type|slice:":6" == "image/" %}🖼{% elif drop.content_type|slice:":5" == "text/" %}📄{% else %}📎{% endif %}
+          /{{ drop.key }}/
         </a>
         <div style="display:flex;align-items:center;gap:.75rem">
-          <button class="like-btn" data-ns="{{ drop.ns }}" data-key="{{ drop.key }}"
+          <button class="like-btn" data-key="{{ drop.key }}"
                   style="background:none;border:none;cursor:pointer;font-size:.9rem;color:var(--muted);display:flex;align-items:center;gap:.25rem;padding:0"
                   title="{% if user.is_authenticated %}like{% else %}log in to like{% endif %}"
                   {% if not user.is_authenticated %}disabled{% endif %}>
@@ -53,7 +53,7 @@
         {% endfor %}
       </div>
       {% endif %}
-      {% if drop.kind == 'text' and drop.content %}
+      {% if drop.content_type|slice:":5" == "text/" and drop.content %}
       <pre style="font-size:.8rem;color:var(--muted);margin-top:.3rem;max-height:3rem;overflow:hidden">{{ drop.content|truncatechars:200 }}</pre>
       {% elif drop.filename %}
       <span class="muted" style="font-size:.82rem">{{ drop.filename }} ({{ drop.filesize|filesizeformat }})</span>
@@ -69,10 +69,8 @@
 <script>
 document.querySelectorAll('.like-btn:not([disabled])').forEach(btn => {
   btn.addEventListener('click', async () => {
-    const ns = btn.dataset.ns;
     const key = btn.dataset.key;
-    const prefix = ns === 'f' ? 'f/' : '';
-    const res = await fetch(`/${prefix}${key}/like/`, {
+    const res = await fetch(`/${key}/like/`, {
       method: 'POST',
       headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value
                 || '{{ csrf_token }}'},

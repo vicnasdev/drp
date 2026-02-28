@@ -78,7 +78,7 @@
           <option value="1095">3 years</option>
           {% endif %}
         </select>
-        <span class="muted" style="font-size:.8rem">from creation · renewable</span>
+        <span class="muted" style="font-size:.8rem">from creation</span>
       </div>
       {% endif %}
     </div>
@@ -128,33 +128,30 @@
         {% if server_drops %}
           {% for drop in server_drops %}
           <div class="drop-item">
-            <span class="drop-icon">{% if drop.kind == 'file' %}📎{% else %}📋{% endif %}</span>
-            <a href="{% if drop.ns == 'f' %}/f/{{ drop.key }}/{% else %}/{{ drop.key }}/{% endif %}" class="drop-key">{% if drop.ns == 'f' %}f/{% endif %}{{ drop.key }}</a>
+            <span class="drop-icon">{% if drop.content_type|slice:":6" == "image/" %}🖼{% elif drop.content_type|slice:":5" == "text/" %}📄{% else %}📎{% endif %}</span>
+            <a href="/{{ drop.key }}/" class="drop-key">{{ drop.key }}</a>
             <span class="drop-label muted">
-              {% if drop.kind == 'file' %}{{ drop.filename|truncatechars:20 }}{% else %}{{ drop.content|truncatechars:20 }}{% endif %}
+              {{ drop.filename|default:drop.content|truncatechars:20 }}
             </span>
             {% if drop.expires_at %}
             <span class="drop-expiry muted">{{ drop.expires_at|date:"M j" }}</span>
             {% endif %}
           </div>
           {% endfor %}
-        {% else %}
+        {% endif %}
+        {% if saved_drops %}
+          {% for s in saved_drops %}
+          <div class="drop-item">
+            <span class="drop-icon">🔖</span>
+            <a href="/{{ s.file_key }}/" class="drop-key">→ {{ s.file_key }}</a>
+            <span class="drop-label muted">{{ s.saved_at|date:"M j" }}</span>
+          </div>
+          {% endfor %}
+        {% endif %}
+        {% if not server_drops and not saved_drops %}
           <p class="empty muted">nothing yet.</p>
         {% endif %}
       </div>
-
-      {% if saved_drops %}
-      <h3 style="margin-top:1.2rem;margin-bottom:.4rem">saved</h3>
-      <div class="drop-list">
-        {% for s in saved_drops %}
-        <div class="drop-item">
-          <span class="drop-icon">🔖</span>
-          <a href="{{ s.url_path }}" class="drop-key">{% if s.ns == 'f' %}f/{% endif %}{{ s.key }}</a>
-          <span class="drop-label muted">{{ s.saved_at|date:"M j" }}</span>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
 
       {% if folders %}
       <h3 style="margin-top:1.2rem;margin-bottom:.4rem">folders</h3>
@@ -162,24 +159,29 @@
         {% for folder in folders %}
         <div class="drop-item">
           <span class="drop-icon">📂</span>
-          <a href="/@{{ user.username }}/{{ folder.slug }}/" class="drop-key">{{ folder.slug }}</a>
+          <a href="/@{{ user.username }}/{{ folder.slug }}/" class="drop-key">drive: /{{ folder.slug }}/</a>
           <span class="drop-label muted">{{ folder.items.count }} drop{{ folder.items.count|pluralize }}</span>
         </div>
         {% endfor %}
       </div>
       {% endif %}
 
-      {% if user.profile.is_paid %}
       <div class="storage-bar-wrap" style="margin-top:.8rem">
         <div class="storage-label muted">
-          {{ user.profile.storage_used_gb|floatformat:2 }} GB
-          / {{ user.profile.storage_quota_gb }} GB used
+          {% if user.profile.is_paid %}
+            {{ user.profile.storage_used_gb|floatformat:2 }} GB / {{ user.profile.storage_quota_gb }} GB used
+          {% else %}
+            0 B / 1 GB used
+          {% endif %}
         </div>
         <div class="storage-bar">
+          {% if user.profile.is_paid %}
           <div class="storage-bar-fill" style="width:{% widthratio user.profile.storage_used_bytes user.profile.storage_quota_bytes 100 %}%"></div>
+          {% else %}
+          <div class="storage-bar-fill" style="width:0%"></div>
+          {% endif %}
         </div>
       </div>
-      {% endif %}
 
     {% else %}
       <h3>my drops</h3>
@@ -195,8 +197,7 @@
         <p class="upsell-heading">free account unlocks:</p>
         <ul class="upsell-list">
           <li>✓ claim &amp; keep drops you create</li>
-          <li>✓ 48h idle timeout (vs 24h)</li>
-          <li>✓ 30-day max lifetime (vs 7d)</li>
+          <li>✓ 7-day key expiry (vs 24h anon)</li>
           <li>✓ save &amp; bookmark others' drops</li>
           <li>✓ export &amp; import folders</li>
         </ul>
@@ -232,7 +233,7 @@
 
     {% if not user.is_authenticated %}
     <p id="anonNudge" class="anon-nudge hidden">
-      Drop expires in 7 days. <a href="/auth/register/">Sign up free</a> to claim it and extend to 30 days.
+      Drop expires in 24 hours. <a href="/auth/register/">Sign up free</a> to keep it for 7 days.
     </p>
     {% endif %}
   </div>
@@ -248,9 +249,9 @@
   <div class="drop-list">
     {% for drop in public_drops %}
     <div class="drop-item">
-      <span class="drop-icon">{% if drop.kind == 'file' %}📎{% else %}📋{% endif %}</span>
-      <a href="/{% if drop.ns == 'f' %}f/{% endif %}{{ drop.key }}/" class="drop-key">
-        {% if drop.ns == 'f' %}f/{% endif %}{{ drop.key }}
+      <span class="drop-icon">{% if drop.content_type|slice:":6" == "image/" %}🖼{% elif drop.content_type|slice:":5" == "text/" %}📄{% else %}📎{% endif %}</span>
+      <a href="/{{ drop.key }}/" class="drop-key">
+        {{ drop.key }}
       </a>
       <span class="drop-label muted">
         {% if drop.owner %}@{{ drop.owner.username }}{% endif %}
@@ -268,6 +269,11 @@
 const IS_AUTHED = {{ user.is_authenticated|yesno:"true,false" }};
 const IS_PAID   = {{ user.is_authenticated|yesno:"true,false" }}
                   && {{ user.profile.is_paid|default:"false"|yesno:"true,false" }};
+
+// Clear local anon drops after they've been claimed on login/register
+if (IS_AUTHED && new URLSearchParams(window.location.search).get('claimed')) {
+  localStorage.removeItem('drp_drops');
+}
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 let activeTab = 'save';
@@ -300,7 +306,7 @@ async function doGet(isFile) {
   }
 
   _currentGetKey = key;
-  const url = isFile ? `/f/${key}/` : `/${key}/`;
+  const url = `/${key}/`;
 
   const btn = isFile ? document.getElementById('fileActionBtn') : document.getElementById('clipActionBtn');
   btn.disabled = true;
@@ -325,14 +331,10 @@ async function doGet(isFile) {
       document.getElementById('getFileName').textContent = data.filename || key;
       document.getElementById('getFileSize').textContent =
         data.filesize ? formatSize(data.filesize) : '';
-      document.getElementById('getFileLink').href = `/f/${key}/download/`;
+      document.getElementById('getFileLink').href = `/${key}/download/`;
       fileEl.classList.remove('hidden');
     } else {
-      if (!isFile) {
-        errEl.textContent = `/${key}/ is a file drop. Use "get file" instead.`;
-      } else {
-        errEl.textContent = `/f/${key}/ is a clipboard drop. Use "get clip" instead.`;
-      }
+      errEl.textContent = `Key not found or wrong type.`;
       errEl.classList.remove('hidden');
     }
   } catch (e) {
@@ -392,15 +394,24 @@ function getMyDrops() {
   try { return JSON.parse(localStorage.getItem('drp_drops') || '[]'); } catch { return []; }
 }
 function saveMyDrops(drops) { localStorage.setItem('drp_drops', JSON.stringify(drops)); }
-function addDropLocal(key, kind, label) {
+function addDropLocal(key, content_type, label) {
   const drops = getMyDrops().filter(d => d.key !== key);
-  drops.unshift({ key, kind, label, saved: Date.now() });
+  drops.unshift({ key, content_type, label, saved: Date.now() });
   saveMyDrops(drops.slice(0, 50));
   renderLocalDashboard();
 }
-function removeDrop(key) {
-  saveMyDrops(getMyDrops().filter(d => d.key !== key));
-  renderLocalDashboard();
+async function removeDrop(key) {
+  const res = await fetch(`/${key}/delete/`, {
+    method: 'DELETE',
+    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+  });
+  if (res.ok || res.status === 404) {
+    saveMyDrops(getMyDrops().filter(d => d.key !== key));
+    renderLocalDashboard();
+    showToast('drop deleted.');
+  } else {
+    showToast('Delete failed.');
+  }
 }
 
 function renderLocalDashboard() {
@@ -417,14 +428,18 @@ function renderLocalDashboard() {
   }
   if (emptyEl)   emptyEl.style.display = 'none';
   if (actionsEl) actionsEl.style.display = '';
-  el.innerHTML = drops.map(d => `
+  el.innerHTML = drops.map(d => {
+    const ct = d.content_type || '';
+    const icon = ct.startsWith('image/') ? '🖼' : ct.startsWith('text/') ? '📄' : ct === 'application/json' ? '📄' : '📎';
+    return `
     <div class="drop-item">
-      <span class="drop-icon">${d.kind === 'file' ? '📎' : '📋'}</span>
+      <span class="drop-icon">${icon}</span>
       <a href="/${d.key}/" class="drop-key">${d.key}</a>
       <span class="drop-label muted">${d.label || ''}</span>
       <button class="btn-sm danger" onclick="removeDrop('${d.key}')">✕</button>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 if (!IS_AUTHED) {
@@ -569,7 +584,7 @@ async function doSave(type) {
       const data = JSON.parse(xhr.responseText);
       if (xhr.status === 200) {
         if (!IS_AUTHED) {
-          addDropLocal(data.key, data.kind,
+          addDropLocal(data.key, data.content_type,
             selectedFile ? selectedFile.name : text.slice(0, 30));
           const nudge = document.getElementById('anonNudge');
           if (nudge) nudge.classList.remove('hidden');
@@ -577,7 +592,7 @@ async function doSave(type) {
           window.location.reload();
           return;
         }
-        const base = data.ns === 'f' ? `/f/${data.key}/` : `/${data.key}/`;
+        const base = `/${data.key}/`;
         document.getElementById('resultUrl').href        = window.location.origin + base;
         document.getElementById('resultUrl').textContent = window.location.origin + base;
         document.getElementById('resultBox').classList.remove('hidden');

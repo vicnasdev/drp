@@ -1,16 +1,16 @@
 {% extends 'base.html' %}
-{% block title %}drp — manage{% endblock %}
+{% block title %}drp — drive{% endblock %}
 {% load static %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/auth.css' %}"/>{% endblock %}
 {% block content %}
 <div class="account-page">
 
   <div class="account-header">
-    <h1>manage</h1>
+    <h1>drive</h1>
     <p class="muted" style="font-size:.85rem">
       @{{ user.username }} ·
       <a href="/auth/account/">account</a> ·
-      <a href="/@{{ user.username }}/">folders</a>
+      <a href="/@{{ user.username }}/">/@{{ user.username }}/</a>
     </p>
   </div>
 
@@ -19,13 +19,13 @@
     <span id="bulk-count">0</span> selected
     <button class="btn-sm danger" onclick="bulkDelete()">delete</button>
     {% if profile.is_paid %}
-    <button class="btn-sm" onclick="bulkRenew()">renew</button>
+    <button class="btn-sm" onclick="bulkSetExpiry()">set expiry</button>
     {% endif %}
     {% if folders %}
     <select id="bulk-folder" style="font-size:.82rem;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:.2rem .5rem">
       <option value="">add to folder…</option>
       {% for folder in folders %}
-      <option value="{{ folder.id }}">{{ folder.name }}</option>
+      <option value="{{ folder.id }}">{{ folder.slug }}</option>
       {% endfor %}
     </select>
     <button class="btn-sm" onclick="bulkAddToFolder()">add</button>
@@ -40,42 +40,37 @@
       <thead>
         <tr>
           <th style="width:2rem"><input type="checkbox" id="select-all" onchange="toggleAll(this)" title="Select all"/></th>
+          <th>filename</th>
+          <th>preview</th>
+          <th>size</th>
+          <th>exp</th>
           <th>key</th>
-          <th>type</th>
-          <th>expires</th>
-          {% if profile.is_paid %}<th>pw</th>{% endif %}
           <th></th>
         </tr>
       </thead>
       <tbody>
         {% for drop in drops %}
-        <tr data-ns="{{ drop.ns }}" data-key="{{ drop.key }}">
+        <tr data-key="{{ drop.key }}">
           <td><input type="checkbox" class="drop-check" onchange="updateBulkBar()"/></td>
           <td>
-            <a href="{% if drop.ns == 'f' %}/f/{{ drop.key }}/{% else %}/{{ drop.key }}/{% endif %}" class="mono">
-              {% if drop.ns == 'f' %}f/{% endif %}{{ drop.key }}
+            <a href="/{{ drop.key }}/" class="mono">
+              {% if drop.content_type %}
+                {% if drop.content_type|slice:":6" == "image/" %}🖼{% elif drop.content_type|slice:":5" == "text/" %}📄{% elif drop.content_type|slice:":12" == "application/" %}📎{% else %}📄{% endif %}
+              {% else %}📄{% endif %}
+              {{ drop.filename|default:drop.key|truncatechars:30 }}
             </a>
           </td>
-          <td class="muted">
-            {% if drop.kind == 'file' %}📎 {{ drop.filename|truncatechars:20 }}
-            {% else %}📋 {{ drop.content|truncatechars:20 }}{% endif %}
-          </td>
+          <td class="muted" style="font-size:.82rem">{{ drop.content|truncatechars:40 }}</td>
+          <td class="muted">{{ drop.filesize|filesizeformat }}</td>
           <td class="muted">
             {% if drop.expires_at %}
-              {{ drop.expires_at|timesince }} left
-            {% elif drop.max_lifetime_secs %}
-              {% if drop.last_accessed_at %}last accessed {{ drop.last_accessed_at|timesince }} ago{% else %}not yet accessed{% endif %}
-              · activity-based
+              {{ drop.expires_at|timeuntil|truncatewords:2 }}
             {% else %}
-              never
+              ∞
             {% endif %}
           </td>
-          {% if profile.is_paid %}
-          <td class="muted" style="font-size:1rem">
-            {% if drop.is_password_protected %}🔑{% else %}—{% endif %}
-          </td>
-          {% endif %}
-          <td><a href="{% if drop.ns == 'f' %}/f/{{ drop.key }}/{% else %}/{{ drop.key }}/{% endif %}" class="btn-sm">view →</a></td>
+          <td class="muted" style="font-size:.8rem">{{ drop.key }}</td>
+          <td><a href="/{{ drop.key }}/" class="btn-sm">view →</a></td>
         </tr>
         {% endfor %}
       </tbody>
@@ -88,12 +83,14 @@
   <!-- Saved drops -->
   {% if saved %}
   <div class="account-section">
-    <h2>saved drops <span class="muted" style="font-weight:400;font-size:.75rem">({{ saved|length }})</span></h2>
+    <h2>bookmarks <span class="muted" style="font-weight:400;font-size:.75rem">({{ saved|length }})</span></h2>
     <table class="drops-table">
       <thead>
         <tr>
+          <th>filename</th>
+          <th>owner</th>
+          <th>exp</th>
           <th>key</th>
-          <th>saved</th>
           <th></th>
         </tr>
       </thead>
@@ -101,15 +98,19 @@
         {% for s in saved %}
         <tr id="saved-row-{{ forloop.counter }}">
           <td>
-            <a href="{{ s.url_path }}" class="mono">
-              {% if s.ns == 'f' %}f/{% endif %}{{ s.key }}
-            </a>
+            <a href="/{{ s.file_key }}/" class="mono">{{ s.file_key }}</a>
           </td>
-          <td class="muted">{{ s.saved_at|date:"M j, Y" }}</td>
+          <td class="muted" style="font-size:.85rem">→ @{{ s.owner_username|default:"" }}</td>
+          <td class="muted">
+            {% if s.expires_at %}
+              {% if s.expired %}<span style="color:var(--danger)">expired</span>{% else %}{{ s.expires_at|timeuntil|truncatewords:2 }}{% endif %}
+            {% else %}∞{% endif %}
+          </td>
+          <td class="muted" style="font-size:.8rem">{{ s.file_key }}</td>
           <td>
             <button class="btn-sm danger"
-                    onclick="unsave('{{ s.ns }}', '{{ s.key }}', 'saved-row-{{ forloop.counter }}')">
-              unsave
+                    onclick="removeBookmark('{{ s.file_key }}', 'saved-row-{{ forloop.counter }}')">
+              remove bookmark
             </button>
           </td>
         </tr>
@@ -128,16 +129,14 @@
         <tr>
           <th>name</th>
           <th>drops</th>
-          <th>inbox</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         {% for folder in folders %}
         <tr>
-          <td><a href="/@{{ user.username }}/{{ folder.slug }}/" class="mono">{{ folder.name }}</a></td>
+          <td><a href="/@{{ user.username }}/{{ folder.slug }}/" class="mono">{{ folder.slug }}</a></td>
           <td class="muted">{{ folder.items.count }}</td>
-          <td class="muted">{% if folder.public_inbox %}✓{% else %}—{% endif %}</td>
           <td>
             <a href="/@{{ user.username }}/{{ folder.slug }}/" class="btn-sm">open →</a>
           </td>
@@ -172,7 +171,7 @@ function getSelected() {
   var rows = [];
   document.querySelectorAll('.drop-check:checked').forEach(function(cb) {
     var tr = cb.closest('tr');
-    rows.push({ ns: tr.dataset.ns, key: tr.dataset.key, row: tr });
+    rows.push({ key: tr.dataset.key, row: tr });
   });
   return rows;
 }
@@ -185,7 +184,7 @@ async function bulkDelete() {
   var ok = 0, fail = 0;
   for (var i = 0; i < items.length; i++) {
     var item = items[i];
-    var url = item.ns === 'f' ? '/f/' + item.key + '/delete/' : '/' + item.key + '/delete/';
+    var url = '/' + item.key + '/delete/';
     try {
       var res = await fetch(url, {
         method: 'DELETE',
@@ -199,25 +198,12 @@ async function bulkDelete() {
   showToast(ok + ' deleted' + (fail ? ', ' + fail + ' failed' : ''));
 }
 
-async function bulkRenew() {
+async function bulkSetExpiry() {
   var items = getSelected();
   if (!items.length) return;
-
-  var ok = 0, fail = 0;
-  for (var i = 0; i < items.length; i++) {
-    var item = items[i];
-    var url = item.ns === 'f' ? '/f/' + item.key + '/renew/' : '/' + item.key + '/renew/';
-    try {
-      var res = await fetch(url, {
-        method: 'POST',
-        headers: { 'X-CSRFToken': getCookie('csrftoken') },
-      });
-      if (res.ok) { ok++; } else { fail++; }
-    } catch (e) { fail++; }
-  }
-  updateBulkBar();
-  showToast(ok + ' renewed' + (fail ? ', ' + fail + ' failed' : ''));
-  if (ok > 0) setTimeout(function() { location.reload(); }, 800);
+  var expiry = prompt('Set expiry (e.g. 24h, 7d, 30d):');
+  if (!expiry) return;
+  showToast('Set expiry is not yet implemented on this page.');
 }
 
 async function bulkAddToFolder() {
@@ -236,7 +222,7 @@ async function bulkAddToFolder() {
       var res = await fetch('/folders/' + folderId + '/add/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-        body: JSON.stringify({ ns: item.ns, key: item.key }),
+        body: JSON.stringify({ key: item.key }),
       });
       if (res.ok) { ok++; } else { fail++; }
     } catch (e) { fail++; }
@@ -246,15 +232,15 @@ async function bulkAddToFolder() {
   showToast(ok + ' added to folder' + (fail ? ', ' + fail + ' failed' : ''));
 }
 
-async function unsave(ns, key, rowId) {
-  var action = ns === 'f' ? '/f/' + key + '/unsave/' : '/' + key + '/unsave/';
+async function removeBookmark(key, rowId) {
+  var action = '/' + key + '/unsave/';
   var res = await fetch(action, {
     method: 'POST',
     headers: { 'X-CSRFToken': getCookie('csrftoken') },
   });
   if (res.ok) {
     document.getElementById(rowId)?.remove();
-    showToast('removed from saved.');
+    showToast('bookmark removed.');
   }
 }
 </script>

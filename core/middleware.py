@@ -1,59 +1,40 @@
 """
 core/middleware.py
 
-API token authentication middleware.
-If request has an Authorization: Bearer <token> header, look up the token
-and attach the user to request.user (works alongside session auth).
+APITokenAuthMiddleware: allows CLI / API clients to authenticate via
+  Authorization: Bearer <raw_token>
+header instead of session cookies.
+
+The raw token is SHA-256 hashed and looked up in APIToken. If found, the
+request.user is set to that user for the duration of the request.
 """
 
 import hashlib
 
+from django.contrib.auth import get_user_model
 from django.utils import timezone
+
+from .models import APIToken
+
+User = get_user_model()
 
 
 class APITokenAuthMiddleware:
-    """
-    Authenticate requests that carry an ``Authorization: Bearer <token>``
-    header.  Runs *after* Django's built-in ``AuthenticationMiddleware`` so
-    session-based auth already had a chance to set ``request.user``.  If the
-    user is already authenticated via session, the header is ignored.
-    """
-
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         if not request.user.is_authenticated:
-            self._try_token_auth(request)
+            auth = request.headers.get("Authorization", "")
+            if auth.startswith("Bearer "):
+                raw_token = auth[7:].strip()
+                token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+                try:
+                    token_obj = APIToken.objects.select_related("user").get(token_hash=token_hash)
+                    request.user = token_obj.user
+                    # update last_used lazily (no signal storm)
+                    APIToken.objects.filter(pk=token_obj.pk).update(last_used=timezone.now())
+                except APIToken.DoesNotExist:
+                    pass
+
         return self.get_response(request)
-
-    @staticmethod
-    def _try_token_auth(request):
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
-            return
-
-        raw_token = auth[7:].strip()
-        if not raw_token:
-            return
-
-        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-
-        from core.models import APIToken
-        try:
-            api_token = APIToken.objects.select_related("user").get(token_hash=token_hash)
-        except APIToken.DoesNotExist:
-            return
-
-        if api_token.is_expired():
-            return
-
-        # Mark last_used (debounce to avoid a write on every request)
-        if (
-            api_token.last_used is None
-            or (timezone.now() - api_token.last_used).total_seconds() > 300
-        ):
-            APIToken.objects.filter(pk=api_token.pk).update(last_used=timezone.now())
-
-        request.user = api_token.user
-        request._api_token = api_token  # noqa: SLF001

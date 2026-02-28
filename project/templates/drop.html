@@ -18,14 +18,21 @@
         <button class="btn-sm" id="renameBtn">rename</button>
       {% endif %}
     </div>
+    {% if can_edit %}
+    <p class="muted" style="font-size:.78rem;margin-top:.25rem">changing the key resets the expiry clock</p>
+    {% endif %}
 
     <div class="share-url">
       <span id="urlDisplay">{{ request.build_absolute_uri }}</span>
       <button class="btn-sm" onclick="copyUrl()">copy link</button>
-      {% if folder_path_url %}
-      <button class="btn-sm" id="linkToggle" onclick="toggleLinkType()">relative</button>
-      {% endif %}
       <button class="btn-sm" id="qrToggle" onclick="toggleQr()" title="Show QR code">QR</button>
+      <button class="btn-sm" id="embedToggle" onclick="toggleEmbed()">embed</button>
+    </div>
+
+    <!-- Embed panel -->
+    <div id="embedPanel" class="qr-panel hidden">
+      <code style="font-size:.8rem;word-break:break-all">&lt;iframe src="{{ request.scheme }}://{{ request.get_host }}/embed/{{ drop.key }}/" width="600" height="400" frameborder="0"&gt;&lt;/iframe&gt;</code>
+      <button class="btn-sm" style="margin-top:.5rem" onclick="copyEmbed()">copy snippet</button>
     </div>
 
     <!-- QR code panel -->
@@ -37,8 +44,8 @@
     <p class="lock-hint {% if not drop.locked %}unlocked{% endif %}">
       {% if drop.locked %}
         🔒 locked — only the owner can edit or delete
-      {% elif drop.is_creation_locked %}
-        🔒 protected for 24h after creation
+      {% elif drop.locked_until %}
+        🔒 protected until {{ drop.locked_until|date:"N j" }}
       {% else %}
         🔓 anyone with the key can replace this content
       {% endif %}
@@ -49,17 +56,10 @@
 
     {% if drop.expires_at %}
     <p class="share-hint">
-      expires {{ drop.expires_at|date:"N j, Y" }}
-      {% if is_owner %}
-        · <button class="btn-link" id="renewBtn">renew</button>
-        <span id="renewStatus" class="muted" style="font-size:.78rem"></span>
-      {% endif %}
+      key expires {{ drop.expires_at|date:"N j, Y" }}
     </p>
     {% else %}
-    <p class="share-hint">
-      {% if drop.kind == 'text' %}clipboard — expires 24h after last access
-      {% else %}file — expires 90 days after upload{% endif %}
-    </p>
+    <p class="share-hint">key never expires</p>
     {% endif %}
   </div>
 
@@ -99,7 +99,7 @@
         <div class="fsize muted">{{ drop.filesize|filesizeformat }}</div>
       </div>
       <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
-        <a href="/f/{{ drop.key }}/download/" class="btn">↓ download</a>
+        <a href="/{{ drop.key }}/download/" class="btn">↓ download</a>
         {% with ext=drop.filename|lower %}
         {% if '.md' in ext or '.py' in ext or '.js' in ext or '.ts' in ext or '.json' in ext or '.yaml' in ext or '.yml' in ext or '.html' in ext or '.css' in ext or '.sh' in ext or '.txt' in ext or '.go' in ext or '.rs' in ext or '.rb' in ext or '.java' in ext or '.c' in ext or '.cpp' in ext or '.toml' in ext or '.xml' in ext or '.csv' in ext %}
         <button class="btn-sm" id="renderBtn" onclick="toggleRender()">render</button>
@@ -190,8 +190,6 @@ const BASE     = window.location.origin;
 const CAN_EDIT = {{ can_edit|yesno:"true,false" }};
 const IS_OWNER = {{ is_owner|yesno:"true,false" }};
 const DROP_URL = '{{ request.build_absolute_uri }}';
-const FOLDER_PATH_URL = '{{ folder_path_url|default:"" }}';
-let linkMode = 'global';
 
 function actionUrl(action) {
   return `/${KEY}/${action}/`;
@@ -200,28 +198,9 @@ function checkKeyUrl(key) {
   return `/check-key/?key=${encodeURIComponent(key)}`;
 }
 
-function activeUrl() {
-  if (linkMode === 'relative' && FOLDER_PATH_URL) return BASE + FOLDER_PATH_URL;
-  return DROP_URL;
-}
-
 function copyUrl() {
-  navigator.clipboard.writeText(activeUrl());
+  navigator.clipboard.writeText(DROP_URL);
   showToast('link copied!');
-}
-
-function toggleLinkType() {
-  const btn = document.getElementById('linkToggle');
-  const display = document.getElementById('urlDisplay');
-  if (linkMode === 'global') {
-    linkMode = 'relative';
-    display.textContent = BASE + FOLDER_PATH_URL;
-    btn.textContent = 'global';
-  } else {
-    linkMode = 'global';
-    display.textContent = DROP_URL;
-    btn.textContent = 'relative';
-  }
 }
 function toggleEdit() {
   document.getElementById('editForm').classList.toggle('hidden');
@@ -246,7 +225,7 @@ function toggleQr() {
   const isHidden = panel.classList.toggle('hidden');
   if (!isHidden && !qrGenerated) {
     new QRCode(document.getElementById('qrCode'), {
-      text: activeUrl(), width: 160, height: 160,
+      text: DROP_URL, width: 160, height: 160,
       colorDark: '#e8e8e8', colorLight: '#1a1a1a',
       correctLevel: QRCode.CorrectLevel.M,
     });
@@ -425,26 +404,14 @@ if (replaceBtn) {
   });
 }
 
-// ── Renew ─────────────────────────────────────────────────────────────────────
-const renewBtn = document.getElementById('renewBtn');
-if (renewBtn) {
-  renewBtn.addEventListener('click', async () => {
-    renewBtn.disabled = true;
-    const res  = await fetch(actionUrl('renew'), {
-      method: 'POST',
-      headers: { 'X-CSRFToken': getCookie('csrftoken') },
-    });
-    const data = await res.json();
-    if (res.ok) {
-      const d = new Date(data.expires_at);
-      document.getElementById('renewStatus').textContent =
-        `renewed → expires ${d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`;
-      showToast('drop renewed!');
-    } else {
-      showToast(data.error || 'Renew failed.');
-      renewBtn.disabled = false;
-    }
-  });
+// ── Embed panel ───────────────────────────────────────────────────────────────
+function toggleEmbed() {
+  document.getElementById('embedPanel').classList.toggle('hidden');
+}
+function copyEmbed() {
+  const snippet = document.querySelector('#embedPanel code').textContent;
+  navigator.clipboard.writeText(snippet);
+  showToast('embed snippet copied!');
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────
@@ -533,7 +500,7 @@ async function toggleRender() {
 
   try {
     if (!_renderContent) {
-      const resp = await fetch(`/f/${KEY}/raw/`);
+      const resp = await fetch(`/${KEY}/raw/`);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       _renderContent = await resp.text();
     }

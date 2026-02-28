@@ -23,7 +23,8 @@
       <a href="/features/">features</a>
       {% if user.is_staff %}<a href="/admin/">admin</a>{% endif %}
       {% if user.is_authenticated %}
-        <a href="/auth/manage/">manage</a>
+        <a href="/auth/manage/">drive</a>
+        <a href="/@{{ user.username }}/">files</a>
         <a href="/auth/account/">
           {% if user.profile.is_paid %}<span class="plan-badge">{{ user.profile.plan }}</span> {% endif %}
           @{{ user.username }}
@@ -31,7 +32,7 @@
         <a href="/auth/logout/">log out</a>
       {% else %}
         <a href="/auth/login/">log in</a>
-        <a href="/auth/register/" class="btn-nav">sign up</a>
+        <a href="/auth/register/" class="btn-nav">sign up free</a>
       {% endif %}
     </nav>
   </header>
@@ -46,8 +47,7 @@
   </main>
   <footer>
     <small>
-      anon: text 7d · files 90d ·
-      paid: explicit expiry, renewable ·
+      anon: 24h · free: 7d · paid: custom expiry ·
       <a href="/help/">help</a> ·
       <a href="/billing/licensing/">licensing</a> ·
       <a href="/privacy/">privacy</a> ·

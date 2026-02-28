@@ -1,68 +1,48 @@
-from django.urls import path, re_path
+from django.urls import path
 from django.contrib.auth import views as auth_views
-from core import views
-from core.views.error_reporting import report_error
-from core.views.github_webhook import github_webhook
-from core.views.drops import raw_view, raw_file, set_drop_password, embed_view, public_feed, drop_view
-from core.views.helpers import qr_view
-from core.views.legal import privacy_view, terms_view
-from core.views.folders import (
-    resolve_handle, create_folder, create_share_token,
-    list_share_tokens, revoke_share_token,
-)
-from core.views.tokens import create_token, list_tokens, revoke_token
-from core.views.templates import create_template, list_templates, get_template, delete_template
-from core.views.features import feature_list, feature_submit, feature_vote
-from core.views.likes import toggle_like
-
-KEY = r"(?P<key>[^/\s]+)"
+from . import views
 
 urlpatterns = [
-    path("api/report-error/",   report_error,          name="report_error"),
-    path("api/github-webhook/", github_webhook,         name="github_webhook"),
-    path("save/",               views.save_drop,        name="save_drop"),
-    path("check-key/",          views.check_key,        name="check_key"),
-    path("upload/prepare/",     views.upload_prepare,   name="upload_prepare"),
-    path("upload/confirm/",     views.upload_confirm,   name="upload_confirm"),
-    path("upload/from-url/",    views.upload_from_url,  name="upload_from_url"),
-    re_path(rf"^raw/{KEY}/$",   raw_view,               name="raw_view"),
-    re_path(rf"^embed/{KEY}/$", embed_view,             name="embed_view"),
-    path("explore/",            public_feed,            name="public_feed"),
-    path("qr/",                 qr_view,                name="qr_view"),
-    path("privacy/",            privacy_view,           name="privacy"),
-    path("terms/",              terms_view,             name="terms"),
-    path("auth/register/",      views.register_view,    name="register"),
-    path("auth/login/",         views.login_view,       name="login"),
-    path("auth/logout/",        views.logout_view,      name="logout"),
-    path("auth/account/",       views.account_view,     name="account"),
-    path("auth/manage/",        views.manage_view,      name="manage"),
-    path("auth/account/export/", views.export_drops,    name="export_drops"),
-    path("auth/account/import/", views.import_drops,    name="import_drops"),
-    path("auth/account/settings/", views.update_account_settings, name="account_settings"),
-    # API tokens
-    path("auth/tokens/",                  list_tokens,    name="token_list"),
-    path("auth/tokens/create/",           create_token,   name="token_create"),
-    path("auth/tokens/<int:token_id>/revoke/", revoke_token, name="token_revoke"),
-    # Drop templates
-    path("auth/templates/",                        list_templates,   name="template_list"),
-    path("auth/templates/create/",                 create_template,  name="template_create"),
-    path("auth/templates/<slug:slug>/",            get_template,     name="template_get"),
-    path("auth/templates/<int:template_id>/delete/", delete_template, name="template_delete"),
-    path("auth/verify/resend/", views.resend_verification_view, name="verify_resend"),
-    re_path(r"^auth/verify/(?P<token>[^/]+)/$", views.verify_email_view, name="verify_email"),
-    path("report-bug/",         views.report_bug_view,  name="report_bug"),
-    path("use-cases/",          views.use_cases_view,   name="use_cases"),
-    # Feature voting board
-    path("features/",                          feature_list,    name="feature_list"),
-    path("features/submit/",                   feature_submit,  name="feature_submit"),
-    path("features/<int:proposal_id>/vote/",   feature_vote,    name="feature_vote"),
+
+    # ── Drop actions ──────────────────────────────────────────────────────────
+    path("save/",                views.drop_save,            name="drop_save"),
+    path("check-key/",           views.check_key,            name="check_key"),
+
+    path("<str:key>/",           views.drop_view,            name="drop_view"),
+    path("<str:key>/raw/",       views.drop_raw,             name="drop_raw"),
+    path("<str:key>/download/",  views.drop_download,        name="drop_download"),
+    path("<str:key>/delete/",    views.drop_delete,          name="drop_delete"),
+    path("<str:key>/rename/",    views.drop_rename,          name="drop_rename"),
+    path("<str:key>/save/",      views.drop_save_bookmark,   name="drop_save_bookmark"),
+    path("<str:key>/unsave/",    views.drop_remove_bookmark, name="drop_remove_bookmark"),
+    path("<str:key>/like/",      views.drop_like,            name="drop_like"),
+    path("<str:key>/set-password/", views.drop_set_password, name="drop_set_password"),
+
+    # ── Embed ─────────────────────────────────────────────────────────────────
+    path("embed/<str:key>/",     views.drop_embed,           name="drop_embed"),
+
+    # ── Auth ──────────────────────────────────────────────────────────────────
+    path("auth/login/",          views.login_view,           name="login"),
+    path("auth/logout/",         views.logout_view,          name="logout"),
+    path("auth/register/",       views.register_view,        name="register"),
+    path("auth/account/",        views.account_view,         name="account"),
+    path("auth/account/settings/", views.account_settings,  name="account_settings"),
+    path("auth/manage/",         views.manage_view,          name="manage"),
+    path("auth/account/export/", views.account_export,       name="account_export"),
+    path("auth/account/import/", views.account_import,       name="account_import"),
+
+    # Email verification
+    path("auth/verify/<str:token>/", views.verify_email,     name="verify_email"),
+    path("auth/verify/resend/",      views.verify_resend,    name="verify_resend"),
+
+    # Password reset (Django built-in)
     path("auth/forgot-password/",
          auth_views.PasswordResetView.as_view(
              template_name="registration/password_reset_form.html",
              email_template_name="registration/password_reset_email.html",
              subject_template_name="registration/password_reset_subject.txt",
          ),
-         name="forgot_password"),
+         name="password_reset"),
     path("auth/forgot-password/done/",
          auth_views.PasswordResetDoneView.as_view(
              template_name="registration/password_reset_done.html",
@@ -78,32 +58,23 @@ urlpatterns = [
              template_name="registration/password_reset_complete.html",
          ),
          name="password_reset_complete"),
-    # Folders
-    path("folders/create/",                   views.create_folder,        name="folder_create"),
-    path("folders/<int:folder_id>/add/",      views.add_to_folder,        name="folder_add"),
-    path("folders/<int:folder_id>/remove/",   views.remove_from_folder,   name="folder_remove"),
-    path("folders/<int:folder_id>/rename/",   views.rename_folder,        name="folder_rename"),
-    path("folders/<int:folder_id>/delete/",   views.delete_folder,        name="folder_delete"),
-    # Folder share tokens
-    path("folders/<int:folder_id>/share/",       create_share_token,   name="folder_share"),
-    path("folders/<int:folder_id>/share/list/",  list_share_tokens,    name="folder_share_list"),
-    path("folders/<int:folder_id>/share/<int:token_id>/revoke/", revoke_share_token, name="folder_share_revoke"),
-    # Folder bookmarks
-    path("bookmarks/folder/<int:folder_id>/save/",   views.save_folder_bookmark,   name="save_folder_bookmark"),
-    path("bookmarks/folder/<int:folder_id>/unsave/", views.unsave_folder_bookmark, name="unsave_folder_bookmark"),
-    # Handle / folder / item resolution
-    re_path(r"^@(?P<handle>[^/]+)/$",                    resolve_handle,         name="resolve_handle"),
-    re_path(r"^@(?P<username>[^/]+)/(?P<path>.+)/$", views.folder_or_item_view, name="folder_view"),
-    # Unified drop actions
-    re_path(rf"^{KEY}/download/$",     views.download_drop,          name="download_drop"),
-    re_path(rf"^{KEY}/raw/$",          raw_file,                     name="raw_file"),
-    re_path(rf"^{KEY}/rename/$",       views.rename_drop,            name="rename_drop"),
-    re_path(rf"^{KEY}/delete/$",       views.delete_drop,            name="delete_drop"),
-    re_path(rf"^{KEY}/renew/$",        views.renew_drop,             name="renew_drop"),
-    re_path(rf"^{KEY}/copy/$",         views.copy_drop,              name="copy_drop"),
-    re_path(rf"^{KEY}/save/$",         views.save_bookmark,          name="save_bookmark"),
-    re_path(rf"^{KEY}/unsave/$",       views.unsave_bookmark,        name="unsave_bookmark"),
-    re_path(rf"^{KEY}/set-password/$", set_drop_password,            name="set_password"),
-    re_path(rf"^{KEY}/like/$",         toggle_like,                  name="toggle_like"),
-    re_path(rf"^{KEY}/$",             drop_view,                     name="drop_view"),
+
+    # ── Folders ───────────────────────────────────────────────────────────────
+    path("folders/create/",                        views.folder_create,       name="folder_create"),
+    path("folders/<int:folder_id>/add/",           views.folder_add,          name="folder_add"),
+    path("folders/<int:folder_id>/delete/",        views.folder_delete,       name="folder_delete"),
+    path("folders/<int:folder_id>/remove/<str:key>/", views.folder_remove_item, name="folder_remove_item"),
+
+    # ── Public profiles ───────────────────────────────────────────────────────
+    path("@<str:username>/",                   views.profile_view, name="profile"),
+    path("@<str:username>/<str:folder_slug>/", views.folder_view,  name="folder_view"),
+
+    # ── Explore ───────────────────────────────────────────────────────────────
+    path("explore/",   views.explore_view,       name="explore"),
+
+    # ── Static pages ─────────────────────────────────────────────────────────
+    path("features/",   views.features_view,     name="features"),
+    path("use-cases/",  views.use_cases_view,    name="use_cases"),
+    path("report-bug/", views.bug_report_view,   name="bug_report"),
+    path("report-bug/done/", views.bug_report_done_view, name="bug_report_done"),
 ]

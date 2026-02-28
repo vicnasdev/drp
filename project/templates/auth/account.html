@@ -29,26 +29,32 @@
     <h2>your drops</h2>
     <p class="muted" style="font-size:.85rem;margin-bottom:.6rem">
       you have <strong>{{ drops|length }}</strong> drop{{ drops|pluralize }} ·
-      <a href="/auth/manage/">manage drops →</a>
+      <a href="/auth/manage/">open drive →</a>
     </p>
   </div>
 
-  <!-- Storage (paid only) -->
-  {% if profile.is_paid %}
+  <!-- Storage (all users) -->
   <div class="account-section">
     <h2>storage</h2>
     <div class="storage-bar-wrap">
       <div class="storage-label">
-        {{ profile.storage_used_gb|floatformat:2 }} GB / {{ profile.storage_quota_gb }} GB used
+        {% if profile.is_paid %}
+          {{ profile.storage_used_gb|floatformat:2 }} GB / {{ profile.storage_quota_gb }} GB used
+        {% else %}
+          0 B / 1 GB used
+        {% endif %}
       </div>
       <div class="storage-bar">
+        {% if profile.is_paid %}
         <div class="storage-bar-fill"
              style="width:{% widthratio profile.storage_used_bytes profile.storage_quota_bytes 100 %}%">
         </div>
+        {% else %}
+        <div class="storage-bar-fill" style="width:0%"></div>
+        {% endif %}
       </div>
     </div>
   </div>
-  {% endif %}
 
   <!-- Plan -->
   <div class="account-section">
@@ -73,7 +79,6 @@
       <ul class="upsell-list">
         <li>🔑 password-protect any drop</li>
         <li>🔒 drops locked to your account</li>
-        <li>♻️ renewable drops</li>
         <li>📅 explicit expiry dates</li>
         <li>📦 {{ plan_limits.max_file_mb }}MB per file · {{ plan_limits.storage_gb }}GB total</li>
         <li>📁
@@ -89,10 +94,10 @@
     <!-- Free: upgrade CTA with feature comparison -->
     <div class="plan-status" style="margin-bottom:1rem">
       <span class="plan-badge">Free</span>
-      <span class="muted" style="font-size:.85rem">200MB per file · idle-based expiry</span>
+      <span class="muted" style="font-size:.85rem">7d key expiry · up to 1 GB</span>
     </div>
     <p class="muted" style="font-size:.85rem;margin-bottom:1rem">
-      upgrade to unlock password protection, explicit expiry, renewable drops, and more.
+      upgrade to unlock password protection, explicit expiry, and more.
     </p>
     <div class="plan-grid">
       <div class="plan-card">
@@ -104,7 +109,6 @@
           <li>5 GB total storage</li>
           <li>Up to 1 year expiry</li>
           <li>Drops locked to your account</li>
-          <li>Renewable drops</li>
           <li>🔑 Password-protect drops</li>
           <li>📁 Up to 10 folders</li>
         </ul>
@@ -120,7 +124,6 @@
           <li>20 GB total storage</li>
           <li>Up to 3 years expiry</li>
           <li>Drops locked to your account</li>
-          <li>Renewable drops</li>
           <li>🔑 Password-protect drops</li>
           <li>📁 Unlimited folders</li>
         </ul>
