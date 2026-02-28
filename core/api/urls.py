@@ -18,7 +18,10 @@ urlpatterns = [
     path("auth/me/",                    views.auth_me,              name="api_auth_me"),
 
     # Files (drops)
-    path("files/",                      views.files_upload,         name="api_files_upload"),
+    # FIX: added GET handler to files_upload view so authenticated users can
+    # list their own drops — needed by shell `ls` at root to show loose drops
+    # (drops not in any folder).
+    path("files/",                      views.files_list_or_upload, name="api_files"),
     path("files/<str:key>/",            views.files_detail,         name="api_files_detail"),
     path("files/<str:key>/fork/",       views.files_fork,           name="api_files_fork"),
 
@@ -37,8 +40,6 @@ urlpatterns = [
     path("tokens/",                     views.tokens_list_create,   name="api_tokens"),
     path("tokens/<int:token_id>/",      views.tokens_detail,        name="api_tokens_detail"),
 
-    # FIX: crash reporting endpoint was missing entirely — the CLI was POSTing here
-    # but getting 404s, so no CrashReport records were created and no GitHub issues
-    # were ever filed. Added the route and its view below in views.py.
+    # Crash reporting
     path("crash/",                      views.crash_report,         name="api_crash"),
 ]

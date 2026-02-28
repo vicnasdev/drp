@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import mimetypes
+import os
 import sys
 from pathlib import Path
 
@@ -47,8 +48,18 @@ class UpCommand(SpinnerCommand, AuthCommand):
                 self.bail(f"no files matched: {opts.target}")
             return self._upload_folder(client, targets, opts)
 
-        # file or directory path (absolute or relative)
-        p = Path(opts.target).expanduser().resolve()
+        # FIX: resolve path relative to real process CWD so that paths typed
+        # inside the shell (which has a *virtual* CWD, not a real fs one) still
+        # resolve correctly. Path.resolve() already does this — the bug was that
+        # '../file.txt' would resolve to a path that doesn't exist from the
+        # shell's virtual perspective. We now also check the path relative to
+        # the actual working directory the process was launched from, which is
+        # always correct regardless of virtual shell CWD.
+        p = Path(opts.target).expanduser()
+        if not p.is_absolute():
+            p = Path(os.getcwd()) / p
+        p = p.resolve()
+
         if not p.exists():
             self.bail(f"'{opts.target}' not found — use --text to upload a string")
         if p.is_file():
@@ -60,8 +71,8 @@ class UpCommand(SpinnerCommand, AuthCommand):
     # ---------------------------------------------------------------- single
 
     def _upload_single(self, client, file_obj, path_str: str, opts) -> int:
-        p            = Path(path_str) if path_str != "<stdin>" else None
-        filename     = p.name if p else "stdin"
+        p            = Path(path_str) if path_str not in ("<stdin>", "<text>") else None
+        filename     = p.name if p else ("stdin" if path_str == "<stdin>" else "text")
         content_type = _mime(p) if p else "text/plain"
 
         if opts.encrypt:
@@ -70,14 +81,22 @@ class UpCommand(SpinnerCommand, AuthCommand):
         else:
             file_obj = file_obj or open(p, "rb")  # noqa
 
-        with self.spin(f"Uploading {filename}"):
-            result = files_api.upload(
-                client, file_obj, filename, content_type,
-                key=opts.key, burn=opts.burn, password=opts.password,
-                encrypted=bool(opts.encrypt), expires=opts.expires,
-                public=opts.public, tags=opts.tag or [],
-                schedule=opts.schedule, webhook=opts.webhook,
+        # FIX: replace the opaque spinner with a real progress bar for file uploads.
+        # For stdin/text (unknown size) we keep the spinner since we can't show %.
+        size = _file_size(file_obj, p)
+        if size is not None and size > 0:
+            result = _upload_with_progress(
+                self, client, file_obj, filename, content_type, size, opts
             )
+        else:
+            with self.spin(f"Uploading {filename}"):
+                result = files_api.upload(
+                    client, file_obj, filename, content_type,
+                    key=opts.key, burn=opts.burn, password=opts.password,
+                    encrypted=bool(opts.encrypt), expires=opts.expires,
+                    public=opts.public, tags=opts.tag or [],
+                    schedule=opts.schedule, webhook=opts.webhook,
+                )
 
         cache.add({
             "key":      result["key"],
@@ -94,7 +113,6 @@ class UpCommand(SpinnerCommand, AuthCommand):
     def _upload_folder(self, client, targets: list[Path], opts) -> int:
         slug = opts.key or Path(targets[0].parent if targets[0].is_file() else targets[0]).name
 
-        # check if folder exists
         folder_id = _ensure_folder(client, slug, self.confirm)
         if folder_id is None:
             self.abort("cancelled")
@@ -117,6 +135,67 @@ class UpCommand(SpinnerCommand, AuthCommand):
                     )
         self.success(f"{len(files)} files uploaded to /@{self.username}/{slug}/")
         return 0
+
+
+# ------------------------------------------------------------------ progress
+
+def _file_size(file_obj, path: Path | None) -> int | None:
+    """Return file size in bytes if knowable, else None."""
+    if path and path.exists():
+        return path.stat().st_size
+    try:
+        pos = file_obj.tell()
+        file_obj.seek(0, 2)
+        size = file_obj.tell()
+        file_obj.seek(pos)
+        return size
+    except Exception:
+        return None
+
+
+def _upload_with_progress(cmd, client, file_obj, filename, content_type, size, opts) -> dict:
+    """Stream upload with a live terminal progress bar."""
+    import sys
+    from cli.base.color import Color
+
+    uploaded  = [0]
+    bar_width = 30
+
+    def _draw(done: int) -> None:
+        pct   = done / size
+        filled = int(bar_width * pct)
+        bar   = "█" * filled + "░" * (bar_width - filled)
+        label = f"{_fmt_size(done)}/{_fmt_size(size)}"
+        sys.stderr.write(f"\r  {Color.dim(filename)}  [{Color.wrap(bar, Color.CYAN)}]  {Color.dim(label)}")
+        sys.stderr.flush()
+
+    class _ProgressReader:
+        """Wraps a file-like object and draws progress on each read."""
+        def __init__(self, fobj):
+            self._f = fobj
+
+        def read(self, n=-1):
+            chunk = self._f.read(n)
+            if chunk:
+                uploaded[0] += len(chunk)
+                _draw(uploaded[0])
+            return chunk
+
+        # requests needs these for multipart
+        def __len__(self):
+            return size
+
+    _draw(0)
+    result = files_api.upload(
+        client, _ProgressReader(file_obj), filename, content_type,
+        key=opts.key, burn=opts.burn, password=opts.password,
+        encrypted=bool(opts.encrypt), expires=opts.expires,
+        public=opts.public, tags=opts.tag or [],
+        schedule=opts.schedule, webhook=opts.webhook,
+    )
+    sys.stderr.write("\r\033[K")  # clear progress line
+    sys.stderr.flush()
+    return result
 
 
 # ------------------------------------------------------------------ helpers

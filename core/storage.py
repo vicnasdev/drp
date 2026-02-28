@@ -8,6 +8,7 @@ import mimetypes
 import uuid
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from django.conf import settings
 
@@ -16,11 +17,15 @@ logger = logging.getLogger(__name__)
 
 
 def _client():
+    # FIX: boto3 was generating SigV2 presigned URLs (AWSAccessKeyId=, Signature=,
+    # Expires= params) which B2 rejects with 401. B2's S3-compatible API requires
+    # SigV4. Adding signature_version='s3v4' fixes all presigned URL downloads.
     return boto3.client(
         "s3",
         endpoint_url=settings.B2_ENDPOINT_URL,
         aws_access_key_id=settings.B2_KEY_ID,
         aws_secret_access_key=settings.B2_APP_KEY,
+        config=Config(signature_version="s3v4"),
     )
 
 

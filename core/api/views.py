@@ -102,8 +102,31 @@ def auth_me(request):
 # ---------------------------------------------------------------------------
 
 @csrf_exempt
-@require_http_methods(["POST"])
-def files_upload(request):
+@require_http_methods(["GET", "POST"])
+def files_list_or_upload(request):
+    # FIX: GET handler added so authenticated users can list their own drops.
+    # Shell `ls` at root calls this to show loose drops (not in any folder)
+    # alongside folders. Previously only POST existed, so shell ls was always empty.
+    if request.method == "GET":
+        if not request.user.is_authenticated:
+            return _err("authentication required", 401)
+        from core.storage import b2_download_url
+        drops = File.objects.filter(owner=request.user).order_by("-created_at")[:100]
+        return _json({
+            "items": [
+                {
+                    "key":          f.key,
+                    "filename":     f.filename,
+                    "size":         f.size,
+                    "size_display": _fmt_size(f.size),
+                    "content_type": f.content_type,
+                    "expires_at":   f.expires_at.isoformat() if f.expires_at else None,
+                    "is_public":    f.is_public,
+                    "download_url": b2_download_url(f.b2_name),
+                }
+                for f in drops
+            ]
+        })
     import re
     import mimetypes
     from datetime import timedelta

@@ -23,8 +23,20 @@ def list_contents(client: APIClient, folder_id: int) -> dict:
 
 
 def list_root(client: APIClient) -> dict:
-    """Returns top-level folders for the authenticated user."""
-    return parse_response(client.get("/api/v1/folders/"))
+    """
+    Returns top-level folders + loose drops for the authenticated user.
+    FIX: previously only returned folder objects from GET /api/v1/folders/.
+    Now also fetches loose drops from GET /api/v1/files/ and merges them,
+    so shell `ls` at root shows everything the user owns.
+    """
+    folders_data = parse_response(client.get("/api/v1/folders/"))
+    try:
+        files_data = parse_response(client.get("/api/v1/files/"))
+        folders_data["items"] = files_data.get("items", [])
+    except Exception:
+        # If the files endpoint fails for any reason, still return folders
+        folders_data.setdefault("items", [])
+    return folders_data
 
 
 def move(client: APIClient, folder_id: int, new_parent_id: int | None) -> dict:

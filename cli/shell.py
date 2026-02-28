@@ -84,15 +84,12 @@ def _run_piped(line: str, config: dict, reporter) -> None:
         name  = parts[0]
         args  = parts[1:]
 
-        # last segment might be a real shell command (grep, head, etc.)
         klass = cmd_registry.ALL.get(name)
         if klass is None:
-            # pass accumulated output to real shell command
             if buf is not None:
                 proc = subprocess.run(seg, shell=True, input=buf, capture_output=False, text=True)
             return
 
-        # capture output from drp command
         import io as _io
         old_stdout = sys.stdout
         sys.stdout = captured = _io.StringIO()
@@ -115,10 +112,9 @@ def _setup_readline(config: dict) -> None:
         cmds = list(cmd_registry.ALL.keys()) + ["help", "exit"]
 
         def completer(text, state):
-            # FIX: the original completer had no exception guard. Any error
-            # inside here causes readline to spin in a tight loop calling the
-            # completer forever, freezing the terminal. Always return None on
-            # any exception so readline gets the termination signal it needs.
+            # FIX 1: always guard with try/except — any uncaught exception here
+            # causes readline to spin calling the completer forever, freezing
+            # the terminal with no visible output.
             try:
                 options = [c for c in cmds if c.startswith(text)]
                 if state < len(options):
@@ -128,12 +124,19 @@ def _setup_readline(config: dict) -> None:
                 return None
 
         readline.set_completer(completer)
-        # FIX: without this, readline treats every character as a possible
-        # delimiter and calls the completer far more times than expected,
-        # compounding the freeze risk above. Restrict delimiters to
-        # whitespace only so each word is completed as a single token.
+
+        # FIX 2: without set_completer_delims, readline treats every character
+        # as a potential delimiter and over-calls the completer.
         readline.set_completer_delims(" \t\n")
+
+        # FIX 3: the "freeze" the user sees is readline's built-in pagination:
+        # when tab is pressed with no text, all N commands match and readline
+        # silently waits for "Display all N possibilities? (y/n)" with no
+        # visible prompt. Setting completion-query-items high enough prevents
+        # this prompt from ever appearing.
+        readline.parse_and_bind("set completion-query-items 9999")
         readline.parse_and_bind("tab: complete")
+
     except ImportError:
         pass  # readline unavailable on Windows
 
