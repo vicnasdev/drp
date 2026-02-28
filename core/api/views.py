@@ -104,9 +104,6 @@ def auth_me(request):
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
 def files_list_or_upload(request):
-    # FIX: GET handler added so authenticated users can list their own drops.
-    # Shell `ls` at root calls this to show loose drops (not in any folder)
-    # alongside folders. Previously only POST existed, so shell ls was always empty.
     if request.method == "GET":
         if not request.user.is_authenticated:
             return _err("authentication required", 401)
@@ -127,12 +124,13 @@ def files_list_or_upload(request):
                 for f in drops
             ]
         })
+
     import re
     import mimetypes
     from datetime import timedelta
     from django.utils import timezone
     from core.models import ANON_MAX_FILE_MB, ANON_LIFETIME_DAYS, generate_key
-    from core.storage import b2_upload, b2_upload_text
+    from core.storage import b2_upload
 
     user    = request.user if request.user.is_authenticated else None
     profile = _profile(user) if user else None
@@ -155,7 +153,6 @@ def files_list_or_upload(request):
     folder_id   = request.POST.get("folder_id")
     password    = request.POST.get("password")
 
-    # validate custom key
     if custom_key:
         if not re.match(r'^[a-zA-Z0-9_\-]{1,64}$', custom_key):
             return _err("invalid key format")
@@ -163,12 +160,10 @@ def files_list_or_upload(request):
         if existing and existing.owner != user:
             return _err("key already taken", 409)
 
-    # expiry
     if user and profile:
         limits   = profile.plan_limits
         max_days = limits["max_expiry_days"]
         if expires_raw:
-            # parse e.g. "7d", "24h"
             match = re.match(r'(\d+)([dh])', expires_raw)
             if match:
                 n, unit = int(match.group(1)), match.group(2)
@@ -182,7 +177,6 @@ def files_list_or_upload(request):
     else:
         expires_at = timezone.now() + timedelta(days=ANON_LIFETIME_DAYS)
 
-    # upload to B2
     try:
         ct       = uploaded.content_type or mimetypes.guess_type(uploaded.name)[0] or "application/octet-stream"
         b2_name, size = b2_upload(uploaded, uploaded.name, ct)
@@ -190,15 +184,13 @@ def files_list_or_upload(request):
     except Exception:
         return _err("upload failed", 500)
 
-    # password hash
     import hashlib
     pw_hash = hashlib.sha256(password.encode()).hexdigest() if password else ""
 
-    # create File record
     drop = File.objects.create(
         key           = custom_key or generate_key(),
         owner         = user,
-        anon_token    = "" if user else "",
+        anon_token    = "",
         b2_name       = b2_name,
         filename      = filename,
         content_type  = ct,
@@ -209,16 +201,13 @@ def files_list_or_upload(request):
         password_hash = pw_hash,
     )
 
-    # add to folder
     if folder_id:
         try:
-            from core.models import Folder, FolderItem
             folder = Folder.objects.get(id=int(folder_id), owner=user)
             FolderItem.objects.get_or_create(folder=folder, key=drop.key, defaults={"label": filename})
         except (Folder.DoesNotExist, ValueError):
             pass
 
-    # update storage
     if profile:
         UserProfile.objects.filter(user=user).update(
             storage_used_bytes=profile.storage_used_bytes + size
@@ -242,7 +231,7 @@ def files_detail(request, key):
         return _err("not found", 404)
 
     if request.method == "GET":
-        from core.storage import b2_download_url  # FIX: generate a presigned download URL
+        from core.storage import b2_download_url
         return _json({
             "key":             f.key,
             "filename":        f.filename,
@@ -255,23 +244,48 @@ def files_detail(request, key):
             "burn_after_read": f.burn_after_read,
             "view_count":      f.view_count,
             "created_at":      f.created_at.isoformat(),
-            "download_url":    b2_download_url(f.b2_name),  # FIX: was missing — caused KeyError in CLI
+            "download_url":    b2_download_url(f.b2_name),
         })
 
     if request.method == "PATCH":
         if not request.user.is_authenticated or f.owner != request.user:
             return _err("permission denied", 403)
-        data    = _body(request)
+        data = _body(request)
+
+        new_filename = data.get("filename")
+        if new_filename:
+            f.filename = new_filename
+            # Also update the FolderItem label so ls shows the new name
+            FolderItem.objects.filter(key=f.key).update(label=new_filename)
+
         new_key = data.get("key")
         if new_key:
             if File.objects.filter(key=new_key).exclude(pk=f.pk).exists():
                 return _err("key already taken", 409)
+            old_key = f.key
             f.key = new_key
+            # Keep FolderItem in sync
+            FolderItem.objects.filter(key=old_key).update(key=new_key)
+
+        new_folder_id = data.get("folder_id")
+        if new_folder_id is not None:
+            # Remove from all current folders first, then add to new one
+            FolderItem.objects.filter(key=f.key).delete()
+            if new_folder_id:
+                try:
+                    folder = Folder.objects.get(id=int(new_folder_id), owner=request.user)
+                    FolderItem.objects.get_or_create(
+                        folder=folder, key=f.key,
+                        defaults={"label": f.filename}
+                    )
+                except (Folder.DoesNotExist, ValueError):
+                    return _err("folder not found", 404)
+
         for field in ("is_public", "burn_after_read", "expires_at"):
             if field in data:
                 setattr(f, field, data[field])
         f.save()
-        return _json({"key": f.key})
+        return _json({"key": f.key, "filename": f.filename})
 
     if request.method == "DELETE":
         if not request.user.is_authenticated or f.owner != request.user:
@@ -292,14 +306,29 @@ def files_fork(request, key):
 # ---------------------------------------------------------------------------
 
 def _folder_data(folder):
-    items = [
-        {
+    from core.storage import b2_download_url
+
+    # FIX: join against File so we return real filename/size/content_type/
+    # download_url on every item — without this, mv/cp/cat/_filename_to_key
+    # all fail because they look for item["filename"] which was never present.
+    folder_items = list(folder.items.all())
+    keys         = [fi.key for fi in folder_items]
+    file_map     = {f.key: f for f in File.objects.filter(key__in=keys)}
+
+    items = []
+    for fi in folder_items:
+        f = file_map.get(fi.key)
+        items.append({
             "key":          fi.key,
-            "filename":     fi.label or fi.key,
+            "filename":     (f.filename if f else None) or fi.label or fi.key,
             "label":        fi.label,
-        }
-        for fi in folder.items.all()
-    ]
+            "size":         f.size if f else 0,
+            "size_display": _fmt_size(f.size) if f else "",
+            "content_type": f.content_type if f else "",
+            "expires_at":   f.expires_at.isoformat() if f and f.expires_at else None,
+            "download_url": b2_download_url(f.b2_name) if f else "",
+        })
+
     subfolders = [
         {"id": c.id, "slug": c.slug, "is_public": c.is_public}
         for c in folder.children.all()
@@ -318,25 +347,25 @@ def _folder_data(folder):
 @token_required
 def folders_list_create(request):
     if request.method == "GET":
+        from core.storage import b2_download_url
         folders = Folder.objects.filter(owner=request.user, parent=None)
-        # FIX: the original returned items=[] always, so shell `ls` at root was
-        # always empty. Now we include loose drops — drops owned by the user that
-        # are not in any folder — so they appear in the shell at root level.
-        # "In any folder" means: their key appears in at least one FolderItem row.
-        from django.db.models import Subquery, OuterRef
-        filed_keys = FolderItem.objects.values("key")
+
+        # Loose drops: owned by user, not in any folder
+        filed_keys  = FolderItem.objects.values("key")
         loose_drops = (
             File.objects.filter(owner=request.user)
                         .exclude(key__in=filed_keys)
                         .order_by("-created_at")[:100]
         )
-        from core.storage import b2_download_url
         return _json({
             "items": [
                 {
                     "key":          f.key,
                     "filename":     f.filename,
+                    "label":        f.filename,
+                    "size":         f.size,
                     "size_display": _fmt_size(f.size),
+                    "content_type": f.content_type,
                     "expires_at":   f.expires_at.isoformat() if f.expires_at else None,
                     "download_url": b2_download_url(f.b2_name),
                 }
@@ -406,20 +435,12 @@ def folders_detail(request, folder_id):
 
 
 # ---------------------------------------------------------------------------
-# Path resolver
+# Drive version (cache polling)
 # ---------------------------------------------------------------------------
 
 @require_http_methods(["GET"])
 @token_required
 def drive_version(request):
-    """
-    Cheap endpoint for the CLI's drive cache to poll.
-
-    Returns a single hash derived from the user's folder/file counts and the
-    last-modified timestamp of the most recently changed file or folder.
-    No file data, no joins — just a quick aggregate the client can compare
-    against its cached version to decide whether a full refresh is needed.
-    """
     from django.db.models import Max, Count
     from hashlib import md5
 
@@ -447,8 +468,7 @@ def drive_version(request):
 @require_http_methods(["GET"])
 @token_required
 def resolve(request):
-    path = request.GET.get("path", "").strip("/")
-    # expected: @username  OR  @username/slug  OR  @username/slug/subslug
+    path  = request.GET.get("path", "").strip("/")
     parts = path.lstrip("@").split("/")
 
     from django.contrib.auth import get_user_model
@@ -460,8 +480,6 @@ def resolve(request):
         return _err("user not found", 404)
 
     if len(parts) < 2 or not parts[1]:
-        # Root — return a virtual root descriptor so `cd ..` from the top
-        # folder works (it sends "@username" which has only 1 part).
         folders = Folder.objects.filter(owner=user, parent=None)
         return _json({
             "type":   "folder",
@@ -516,8 +534,8 @@ def tokens_list_create(request):
     if request.method == "GET":
         tokens = APIToken.objects.filter(user=request.user).values("id", "label", "last_used", "created_at")
         return _json({"results": list(tokens)})
-    data      = _body(request)
-    label     = data.get("label", "")
+    data           = _body(request)
+    label          = data.get("label", "")
     token_obj, raw = issue_token(request.user, label=label)
     return _json({"id": token_obj.id, "token": raw, "label": label}, status=201)
 
@@ -536,11 +554,6 @@ def tokens_detail(request, token_id):
 
 # ---------------------------------------------------------------------------
 # Crash reporting
-# FIX: this endpoint was missing entirely. The CLI posts here after every
-# unhandled exception, but was getting 404s, so CrashReport records were
-# never created and GitHub issues were never filed. The route is now wired
-# in urls.py and delegates to the existing error_reporting_logic module
-# which handles deduplication and GitHub issue creation.
 # ---------------------------------------------------------------------------
 
 @csrf_exempt
@@ -553,9 +566,6 @@ def crash_report(request):
     if not data:
         return _err("no data", 400)
 
-    # Normalise the payload from the CLI into what maybe_file_issue expects.
-    # CLI sends: fingerprint, exc_type, title, traceback (str), cli_version.
-    # maybe_file_issue expects: exc_type, exc_message, traceback (list), cli_version.
     normalised = {
         "exc_type":       data.get("exc_type", "UnknownError"),
         "exc_message":    data.get("title", ""),
@@ -566,8 +576,5 @@ def crash_report(request):
         "platform":       data.get("platform", ""),
     }
 
-    # Fire-and-forget in a daemon thread — same pattern as the CLI sender —
-    # so the response returns immediately and the CLI isn't kept waiting.
     Thread(target=maybe_file_issue, args=(normalised,), daemon=True).start()
-
     return _json({"status": "ok"}, status=202)

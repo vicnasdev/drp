@@ -131,7 +131,7 @@
             <span class="drop-icon">{% if drop.content_type|slice:":6" == "image/" %}🖼{% elif drop.content_type|slice:":5" == "text/" %}📄{% else %}📎{% endif %}</span>
             <a href="/{{ drop.key }}/" class="drop-key">{{ drop.key }}</a>
             <span class="drop-label muted">
-              {{ drop.filename|default:drop.content|truncatechars:20 }}
+              {{ drop.filename|default:drop.key|truncatechars:20 }}
             </span>
             {% if drop.expires_at %}
             <span class="drop-expiry muted">{{ drop.expires_at|date:"M j" }}</span>
