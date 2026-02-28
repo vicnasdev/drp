@@ -29,4 +29,4 @@ def _resolve_version():
         return '0.0.0'
 
 __version__ = _resolve_version()
-DEFAULT_HOST = 'https://drp.fyi'
+DEFAULT_HOST = 'https://drp.fyi' 
