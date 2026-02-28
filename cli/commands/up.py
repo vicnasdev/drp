@@ -81,6 +81,13 @@ class UpCommand(SpinnerCommand, AuthCommand):
         else:
             file_obj = file_obj or open(p, "rb")  # noqa
 
+        # Auto-rename if a drop with the same filename already exists in the cache.
+        # FIX: without this, uploading file1.txt twice produced two identical-looking
+        # rows in `ls` with different keys — confusing and impossible to disambiguate
+        # visually. We rename client-side (file1 (1).txt, file1 (2).txt ...) before
+        # upload so the stored filename is unique.
+        filename = _unique_filename(filename)
+
         # FIX: replace the opaque spinner with a real progress bar for file uploads.
         # For stdin/text (unknown size) we keep the spinner since we can't show %.
         size = _file_size(file_obj, p)
@@ -138,6 +145,29 @@ class UpCommand(SpinnerCommand, AuthCommand):
 
 
 # ------------------------------------------------------------------ progress
+
+def _unique_filename(filename: str) -> str:
+    """
+    If a drop with this filename already exists in the local cache, append
+    (1), (2) ... until the name is unique — same behaviour as macOS/Windows
+    file copy. This prevents duplicate-looking rows in `ls`.
+    """
+    from cli import cache as cache_store
+    existing = {e.get("filename", "") for e in cache_store.all_entries()}
+    if filename not in existing:
+        return filename
+    stem, _, ext = filename.rpartition(".")
+    if not stem:          # no extension
+        stem, ext = filename, ""
+    else:
+        ext = "." + ext
+    i = 1
+    while True:
+        candidate = f"{stem} ({i}){ext}"
+        if candidate not in existing:
+            return candidate
+        i += 1
+
 
 def _file_size(file_obj, path: Path | None) -> int | None:
     """Return file size in bytes if knowable, else None."""

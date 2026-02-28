@@ -1,44 +1,55 @@
 """
 cli/commands/__init__.py
 
-Command registry. Adding a new command = one line here + one new file.
-Nothing else to touch.
+Flat command registry — one folder, one registry, no arbitrary splits.
+Every command works everywhere: inside the shell, outside, same behaviour.
 """
-from cli.commands.both    import UpCommand, GetCommand, LsCommand, StatusCommand, TokenCommand, AskCommand, CatCommand
-from cli.commands.outside import SetupCommand, LoginCommand, LogoutCommand, PingCommand
-from cli.commands.shell   import (
-    CdCommand, MkdirCommand, CpCommand, MvCommand, RmCommand,
-    GetkeyCommand, SetkeyCommand, EditCommand, ForkCommand, ShareCommand,
-)
+from .ask     import AskCommand
+from .cat     import CatCommand
+from .cd      import CdCommand
+from .cp      import CpCommand
+from .edit    import EditCommand
+from .fork    import ForkCommand
+from .get     import GetCommand
+from .getkey  import GetkeyCommand
+from .login   import LoginCommand
+from .logout  import LogoutCommand
+from .ls      import LsCommand
+from .mkdir   import MkdirCommand
+from .mv      import MvCommand
+from .ping    import PingCommand
+from .rm      import RmCommand
+from .setkey  import SetkeyCommand
+from .setup   import SetupCommand
+from .share   import ShareCommand
+from .status  import StatusCommand
+from .token   import TokenCommand
+from .up      import UpCommand
 
-# Commands available outside the shell (and therefore also inside, via ALL)
-OUTSIDE: dict[str, type] = {
-    "up":     UpCommand,
-    "get":    GetCommand,
-    "ls":     LsCommand,
-    "cat":    CatCommand,   # FIX: was in shell/ + SHELL_ONLY; now in both/ + OUTSIDE
-    "status": StatusCommand,
-    "token":  TokenCommand,
+# Single registry used everywhere — shell, CLI, completion
+ALL: dict[str, type] = {
     "ask":    AskCommand,
-    "login":  LoginCommand,
-    "logout": LogoutCommand,
-    "setup":  SetupCommand,
-    "ping":   PingCommand,
-}
-
-# Commands available ONLY inside the shell
-SHELL_ONLY: dict[str, type] = {
+    "cat":    CatCommand,
     "cd":     CdCommand,
-    "mkdir":  MkdirCommand,
     "cp":     CpCommand,
-    "mv":     MvCommand,
-    "rm":     RmCommand,
-    "getkey": GetkeyCommand,
-    "setkey": SetkeyCommand,
     "edit":   EditCommand,
     "fork":   ForkCommand,
+    "get":    GetCommand,
+    "getkey": GetkeyCommand,
+    "login":  LoginCommand,
+    "logout": LogoutCommand,
+    "ls":     LsCommand,
+    "mkdir":  MkdirCommand,
+    "mv":     MvCommand,
+    "ping":   PingCommand,
+    "rm":     RmCommand,
+    "setkey": SetkeyCommand,
+    "setup":  SetupCommand,
     "share":  ShareCommand,
+    "status": StatusCommand,
+    "token":  TokenCommand,
+    "up":     UpCommand,
 }
 
-# Full registry used inside the shell
-ALL: dict[str, type] = {**OUTSIDE, **SHELL_ONLY}
+# main.py uses OUTSIDE for direct CLI dispatch — now same as ALL
+OUTSIDE = ALL

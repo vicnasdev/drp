@@ -5,9 +5,10 @@ Display a drop's content with syntax highlighting.
 Auto-bookmarks if you don't own it.
 --parse / --field for structured extraction (JSON, CSV).
 
-Inside shell:   cat file3.json          # resolved by filename in current folder
-                cat -k OmL3nsn9         # explicit key, bypasses filename lookup
-Outside shell:  drp cat -k OmL3nsn9    # key required (no folder context)
+Inside shell:   cat file3.json              # resolved by filename in current folder
+                cat file3.json --field key  # auto-parses, extracts field
+                cat -k OmL3nsn9            # explicit key
+Outside shell:  drp cat -k OmL3nsn9
                 drp cat -k OmL3nsn9 --parse --field key
 """
 from __future__ import annotations
@@ -30,24 +31,23 @@ class CatCommand(SpinnerCommand):
         p.add_argument("ref",         nargs="?", default=None,
                        help="Filename in current folder (shell only)")
         p.add_argument("-k", "--key", default=None, metavar="KEY",
-                       help="Drop key — bypasses filename lookup, works everywhere")
+                       help="Drop key — works everywhere")
         p.add_argument("--decrypt",   default=None, metavar="PASSPHRASE")
         p.add_argument("--parse",     action="store_true")
         p.add_argument("--field",     default=None)
         opts = p.parse_args(args)
+
+        # FIX: --field implies --parse — no reason to require both flags
+        if opts.field:
+            opts.parse = True
 
         client = APIClient.from_config(self.config, authed=bool(
             self.config.get("auth", {}).get("token")
         ))
 
         if opts.key:
-            # Explicit key — works inside and outside the shell
             key = opts.key
         elif opts.ref and self.in_shell:
-            # FIX: inside the shell, ref is a filename, not a key.
-            # Resolve it by looking up the current folder's item list.
-            # Previously cat passed the filename directly to the API as a key,
-            # which always returned 404 for anything that wasn't an exact key match.
             key = self._resolve_filename(client, opts.ref)
             if key is None:
                 self.err(f"no drop named '{opts.ref}' in current folder")
@@ -56,10 +56,8 @@ class CatCommand(SpinnerCommand):
             self.err("outside the shell use:  drp cat -k <key>")
             return 1
         else:
-            if self.in_shell:
-                self.err("usage: cat <filename>  or  cat -k <key>")
-            else:
-                self.err("usage: drp cat -k <key>")
+            self.err("usage: cat <filename>  or  cat -k <key>" if self.in_shell
+                     else "usage: drp cat -k <key>")
             return 1
 
         with self.spin("Fetching"):
@@ -77,7 +75,6 @@ class CatCommand(SpinnerCommand):
 
         self.print_content(content, filename=meta.get("filename"))
 
-        # auto-bookmark if not owned
         me = self.config.get("auth", {}).get("username", "")
         if meta.get("owner") != me and me:
             cache.add({
@@ -91,26 +88,19 @@ class CatCommand(SpinnerCommand):
         return 0
 
     def _resolve_filename(self, client, filename: str) -> str | None:
-        """
-        Look up a filename in the current virtual folder and return its drop key.
-        Falls back to treating the ref as a key directly (for power users who
-        type keys inside the shell).
-        """
         try:
             folder_id = self.config.get("shell", {}).get("cwd_id")
             if folder_id:
-                data  = folders_api.list_contents(client, folder_id)
+                data = folders_api.list_contents(client, folder_id)
             else:
-                data  = folders_api.list_root(client)
-            items = data.get("items", [])
-            # match by label/filename, case-insensitive
-            for item in items:
+                data = folders_api.list_root(client)
+            for item in data.get("items", []):
                 label = item.get("filename") or item.get("label") or ""
                 if label.lower() == filename.lower():
                     return item["key"]
         except Exception:
             pass
-        # fallback: treat as key directly (lets `cat MfZDdyb0` still work in shell)
+        # fallback: treat short refs as keys directly
         return filename if len(filename) <= 12 else None
 
 
