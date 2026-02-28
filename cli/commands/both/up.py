@@ -35,23 +35,27 @@ class UpCommand(SpinnerCommand, AuthCommand):
         if opts.target == "-":
             return self._upload_single(client, sys.stdin.buffer, "<stdin>", opts)
 
-        targets = list(Path(".").glob(opts.target)) if "*" in opts.target else [Path(opts.target)]
-        if not targets:
-            self.bail(f"no files matched: {opts.target}")
+        # explicit text upload
+        if opts.text:
+            import io
+            return self._upload_single(client, io.BytesIO(opts.target.encode()), "<text>", opts)
 
-        # single file
-        if len(targets) == 1 and targets[0].is_file():
-            return self._upload_single(client, None, str(targets[0]), opts)
+        # glob
+        if "*" in opts.target:
+            targets = list(Path(".").glob(opts.target))
+            if not targets:
+                self.bail(f"no files matched: {opts.target}")
+            return self._upload_folder(client, targets, opts)
 
-        # not a real path
-        if len(targets) == 1 and not targets[0].exists():
-            if opts.text:
-                import io
-                return self._upload_single(client, io.BytesIO(opts.target.encode()), "<text>", opts)
+        # file or directory path (absolute or relative)
+        p = Path(opts.target).expanduser().resolve()
+        if not p.exists():
             self.bail(f"'{opts.target}' not found — use --text to upload a string")
+        if p.is_file():
+            return self._upload_single(client, None, str(p), opts)
 
-        # directory or glob → folder upload
-        return self._upload_folder(client, targets, opts)
+        # directory → folder upload
+        return self._upload_folder(client, [p], opts)
 
     # ---------------------------------------------------------------- single
 
