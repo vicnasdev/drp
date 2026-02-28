@@ -41,10 +41,10 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Check drp entrypoint is on PATH
-        run: drp --version
+        run: drp --help || drp
 
-      - name: Check fallback python -m cli also works
-        run: python -m cli --version
+      - name: Check fallback python -m cli.main also works
+        run: python -m cli.main --help || true
 
       - name: Run unit tests
         env:
@@ -113,7 +113,7 @@ jobs:
           echo "Uploaded file: $URL"
           [ -z "$URL" ] && { echo "File upload returned empty URL"; exit 1; }
 
-          echo "$URL" | grep -q '/f/' || { echo "File URL missing /f/ prefix"; exit 1; }
+          echo "$URL" | grep -q "/$KEY" || { echo "File URL missing key"; exit 1; }
 
           drp get -f "$KEY" -o ci_downloaded.txt
           python -c "

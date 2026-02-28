@@ -55,10 +55,11 @@ dev = [
     "gunicorn",
     "requests",
     "psycopg2-binary>=2.9",
-    "resend",
     "boto3",
     "markdown",
-    "argcomplete>=3.1"
+    "pygments>=2.14",
+    "reportlab",
+    "argcomplete>=3.1",
 ]
 
 [project.urls]
@@ -67,7 +68,7 @@ Repository = "https://github.com/vicnasdev/drp"
 Issues    = "https://github.com/vicnasdev/drp/issues"
 
 [project.scripts]
-drp = "cli.drp:main"
+drp = "cli.main:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "cli.__version__"}
