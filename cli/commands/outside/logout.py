@@ -8,7 +8,7 @@ from cli.api import auth as auth_api
 from cli import config as cfg
 
 
-class LogoutCommand(AuthCommand):
+class LogoutCommand(BaseCommand, AuthCommand):
     name        = "logout"
     description = "Log out and clear local credentials"
 
