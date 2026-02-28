@@ -29,6 +29,9 @@ urlpatterns = [
     path("folders/",                    views.folders_list_create,  name="api_folders"),
     path("folders/<int:folder_id>/",    views.folders_detail,       name="api_folders_detail"),
 
+    # Drive cache version (cheap hash for CLI autocomplete polling)
+    path("drive/version/",              views.drive_version,        name="api_drive_version"),
+
     # Path resolver (shell cd)
     path("resolve/",                    views.resolve,              name="api_resolve"),
 

@@ -13,12 +13,14 @@ from pathlib import Path
 
 from cli import commands as cmd_registry
 from cli.base.color import Color
+from cli.cache import drive_cache
 from cli.crash.reporter import CrashReporter
 
 
 def run_shell(config: dict, reporter: CrashReporter | None = None) -> None:
     _init_cwd(config)
     _setup_readline(config)
+    drive_cache.start(config)   # load disk cache + start background refresh thread
     print(Color.dim("drp shell — type 'help' for commands, Ctrl-D to exit"))
     print()
 
@@ -35,11 +37,22 @@ def run_shell(config: dict, reporter: CrashReporter | None = None) -> None:
         if not line:
             continue
 
+        # Strip shell-style comments before parsing.
+        # This must happen before shlex.split — an apostrophe in a comment
+        # (e.g. "# doesn't work") causes ValueError: No closing quotation.
+        line = _strip_comment(line)
+        if not line:
+            continue
+
         if "|" in line:
             _run_piped(line, config, reporter)
             continue
 
-        parts = shlex.split(line)
+        try:
+            parts = shlex.split(line)
+        except ValueError as exc:
+            print(Color.error("parse error: ") + str(exc))
+            continue
         name  = parts[0]
         args  = parts[1:]
 
@@ -58,6 +71,12 @@ def run_shell(config: dict, reporter: CrashReporter | None = None) -> None:
 
         cmd = klass(config, reporter=reporter, in_shell=True)
         cmd.execute(args)
+
+        # Invalidate the drive cache after any write command so autocomplete
+        # reflects new files/folders on the very next Tab press.
+        _WRITE_CMDS = {"up", "cp", "mv", "rm", "mkdir"}
+        if name in _WRITE_CMDS:
+            drive_cache.invalidate()
 
 
 # ------------------------------------------------------------------ init
@@ -140,36 +159,12 @@ def _run_piped(line: str, config: dict, reporter) -> None:
 
 # ------------------------------------------------------------------ completion
 
-# Module-level cache so we don't hammer the server on every keypress
-_completion_cache: list[str] = []
-_completion_config: dict     = {}
-
-
-def _fetch_drp_names(config: dict) -> list[str]:
-    """Fetch filenames and folder slugs in the current virtual dir, cached per session."""
-    global _completion_cache, _completion_config
-    cwd_id = config.get("shell", {}).get("cwd_id")
-    if _completion_config.get("cwd_id") == cwd_id and _completion_cache:
-        return _completion_cache
-    try:
-        from cli.api.client import APIClient
-        from cli.api import folders as folders_api
-        client = APIClient.from_config(config, authed=True)
-        if cwd_id:
-            data = folders_api.list_contents(client, cwd_id)
-        else:
-            data = folders_api.list_root(client)
-        names = [f["slug"] + "/" for f in data.get("folders", [])]
-        names += [i.get("filename") or i.get("label") or i.get("key", "")
-                  for i in data.get("items", [])]
-        _completion_cache  = names
-        _completion_config = {"cwd_id": cwd_id}
-        return names
-    except Exception:
-        return _completion_cache
-
-
 def _setup_readline(config: dict) -> None:
+    """
+    Wire up Tab completion. The completer reads ONLY from drive_cache's
+    in-memory snapshot — no I/O, no network, always returns instantly.
+    The background thread in drive_cache keeps that snapshot fresh.
+    """
     try:
         import readline
 
@@ -185,9 +180,10 @@ def _setup_readline(config: dict) -> None:
                     options = [c for c in cmds if c.startswith(text)]
                     return options[state] if state < len(options) else None
 
-                # Completing an argument — context-aware
-                if text.startswith("../") or text.startswith("./") or text == ".." or text == ".":
-                    # Real filesystem path — complete against real FS
+                # Completing an argument
+                if text.startswith("../") or text.startswith("./") \
+                        or text == ".." or text == ".":
+                    # Real filesystem path
                     real_prefix = str(Path(text).parent) if "/" in text else "."
                     real_part   = text.rsplit("/", 1)[-1] if "/" in text else text
                     try:
@@ -199,9 +195,10 @@ def _setup_readline(config: dict) -> None:
                     except Exception:
                         matches = []
                 else:
-                    # drp path — complete against current virtual dir
-                    drp_names = _fetch_drp_names(config)
-                    matches   = [n for n in drp_names if n.startswith(text)]
+                    # drp path — read from in-memory cache only, zero I/O
+                    cwd_id  = config.get("shell", {}).get("cwd_id")
+                    names   = drive_cache.get_names(cwd_id)
+                    matches = [n for n in names if n.startswith(text)]
 
                 return matches[state] if state < len(matches) else None
 
@@ -216,9 +213,25 @@ def _setup_readline(config: dict) -> None:
 
     except ImportError:
         pass
-    
 
-# ------------------------------------------------------------------ help
+
+# ------------------------------------------------------------------ comment stripping
+
+def _strip_comment(line: str) -> str:
+    """
+    Strip an unquoted '#' and everything after it, respecting quotes.
+    Returns the line stripped of the comment and trailing whitespace.
+    """
+    in_single = False
+    in_double = False
+    for i, ch in enumerate(line):
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif ch == '#' and not in_single and not in_double:
+            return line[:i].rstrip()
+    return line
 
 def _print_help() -> None:
     print()
