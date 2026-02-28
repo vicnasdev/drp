@@ -85,22 +85,69 @@ def _get_readme_html():
 @cache
 def _get_parser_info():
     import argparse
-    from cli import commands as cmd_registry
+    from cli.drp import build_parser, COMMANDS
 
     try:
-        # Build a list of available commands and their descriptions from the registry
+        parser = build_parser()
+
+        # Locate the subparser map from argparse internals
+        sub_map = {}
+        for action in parser._subparsers._group_actions:
+            if hasattr(action, '_name_parser_map'):
+                sub_map = action._name_parser_map
+                break
+
         commands = []
-        for name, klass in cmd_registry.OUTSIDE.items():
-            help_str = getattr(klass, 'description', '')
+        for name, _, help_str in COMMANDS:
+            sub = sub_map.get(name)
+            args = []
+
+            if sub:
+                for action in sub._actions:
+                    # Skip the default --help action
+                    if isinstance(action, argparse._HelpAction):
+                        continue
+
+                    # Positional arguments
+                    if not action.option_strings:
+                        args.append({
+                            'flags': action.dest,
+                            'help': action.help or '',
+                            'required': action.required if hasattr(action, 'required') else True,
+                            'default': None,
+                            'metavar': (action.metavar or action.dest).upper(),
+                            'positional': True,
+                            'is_flag': False,
+                        })
+                    else:
+                        # Optional flags
+                        is_flag = isinstance(action, argparse._StoreTrueAction) or \
+                                  isinstance(action, argparse._StoreFalseAction)
+                        metavar = ''
+                        if not is_flag:
+                            metavar = action.metavar or (
+                                action.dest.upper() if action.dest else ''
+                            )
+                        args.append({
+                            'flags': ', '.join(action.option_strings),
+                            'help': action.help or '',
+                            'required': action.required if hasattr(action, 'required') else False,
+                            'default': action.default if action.default not in (None, argparse.SUPPRESS) else None,
+                            'metavar': metavar,
+                            'positional': False,
+                            'is_flag': is_flag,
+                        })
+
             commands.append({
                 'name': name,
                 'help': help_str,
-                'args': [],
-                'epilog': '',
+                'args': args,
+                'epilog': (sub.epilog or '').strip() if sub else '',
             })
+
         return {
-            'description': 'drp CLI commands',
-            'epilog': '',
+            'description': parser.description,
+            'epilog': (parser.epilog or '').strip(),
             'commands': commands,
         }
     except Exception as e:
