@@ -37,6 +37,12 @@ def main() -> None:
     name = args[0]
     rest = args[1:]
 
+    # --version support
+    if name in ("--version", "-V"):
+        from cli import __version__
+        print(f"drp {__version__}")
+        sys.exit(0)
+
     # shell completion hook
     if name == "--completion":
         _print_completion(rest[0] if rest else "bash")
