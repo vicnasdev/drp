@@ -182,8 +182,7 @@ def _setup_readline(config: dict) -> None:
                     return options[state] if state < len(options) else None
 
                 # Completing an argument
-                if text.startswith("../") or text.startswith("./") \
-                        or text == ".." or text == ".":
+                if text.startswith(("../", "./", "/")) or text in ("..", "."):
                     # Real filesystem path — resolve from launch dir
                     launch_dir = config.get("shell", {}).get("launch_dir", ".")
                     try:

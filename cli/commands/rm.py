@@ -18,7 +18,12 @@ class RmCommand(SpinnerCommand, AuthCommand):
         p.add_argument("ref")
         p.add_argument("-f",            action="store_true")
         p.add_argument("--recursive",   action="store_true")
+        p.add_argument("-rf", "-fr",    action="store_true", dest="rf", default=False)
         opts   = p.parse_args(args)
+        # -rf / -fr sets both flags
+        if opts.rf:
+            opts.f         = True
+            opts.recursive = True
         client = APIClient.from_config(self.config, authed=True)
 
         # FIX: the original passed opts.ref straight to resolve_path() which

@@ -349,18 +349,16 @@ def folders_list_create(request):
     if request.method == "GET":
         from core.storage import b2_download_url
         folders = Folder.objects.filter(owner=request.user, parent=None)
-        # All files live in folders — there are no loose drops.
-        # Root listing returns folders + files that are direct children
-        # of any root-level folder (i.e. one level deep, for shell `ls` at root).
-        # The shell `ls` at root shows folders and their immediate contents.
-        all_items = []
-        filed_keys = set(FolderItem.objects.filter(
-            folder__owner=request.user, folder__parent=None
+        # Root listing returns only truly loose drops (not in any folder) + top-level folders.
+        # Files inside folders are NOT surfaced here — browse them via /api/v1/folders/<id>/.
+        all_filed_keys = set(FolderItem.objects.filter(
+            folder__owner=request.user
         ).values_list("key", flat=True))
-        root_files = File.objects.filter(
-            owner=request.user, key__in=filed_keys
-        ).order_by("-created_at")[:100]
-        for f in root_files:
+        loose_files = File.objects.filter(
+            owner=request.user
+        ).exclude(key__in=all_filed_keys).order_by("-created_at")[:100]
+        all_items = []
+        for f in loose_files:
             all_items.append({
                 "key":          f.key,
                 "filename":     f.filename,

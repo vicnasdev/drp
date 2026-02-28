@@ -44,7 +44,7 @@ def profile_view(request, username):
         "is_owner":     is_owner,
         "is_root":      True,
     }
-    return render(request, "folder.html", ctx)
+    return render(request, "auth/folder.html", ctx)
 
 
 def folder_view(request, username, folder_slug):
@@ -92,4 +92,4 @@ def folder_view(request, username, folder_slug):
         "subfolders":   subfolders,
         "is_owner":     is_owner,
     }
-    return render(request, "folder.html", ctx)
+    return render(request, "auth/folder.html", ctx)

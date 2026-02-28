@@ -19,6 +19,13 @@ class CdCommand(BaseCommand):
         path   = args[0].rstrip("/")
         client = APIClient.from_config(self.config, authed=True)
 
+        # Guard: can't go above root
+        if path == "..":
+            cwd = self.config.get("shell", {}).get("cwd", "/")
+            if not cwd.strip("/"):
+                self.err("already at root")
+                return 1
+
         resolved = _resolve(path, self.config)
         result   = folders_api.resolve_path(client, resolved)
 

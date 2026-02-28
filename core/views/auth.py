@@ -21,7 +21,7 @@ from django.views.decorators.http import require_POST, require_GET
 from django.conf import settings
 
 from core.models import (
-    File, FileBookmark, Folder, UserProfile,
+    File, FileBookmark, Folder, FolderItem, UserProfile,
     PLAN_LIMITS, FREE_LIFETIME_DAYS,
 )
 

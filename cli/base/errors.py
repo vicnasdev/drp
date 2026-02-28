@@ -74,6 +74,11 @@ def parse_response(resp: "requests.Response") -> dict:  # noqa: F821
         case 404:
             raise NotFoundError(data.get("key", ""))
         case 409:
+            # A 409 from a folder delete means "not empty"; from a file upload
+            # it means "key already taken". Distinguish by checking the error body.
+            err_msg = data.get("error", "")
+            if "not empty" in err_msg:
+                raise DrpError(err_msg + " — pass --recursive to delete recursively")
             raise KeyTakenError(data.get("key", ""))
         case 413:
             raise FileTooLargeError()
