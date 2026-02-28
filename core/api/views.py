@@ -438,24 +438,53 @@ def drive_version(request):
     )
     version = md5(raw.encode(), usedforsecurity=False).hexdigest()[:16]
     return _json({"version": version})
+
+
+# ---------------------------------------------------------------------------
+# Path resolver
+# ---------------------------------------------------------------------------
+
+@require_http_methods(["GET"])
+@token_required
+def resolve(request):
     path = request.GET.get("path", "").strip("/")
-    # expected: @username/slug or @username/slug/subslug
+    # expected: @username  OR  @username/slug  OR  @username/slug/subslug
     parts = path.lstrip("@").split("/")
-    if len(parts) < 2:
-        return _err("invalid path")
+
     from django.contrib.auth import get_user_model
     User = get_user_model()
+
     try:
         user = User.objects.get(username=parts[0])
     except User.DoesNotExist:
         return _err("user not found", 404)
+
+    if len(parts) < 2 or not parts[1]:
+        # Root — return a virtual root descriptor so `cd ..` from the top
+        # folder works (it sends "@username" which has only 1 part).
+        folders = Folder.objects.filter(owner=user, parent=None)
+        return _json({
+            "type":   "folder",
+            "object": {
+                "id":        None,
+                "slug":      "",
+                "is_public": False,
+                "items":     [],
+                "folders":   [{"id": f.id, "slug": f.slug, "is_public": f.is_public} for f in folders],
+                "path":      "/",
+            },
+        })
+
     try:
         folder = Folder.objects.get(owner=user, slug=parts[1], parent=None)
         for part in parts[2:]:
             folder = folder.children.get(slug=part)
     except Folder.DoesNotExist:
         return _err("not found", 404)
-    return _json({"type": "folder", "object": _folder_data(folder)})
+
+    data = _folder_data(folder)
+    data["path"] = "/" + "/".join(parts[1:])
+    return _json({"type": "folder", "object": data})
 
 
 # ---------------------------------------------------------------------------
