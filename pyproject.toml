@@ -67,7 +67,7 @@ Repository = "https://github.com/vicnasdev/drp"
 Issues    = "https://github.com/vicnasdev/drp/issues"
 
 [project.scripts]
-drp = "cli.main:main"
+drp = "cli.drp:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "cli.__version__"}
