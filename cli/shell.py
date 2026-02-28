@@ -88,32 +88,11 @@ def _init_cwd(config: dict) -> None:
     or upload a file (which will prompt for folder creation via `up`).
     This way, deleting a folder and reopening the shell doesn't silently recreate it.
     """
-    slug     = Path(os.getcwd()).name
-    username = config.get("auth", {}).get("username", "")
-
     shell = config.setdefault("shell", {})
     shell["launch_dir"] = os.getcwd()
-    shell["cwd"]        = f"/{slug}"
-    shell["cwd_slug"]   = slug
-
-    if not username:
-        shell["cwd_id"] = None
-        return
-
-    try:
-        from cli.api.client import APIClient
-        from cli.api import folders as folders_api
-        client = APIClient.from_config(config, authed=True)
-        data   = folders_api.list_root(client)
-        match  = next((f for f in data.get("folders", []) if f["slug"] == slug), None)
-        if match:
-            shell["cwd_id"] = match.get("id")
-        else:
-            # No matching folder — start at root instead
-            shell["cwd"]    = "/"
-            shell["cwd_id"] = None
-    except Exception:
-        shell["cwd_id"] = None
+    shell["cwd"]        = "/"
+    shell["cwd_slug"]   = ""
+    shell["cwd_id"]     = None
 
 
 # ------------------------------------------------------------------ prompt

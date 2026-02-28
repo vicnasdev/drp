@@ -17,11 +17,24 @@ if not DOMAIN:
     # Sensible defaults per environment
     DOMAIN = {"prod": "drp.fyi", "dev": "dev.drp.fyi"}.get(ENVIRONMENT)
 if DOMAIN:
-    ALLOWED_HOSTS       = [DOMAIN]
+    ALLOWED_HOSTS        = [DOMAIN]
     CSRF_TRUSTED_ORIGINS = [f"https://{DOMAIN}", f"http://{DOMAIN}"]
+    # Trust X-Forwarded-Proto so Django knows requests arriving over HTTP
+    # internally are actually HTTPS externally (reverse proxy / container).
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 else:
     ALLOWED_HOSTS        = ["localhost", "127.0.0.1"]
     CSRF_TRUSTED_ORIGINS = ["http://localhost:8000"]
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "root": {"handlers": ["console"], "level": "WARNING"},
+    "loggers": {
+        "core": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+    },
+}
 
 INSTALLED_APPS = [
     "django.contrib.admin",
