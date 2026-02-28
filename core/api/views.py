@@ -62,8 +62,8 @@ def auth_login(request):
     user     = authenticate(request, username=username, password=password)
     if user is None:
         return _err("invalid credentials", 401)
-    token = issue_token(user)
-    return _json({"token": token.key, "username": user.username})
+    token_obj, raw = issue_token(user)
+    return _json({"token": raw, "username": user.username})
 
 
 @csrf_exempt
