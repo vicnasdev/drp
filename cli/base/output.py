@@ -14,8 +14,8 @@ class OutputMixin:
 
     # ------------------------------------------------------------------ basics
 
-    def out(self, text: str = "") -> None:
-        print(text)
+    def out(self, text: str = "", **kwargs) -> None:
+        print(text, **kwargs)
 
     def err(self, text: str) -> None:
         print(Color.error("error: ") + text, file=sys.stderr)
