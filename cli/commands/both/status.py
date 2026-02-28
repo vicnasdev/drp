@@ -7,7 +7,7 @@ from cli.base import BaseCommand, AuthCommand
 from cli.api import APIClient, files as files_api, auth as auth_api
 
 
-class StatusCommand(BaseCommand, AuthCommand):
+class StatusCommand(AuthCommand):
     name        = "status"
     description = "Show account info or drop metadata"
 
