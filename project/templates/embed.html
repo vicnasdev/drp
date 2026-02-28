@@ -31,8 +31,8 @@
   </style>
 </head>
 <body>
-  {% if drop.kind == 'text' %}
-    <pre><code id="code">{{ drop.content }}</code></pre>
+  {% if drop.content_type|slice:":5" == "text/" %}
+    <pre><code id="code">{{ text_content }}</code></pre>
   {% else %}
     {% with ext=drop.filename|lower %}
     {% if '.png' in ext or '.jpg' in ext or '.jpeg' in ext or '.gif' in ext or '.webp' in ext or '.svg' in ext %}
@@ -51,7 +51,7 @@
     <a href="/{% if ns == 'f' %}f/{% endif %}{{ drop.key }}/" target="_blank">open on drp</a>
   </div>
 
-  {% if drop.kind == 'text' %}
+  {% if drop.content_type|slice:":5" == "text/" %}
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script>

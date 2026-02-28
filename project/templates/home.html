@@ -144,7 +144,7 @@
           <div class="drop-item">
             <span class="drop-icon">🔖</span>
             <a href="/{{ s.file_key }}/" class="drop-key">→ {{ s.file_key }}</a>
-            <span class="drop-label muted">{{ s.saved_at|date:"M j" }}</span>
+            <span class="drop-label muted">{{ s.created_at|date:"M j" }}</span>
           </div>
           {% endfor %}
         {% endif %}

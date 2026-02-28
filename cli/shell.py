@@ -83,46 +83,28 @@ def run_shell(config: dict, reporter: CrashReporter | None = None) -> None:
 
 def _init_cwd(config: dict) -> None:
     """
-    Set the initial virtual CWD to the real directory drp was launched from.
-    drp opened in ~/Desktop/Code/temp/ → virtual CWD is /temp/
-    Prompt shows /@vicnas/temp/
-    The folder is created in drp if it doesn't exist yet.
+    Set the initial virtual CWD to drp root (/).
+    The real filesystem CWD is shown separately in the prompt.
+    We do NOT auto-create a drp folder on every shell open — that caused
+    repeated 409 Conflict errors and silently created folders the user
+    never asked for.
     """
-    slug     = Path(os.getcwd()).name
-    username = config.get("auth", {}).get("username", "")
-    if not username:
-        return
-
     shell = config.setdefault("shell", {})
-    if shell.get("cwd_id"):
-        return  # already initialised (shouldn't happen on fresh launch but be safe)
-
-    shell["cwd"]      = f"/{slug}"
-    shell["cwd_slug"] = slug
-
-    # Ensure the folder exists on the server, get its id
-    try:
-        from cli.api.client import APIClient
-        from cli.api import folders as folders_api
-        client = APIClient.from_config(config, authed=True)
-        try:
-            result = folders_api.create(client, slug)
-        except Exception:
-            # Already exists — find it
-            data   = folders_api.list_root(client)
-            result = next((f for f in data.get("folders", []) if f["slug"] == slug), {})
-        shell["cwd_id"] = result.get("id")
-    except Exception:
-        shell["cwd_id"] = None
+    shell["cwd"]       = "/"
+    shell["cwd_slug"]  = ""
+    shell["cwd_id"]    = None
+    shell["launch_dir"] = os.getcwd()
 
 
 # ------------------------------------------------------------------ prompt
 
 def _prompt(config: dict) -> str:
-    cwd      = config.get("shell", {}).get("cwd", "/")
-    username = config.get("auth", {}).get("username", "")
-    path     = f"/@{username}{cwd}" if username else cwd
-    return Color.wrap("drp", Color.CYAN, Color.BOLD) + Color.dim(f":{path}> ")
+    cwd        = config.get("shell", {}).get("cwd", "/")
+    username   = config.get("auth", {}).get("username", "")
+    launch_dir = config.get("shell", {}).get("launch_dir", os.getcwd())
+    real_cwd   = launch_dir.replace(os.path.expanduser("~"), "~")
+    drp_part   = f"@{username}{cwd}" if username else cwd
+    return Color.wrap("drp", Color.CYAN, Color.BOLD) + Color.dim(f":{real_cwd}/{drp_part}> ")
 
 
 # ------------------------------------------------------------------ pipe
@@ -183,15 +165,27 @@ def _setup_readline(config: dict) -> None:
                 # Completing an argument
                 if text.startswith("../") or text.startswith("./") \
                         or text == ".." or text == ".":
-                    # Real filesystem path
-                    real_prefix = str(Path(text).parent) if "/" in text else "."
-                    real_part   = text.rsplit("/", 1)[-1] if "/" in text else text
+                    # Real filesystem path — resolve from launch dir
+                    launch_dir = config.get("shell", {}).get("launch_dir", ".")
                     try:
-                        entries = os.listdir(real_prefix)
-                        matches = [
-                            (real_prefix.rstrip("/") + "/" + e if real_prefix != "." else e)
-                            for e in entries if e.startswith(real_part)
-                        ]
+                        # Build the real prefix to list
+                        if "/" in text:
+                            dir_part  = text.rsplit("/", 1)[0]
+                            file_part = text.rsplit("/", 1)[1]
+                            # Resolve dir_part relative to launch_dir
+                            if dir_part.startswith("../") or dir_part == "..":
+                                abs_dir = str(Path(launch_dir) / dir_part)
+                            else:
+                                abs_dir = dir_part
+                            entries = os.listdir(abs_dir)
+                            matches = [dir_part + "/" + e for e in entries if e.startswith(file_part)]
+                        else:
+                            entries = os.listdir(launch_dir)
+                            prefix  = text.lstrip("./")
+                            matches = [
+                                ("../" + e) if text.startswith("../") else ("./" + e)
+                                for e in entries if e.startswith(prefix)
+                            ]
                     except Exception:
                         matches = []
                 else:

@@ -53,9 +53,7 @@
         {% endfor %}
       </div>
       {% endif %}
-      {% if drop.content_type|slice:":5" == "text/" and drop.content %}
-      <pre style="font-size:.8rem;color:var(--muted);margin-top:.3rem;max-height:3rem;overflow:hidden">{{ drop.content|truncatechars:200 }}</pre>
-      {% elif drop.filename %}
+      {% if drop.filename %}
       <span class="muted" style="font-size:.82rem">{{ drop.filename }} ({{ drop.filesize|filesizeformat }})</span>
       {% endif %}
     </div>

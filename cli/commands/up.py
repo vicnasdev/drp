@@ -68,6 +68,7 @@ class UpCommand(SpinnerCommand, AuthCommand):
             or target.startswith("./")
             or target.startswith("/")
             or target == ".."
+            or target == "."
         )
 
         if self.in_shell and not is_real_path:
@@ -80,10 +81,25 @@ class UpCommand(SpinnerCommand, AuthCommand):
             )
 
         launch_dir = Path(os.getcwd())
-        if target.startswith("../"):
-            # ../ means "launch directory", so ../foo.txt → <launch_dir>/foo.txt
-            # ../../foo.txt → <launch_dir>/../foo.txt  (resolved naturally)
-            p = (launch_dir / target[3:]).resolve()
+        if target.startswith("../") or target == "..":
+            # Count how many ../ levels the user typed.
+            # Inside the shell, the virtual CWD depth is irrelevant — all ../
+            # paths are anchored to the real launch dir.
+            # 1 level (../foo)   → launch_dir/foo
+            # 2 levels (../../foo) → launch_dir/../foo  (one above launch dir)
+            rest = target
+            levels = 0
+            while rest.startswith("../"):
+                levels += 1
+                rest = rest[3:]
+            if rest == ".." :
+                levels += 1
+                rest = ""
+            # level 1 = launch_dir itself; level 2 = launch_dir/..; etc.
+            base = launch_dir
+            for _ in range(levels - 1):
+                base = base.parent
+            p = (base / rest).resolve() if rest else base.resolve()
         else:
             p = Path(target).expanduser()
             if not p.is_absolute():
@@ -117,7 +133,7 @@ class UpCommand(SpinnerCommand, AuthCommand):
         # rows in `ls` with different keys — confusing and impossible to disambiguate
         # visually. We rename client-side (file1 (1).txt, file1 (2).txt ...) before
         # upload so the stored filename is unique.
-        filename = _unique_filename(filename)
+        filename = _unique_filename(filename, client=client, folder_id=shell_folder_id)
 
         # FIX: when running inside the drp shell, link the upload to the current
         # virtual folder so that `ls` shows the file immediately after uploading.
@@ -185,24 +201,39 @@ class UpCommand(SpinnerCommand, AuthCommand):
 
 # ------------------------------------------------------------------ progress
 
-def _unique_filename(filename: str) -> str:
+def _unique_filename(filename: str, client=None, folder_id=None) -> str:
     """
-    If a drop with this filename already exists in the local cache, append
-    (1), (2) ... until the name is unique — same behaviour as macOS/Windows
-    file copy. This prevents duplicate-looking rows in `ls`.
+    If a drop with this filename already exists in the current folder on the
+    server, append _1, _2 ... until the name is unique.
+    Falls back to local cache only if no client is provided.
     """
-    from cli import cache as cache_store
-    existing = {e.get("filename", "") for e in cache_store.all_entries()}
+    if client is not None:
+        try:
+            from cli.api import folders as folders_api
+            if folder_id:
+                data = folders_api.list_contents(client, folder_id)
+            else:
+                data = folders_api.list_root(client)
+            existing = {
+                i.get("filename") or i.get("label") or ""
+                for i in data.get("items", [])
+            }
+        except Exception:
+            existing = set()
+    else:
+        from cli import cache as cache_store
+        existing = {e.get("filename", "") for e in cache_store.all_entries()}
+
     if filename not in existing:
         return filename
     stem, _, ext = filename.rpartition(".")
-    if not stem:          # no extension
+    if not stem:
         stem, ext = filename, ""
     else:
         ext = "." + ext
     i = 1
     while True:
-        candidate = f"{stem} ({i}){ext}"
+        candidate = f"{stem}_{i}{ext}"
         if candidate not in existing:
             return candidate
         i += 1

@@ -64,10 +64,10 @@
   </div>
 
   <!-- Content -->
-  {% if drop.kind == 'text' %}
+  {% if drop.content_type|slice:":5" == "text/" %}
   <div class="drop-content">
     <div class="clip-existing">
-      <pre id="clipPre"><code id="clipContent">{{ drop.content }}</code></pre>
+      <pre id="clipPre"><code id="clipContent">{{ text_content }}</code></pre>
       <div class="clip-actions">
         <button class="btn-sm" onclick="copyContent()">copy text</button>
         <button class="btn-sm" onclick="downloadText()">download .txt</button>
@@ -81,7 +81,7 @@
     {% if can_edit %}
     <form id="editForm" class="clip-form hidden" style="margin-top:1rem">
       {% csrf_token %}
-      <textarea id="editArea" rows="6">{{ drop.content }}</textarea>
+      <textarea id="editArea" rows="6">{{ text_content }}</textarea>
       <div style="display:flex;gap:.5rem">
         <button type="submit" class="btn">update</button>
         <button type="button" class="btn-sm" onclick="toggleEdit()">cancel</button>
@@ -168,13 +168,13 @@
 
 {% block scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-{% if drop.kind == 'text' %}
+{% if drop.content_type|slice:":5" == "text/" %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 
 {% endif %}
-{% if drop.kind == 'file' %}
+{% if drop.content_type|slice:":5" != "text/" %}
 {% with ext=drop.filename|lower %}
 {% if '.md' in ext or '.py' in ext or '.js' in ext or '.ts' in ext or '.json' in ext or '.yaml' in ext or '.yml' in ext or '.html' in ext or '.css' in ext or '.sh' in ext or '.txt' in ext or '.go' in ext or '.rs' in ext or '.rb' in ext or '.java' in ext or '.c' in ext or '.cpp' in ext or '.toml' in ext or '.xml' in ext or '.csv' in ext %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
@@ -257,7 +257,7 @@ function _csvTableHTML(rows) {
 }
 
 // ── Syntax highlighting + CSV table ─────────────────────────────────────────────────
-{% if drop.kind == 'text' %}
+{% if drop.content_type|slice:":5" == "text/" %}
 let _csvTableVisible = false;
 document.addEventListener('DOMContentLoaded', () => {
   const block = document.getElementById('clipContent');
