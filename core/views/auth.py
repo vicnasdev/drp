@@ -148,18 +148,38 @@ def account_settings(request):
 
 @login_required
 def manage_view(request):
+    from django.utils import timezone as tz
     profile = request.user.profile
-    drops   = (
+    folders = Folder.objects.filter(owner=request.user, parent=None).order_by("slug")
+
+    # Only show loose drops (not in any folder) in the flat table.
+    # Files inside folders are browsed via the folder view, not dumped here.
+    filed_keys  = FolderItem.objects.values_list("key", flat=True)
+    loose_drops = (
         File.objects
         .filter(owner=request.user)
+        .exclude(key__in=filed_keys)
         .order_by("-created_at")
     )
-    saved = FileBookmark.objects.filter(user=request.user).order_by("-created_at")
-    folders = Folder.objects.filter(owner=request.user, parent=None).order_by("slug")
+
+    # Enrich bookmarks with File metadata so the template can show expiry/owner
+    raw_bookmarks = FileBookmark.objects.filter(user=request.user).order_by("-created_at")
+    bm_keys  = [b.file_key for b in raw_bookmarks]
+    file_map = {f.key: f for f in File.objects.filter(key__in=bm_keys).select_related("owner")}
+    saved = []
+    now   = tz.now()
+    for bm in raw_bookmarks:
+        f = file_map.get(bm.file_key)
+        saved.append({
+            "file_key":       bm.file_key,
+            "owner_username": f.owner.username if f and f.owner else "",
+            "expires_at":     f.expires_at if f else None,
+            "expired":        (f.expires_at and f.expires_at < now) if f else False,
+        })
 
     ctx = {
         "profile": profile,
-        "drops":   drops,
+        "drops":   loose_drops,
         "saved":   saved,
         "folders": folders,
     }
