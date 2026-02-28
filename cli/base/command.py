@@ -88,7 +88,7 @@ class BaseCommand(OutputMixin, ABC):
 
     @property
     def server_url(self) -> str:
-        return self.config.get("server_url", "https://drp.fyi").rstrip("/")
+        return self.config.get("server", {}).get("url", "https://drp.fyi").rstrip("/")
 
 
 # ---------------------------------------------------------------------------

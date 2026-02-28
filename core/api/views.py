@@ -134,6 +134,11 @@ def files_list_or_upload(request):
 
     user    = request.user if request.user.is_authenticated else None
     profile = _profile(user) if user else None
+
+    # Require email verification for authenticated uploads via API
+    if user and (not profile or not profile.email_verified):
+        return _err("email not verified — check your inbox or visit /auth/account/", 403)
+
     max_mb  = profile.plan_limits["max_file_mb"] if profile else ANON_MAX_FILE_MB
 
     uploaded = request.FILES.get("file")
@@ -156,8 +161,7 @@ def files_list_or_upload(request):
     if custom_key:
         if not re.match(r'^[a-zA-Z0-9_\-]{1,64}$', custom_key):
             return _err("invalid key format")
-        existing = File.objects.filter(key=custom_key).first()
-        if existing and existing.owner != user:
+        if File.objects.filter(key=custom_key).exists():
             return _err("key already taken", 409)
 
     if user and profile:

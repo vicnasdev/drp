@@ -183,6 +183,10 @@ def drop_save(request):
         return JsonResponse({"error": "Method not allowed"}, status=405)
 
     user        = request.user if request.user.is_authenticated else None
+
+    # Require email verification for authenticated users before they can upload
+    if user and not user.profile.email_verified:
+        return JsonResponse({"error": "Please verify your email before uploading."}, status=403)
     anon_token  = _get_anon_token(request)
     custom_key  = (request.POST.get("key") or "").strip()
     expiry_days = request.POST.get("expiry_days")

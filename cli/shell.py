@@ -83,10 +83,10 @@ def run_shell(config: dict, reporter: CrashReporter | None = None) -> None:
 
 def _init_cwd(config: dict) -> None:
     """
-    Set the virtual CWD to a drp folder matching the real launch directory name.
-    Creates the folder if it doesn't exist yet (silently handles 409 if it does).
-    This means every upload inside the shell lands in a named folder — there
-    are no loose drops.
+    Set the virtual CWD to a drp folder matching the real launch directory name,
+    if one already exists. Does NOT create it — the user can mkdir explicitly
+    or upload a file (which will prompt for folder creation via `up`).
+    This way, deleting a folder and reopening the shell doesn't silently recreate it.
     """
     slug     = Path(os.getcwd()).name
     username = config.get("auth", {}).get("username", "")
@@ -104,13 +104,14 @@ def _init_cwd(config: dict) -> None:
         from cli.api.client import APIClient
         from cli.api import folders as folders_api
         client = APIClient.from_config(config, authed=True)
-        try:
-            result = folders_api.create(client, slug)
-        except Exception:
-            # 409 — folder already exists, look it up
-            data   = folders_api.list_root(client)
-            result = next((f for f in data.get("folders", []) if f["slug"] == slug), {})
-        shell["cwd_id"] = result.get("id")
+        data   = folders_api.list_root(client)
+        match  = next((f for f in data.get("folders", []) if f["slug"] == slug), None)
+        if match:
+            shell["cwd_id"] = match.get("id")
+        else:
+            # No matching folder — start at root instead
+            shell["cwd"]    = "/"
+            shell["cwd_id"] = None
     except Exception:
         shell["cwd_id"] = None
 
