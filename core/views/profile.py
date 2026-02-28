@@ -13,29 +13,38 @@ from core.models import File, Folder, FolderItem, FileBookmark
 
 
 def profile_view(request, username):
-    user = get_object_or_404(User, username__iexact=username)
+    user     = get_object_or_404(User, username__iexact=username)
     is_owner = request.user.is_authenticated and request.user == user
 
-    folders = Folder.objects.filter(owner=user, parent=None)
+    folders = Folder.objects.filter(owner=user, parent=None).exclude(slug="__root__")
     if not is_owner:
         folders = folders.filter(is_public=True)
     folders = folders.order_by("slug")
 
-    # Recent public drops
-    drops = (
-        File.objects
-        .filter(owner=user, is_public=True)
-        .exclude(expires_at__lt=timezone.now())
-        .order_by("-created_at")[:20]
-    )
+    # Public drops (files inside public folders) for non-owners
+    # Owners see everything via the folder browser, not a flat list
+    files = File.objects.none()
+    if not is_owner:
+        public_folder_keys = FolderItem.objects.filter(
+            folder__owner=user, folder__is_public=True, folder__parent=None
+        ).values_list("key", flat=True)
+        files = (
+            File.objects
+            .filter(key__in=public_folder_keys, is_public=True)
+            .exclude(expires_at__lt=timezone.now())
+            .order_by("-created_at")[:50]
+        )
 
+    # Reuse folder.html — profile root IS just a folder view with no parent
     ctx = {
         "profile_user": user,
+        "folder":       None,          # no parent folder — we're at root
+        "files":        files,
+        "subfolders":   folders,
         "is_owner":     is_owner,
-        "folders":      folders,
-        "drops":        drops,
+        "is_root":      True,
     }
-    return render(request, "profile.html", ctx)
+    return render(request, "folder.html", ctx)
 
 
 def folder_view(request, username, folder_slug):

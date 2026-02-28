@@ -105,23 +105,42 @@ class CatCommand(SpinnerCommand):
 
 
 def _print_parsed(cmd, content: str, field: str | None) -> int:
+    # Try JSON first
     try:
         data = json.loads(content)
         if field:
-            cmd.out(str(data.get(field, "")))
+            if field not in data:
+                cmd.err(f"--field: key '{field}' not found in JSON object")
+                return 1
+            cmd.out(str(data[field]))
         else:
             cmd.out(json.dumps(data, indent=2))
         return 0
     except json.JSONDecodeError:
         pass
+
+    # Try CSV
     try:
         rows = list(csv.DictReader(io.StringIO(content)))
+        if not rows:
+            cmd.err("--parse: file is empty or not valid JSON/CSV")
+            return 1
         if field:
+            found = False
             for r in rows:
-                cmd.out(r.get(field, ""))
+                # Case-insensitive field match
+                match = next((v for k, v in r.items() if k.lower() == field.lower()), None)
+                if match is not None:
+                    cmd.out(match)
+                    found = True
+            if not found:
+                cmd.err(f"--field: column '{field}' not found. Available: {', '.join(rows[0].keys())}")
+                return 1
         else:
-            cmd.print_table(rows, list(rows[0].keys()) if rows else [])
+            cmd.print_table(rows, list(rows[0].keys()))
         return 0
     except Exception:
-        cmd.err("--parse: unsupported format (JSON and CSV supported)")
-        return 1
+        pass
+
+    cmd.err("--parse: unsupported format (JSON and CSV supported)")
+    return 1

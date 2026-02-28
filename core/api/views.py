@@ -349,28 +349,30 @@ def folders_list_create(request):
     if request.method == "GET":
         from core.storage import b2_download_url
         folders = Folder.objects.filter(owner=request.user, parent=None)
-
-        # Loose drops: owned by user, not in any folder
-        filed_keys  = FolderItem.objects.values("key")
-        loose_drops = (
-            File.objects.filter(owner=request.user)
-                        .exclude(key__in=filed_keys)
-                        .order_by("-created_at")[:100]
-        )
+        # All files live in folders — there are no loose drops.
+        # Root listing returns folders + files that are direct children
+        # of any root-level folder (i.e. one level deep, for shell `ls` at root).
+        # The shell `ls` at root shows folders and their immediate contents.
+        all_items = []
+        filed_keys = set(FolderItem.objects.filter(
+            folder__owner=request.user, folder__parent=None
+        ).values_list("key", flat=True))
+        root_files = File.objects.filter(
+            owner=request.user, key__in=filed_keys
+        ).order_by("-created_at")[:100]
+        for f in root_files:
+            all_items.append({
+                "key":          f.key,
+                "filename":     f.filename,
+                "label":        f.filename,
+                "size":         f.size,
+                "size_display": _fmt_size(f.size),
+                "content_type": f.content_type,
+                "expires_at":   f.expires_at.isoformat() if f.expires_at else None,
+                "download_url": b2_download_url(f.b2_name),
+            })
         return _json({
-            "items": [
-                {
-                    "key":          f.key,
-                    "filename":     f.filename,
-                    "label":        f.filename,
-                    "size":         f.size,
-                    "size_display": _fmt_size(f.size),
-                    "content_type": f.content_type,
-                    "expires_at":   f.expires_at.isoformat() if f.expires_at else None,
-                    "download_url": b2_download_url(f.b2_name),
-                }
-                for f in loose_drops
-            ],
+            "items":   all_items,
             "folders": [{"id": f.id, "slug": f.slug, "is_public": f.is_public} for f in folders],
         })
 

@@ -122,24 +122,16 @@ class UpCommand(SpinnerCommand, AuthCommand):
         filename     = p.name if p else ("stdin" if path_str == "<stdin>" else "text")
         content_type = _mime(p) if p else "text/plain"
 
+        # Must be resolved before _unique_filename which needs it
+        shell_folder_id = self.config.get("shell", {}).get("cwd_id") if self.in_shell else None
+
         if opts.encrypt:
             from cli.base.crypto import encrypt
             file_obj, content_type = encrypt(file_obj or open(p, "rb"), opts.encrypt)  # noqa
         else:
             file_obj = file_obj or open(p, "rb")  # noqa
 
-        # Auto-rename if a drop with the same filename already exists in the cache.
-        # FIX: without this, uploading file1.txt twice produced two identical-looking
-        # rows in `ls` with different keys — confusing and impossible to disambiguate
-        # visually. We rename client-side (file1 (1).txt, file1 (2).txt ...) before
-        # upload so the stored filename is unique.
         filename = _unique_filename(filename, client=client, folder_id=shell_folder_id)
-
-        # FIX: when running inside the drp shell, link the upload to the current
-        # virtual folder so that `ls` shows the file immediately after uploading.
-        # Without this, every `up` inside the shell produces a "loose drop" that
-        # is invisible to `ls` (which only shows the current folder's contents).
-        shell_folder_id = self.config.get("shell", {}).get("cwd_id") if self.in_shell else None
 
         # FIX: replace the opaque spinner with a real progress bar for file uploads.
         # For stdin/text (unknown size) we keep the spinner since we can't show %.

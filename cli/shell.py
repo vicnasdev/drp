@@ -83,17 +83,36 @@ def run_shell(config: dict, reporter: CrashReporter | None = None) -> None:
 
 def _init_cwd(config: dict) -> None:
     """
-    Set the initial virtual CWD to drp root (/).
-    The real filesystem CWD is shown separately in the prompt.
-    We do NOT auto-create a drp folder on every shell open — that caused
-    repeated 409 Conflict errors and silently created folders the user
-    never asked for.
+    Set the virtual CWD to a drp folder matching the real launch directory name.
+    Creates the folder if it doesn't exist yet (silently handles 409 if it does).
+    This means every upload inside the shell lands in a named folder — there
+    are no loose drops.
     """
+    slug     = Path(os.getcwd()).name
+    username = config.get("auth", {}).get("username", "")
+
     shell = config.setdefault("shell", {})
-    shell["cwd"]       = "/"
-    shell["cwd_slug"]  = ""
-    shell["cwd_id"]    = None
     shell["launch_dir"] = os.getcwd()
+    shell["cwd"]        = f"/{slug}"
+    shell["cwd_slug"]   = slug
+
+    if not username:
+        shell["cwd_id"] = None
+        return
+
+    try:
+        from cli.api.client import APIClient
+        from cli.api import folders as folders_api
+        client = APIClient.from_config(config, authed=True)
+        try:
+            result = folders_api.create(client, slug)
+        except Exception:
+            # 409 — folder already exists, look it up
+            data   = folders_api.list_root(client)
+            result = next((f for f in data.get("folders", []) if f["slug"] == slug), {})
+        shell["cwd_id"] = result.get("id")
+    except Exception:
+        shell["cwd_id"] = None
 
 
 # ------------------------------------------------------------------ prompt

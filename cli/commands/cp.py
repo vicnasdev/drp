@@ -64,7 +64,30 @@ class CpCommand(SpinnerCommand, AuthCommand):
     # ---------------------------------------------------------------- upload (real → drp)
 
     def _upload(self, client, src: str, dest: str) -> int:
-        p = Path(src)
+        import os as _os
+        launch_dir = Path(self.config.get("shell", {}).get("launch_dir", _os.getcwd()))
+
+        # Resolve src relative to launch_dir (mirrors up.py logic)
+        if src.startswith("../") or src == "..":
+            rest = src
+            levels = 0
+            while rest.startswith("../"):
+                levels += 1
+                rest = rest[3:]
+            if rest == "..":
+                levels += 1
+                rest = ""
+            base = launch_dir
+            for _ in range(levels - 1):
+                base = base.parent
+            p = (base / rest).resolve() if rest else base.resolve()
+        elif src.startswith("./"):
+            p = (launch_dir / src[2:]).resolve()
+        elif src.startswith("/"):
+            p = Path(src).resolve()
+        else:
+            p = (launch_dir / src).resolve()
+
         if not p.exists():
             self.err(f"not found: {src}")
             return 1

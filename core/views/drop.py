@@ -22,7 +22,7 @@ from django.views.decorators.http import require_POST, require_GET
 from django.views.decorators.csrf import csrf_exempt
 
 from core.models import (
-    File, FileBookmark, Like, UserProfile,
+    File, FileBookmark, Like, UserProfile, Folder, FolderItem,
     FREE_LIFETIME_DAYS, ANON_LIFETIME_DAYS, ANON_MAX_FILE_MB, PLAN_LIMITS,
 )
 from core.storage import (
@@ -265,7 +265,7 @@ def drop_save(request):
 
     if not drop:
         drop = File.objects.create(
-            key          = custom_key or None,   # auto-generated if blank
+            key          = custom_key or None,
             owner        = user,
             anon_token   = anon_token if not user else "",
             b2_name      = b2_name,
@@ -274,6 +274,21 @@ def drop_save(request):
             size         = size,
             expires_at   = expires_at,
             is_public    = is_public if user else False,
+        )
+
+    # Always assign authenticated uploads to a folder.
+    # For the web UI we use a special root folder "__root__" per user.
+    # Anon uploads are keyless and have no folder.
+    if user:
+        from django.utils.text import slugify as _slugify
+        root_slug = "__root__"
+        root_folder, _ = Folder.objects.get_or_create(
+            owner=user, slug=root_slug, parent=None,
+            defaults={"is_public": False},
+        )
+        FolderItem.objects.get_or_create(
+            folder=root_folder, key=drop.key,
+            defaults={"label": filename},
         )
 
     # Update storage used

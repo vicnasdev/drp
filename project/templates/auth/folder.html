@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
-{% block title %}/@{{ profile_user.username }}/{{ folder.slug }}/ — drp{% endblock %}
+{% block title %}
+  {% if folder %}/@{{ profile_user.username }}/{{ folder.slug }}/{% else %}/@{{ profile_user.username }}/{% endif %} — drp
+{% endblock %}
 {% load static %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/auth.css' %}"/>{% endblock %}
 
@@ -8,55 +10,72 @@
 
   <div class="account-header">
     <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
-      <a href="/@{{ profile_user.username }}/" class="muted" style="text-decoration:none;font-size:.9rem">/@{{ profile_user.username }}/</a>
-      <span class="muted">›</span>
-      <h1 style="margin:0">{{ folder.slug }}/</h1>
-      {% if folder.is_public %}
-        <span style="font-size:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:.1rem .4rem;color:var(--muted)">public</span>
+      {% if folder %}
+        <a href="/@{{ profile_user.username }}/" class="muted" style="text-decoration:none;font-size:.9rem">/@{{ profile_user.username }}/</a>
+        <span class="muted">›</span>
+        <h1 style="margin:0">{{ folder.slug }}/</h1>
+        {% if folder.is_public %}
+          <span style="font-size:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:.1rem .4rem;color:var(--muted)">public</span>
+        {% endif %}
+      {% else %}
+        <h1 style="margin:0">/@{{ profile_user.username }}/</h1>
+        {% if is_owner %}
+          <a href="/auth/account/" class="muted" style="font-size:.82rem;text-decoration:none">account settings</a>
+        {% endif %}
       {% endif %}
     </div>
-    {% if is_owner %}
-    <p class="muted" style="font-size:.85rem;margin-top:.3rem">
-      <a href="/auth/manage/">← back to drive</a>
-    </p>
-    {% endif %}
   </div>
 
-  <!-- Subfolders -->
-  {% if subfolders %}
+  <!-- Subfolders / root folders -->
   <div class="account-section">
-    <h2>folders <span class="muted" style="font-weight:400;font-size:.75rem">({{ subfolders|length }})</span></h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
+      <h2>folders <span class="muted" style="font-weight:400;font-size:.75rem">({{ subfolders|length }})</span></h2>
+      {% if is_owner %}
+      <button class="btn-sm" onclick="showNewFolder()">+ new folder</button>
+      {% endif %}
+    </div>
+
+    {% if is_owner %}
+    <div id="new-folder-row" style="display:none;margin-bottom:.8rem">
+      <input type="text" id="new-folder-name" placeholder="folder name…"
+             style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:.9rem;padding:.4rem .7rem;outline:none;width:200px"/>
+      <button class="btn-sm" onclick="createFolder()" style="margin-left:.4rem">create</button>
+      <button class="btn-sm" onclick="hideNewFolder()" style="margin-left:.25rem">cancel</button>
+      <span id="new-folder-err" style="font-size:.82rem;margin-left:.5rem;color:var(--danger)"></span>
+    </div>
+    {% endif %}
+
+    {% if subfolders %}
     <table class="drops-table">
-      <thead>
-        <tr>
-          <th>name</th>
-          <th>drops</th>
-          <th></th>
-        </tr>
-      </thead>
+      <thead><tr><th>name</th><th>files</th><th></th></tr></thead>
       <tbody>
         {% for sub in subfolders %}
         <tr>
-          <td><a href="/@{{ profile_user.username }}/{{ folder.slug }}/{{ sub.slug }}/" class="mono">📁 {{ sub.slug }}/</a></td>
+          <td>
+            <a href="/@{{ profile_user.username }}/{% if folder %}{{ folder.slug }}/{% endif %}{{ sub.slug }}/" class="mono">
+              📁 {{ sub.slug }}/
+            </a>
+          </td>
           <td class="muted">{{ sub.items.count }}</td>
-          <td><a href="/@{{ profile_user.username }}/{{ folder.slug }}/{{ sub.slug }}/" class="btn-sm">open →</a></td>
+          <td><a href="/@{{ profile_user.username }}/{% if folder %}{{ folder.slug }}/{% endif %}{{ sub.slug }}/" class="btn-sm">open →</a></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    {% else %}
+    <p class="muted empty">{% if is_owner %}no folders yet.{% else %}no public folders.{% endif %}</p>
+    {% endif %}
   </div>
-  {% endif %}
 
-  <!-- Files in this folder -->
+  <!-- Files — only inside a subfolder, or public files for visitors -->
+  {% if folder or not is_owner %}
   <div class="account-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
       <h2>files <span class="muted" style="font-weight:400;font-size:.75rem">({{ files|length }})</span></h2>
-      {% if is_owner %}
-      <div style="display:flex;gap:.4rem">
-        <div id="bulk-bar" style="display:none">
-          <span id="bulk-count">0</span> selected
-          <button class="btn-sm danger" onclick="bulkDelete()">delete</button>
-        </div>
+      {% if is_owner and folder %}
+      <div id="bulk-bar" style="display:none">
+        <span id="bulk-count">0</span> selected
+        <button class="btn-sm danger" onclick="bulkDelete()">delete</button>
       </div>
       {% endif %}
     </div>
@@ -65,7 +84,7 @@
     <table class="drops-table" id="files-table">
       <thead>
         <tr>
-          {% if is_owner %}<th style="width:2rem"><input type="checkbox" id="select-all" onchange="toggleAll(this)"/></th>{% endif %}
+          {% if is_owner and folder %}<th style="width:2rem"><input type="checkbox" id="select-all" onchange="toggleAll(this)"/></th>{% endif %}
           <th>filename</th>
           <th>size</th>
           <th>exp</th>
@@ -76,7 +95,7 @@
       <tbody>
         {% for file in files %}
         <tr data-key="{{ file.key }}">
-          {% if is_owner %}<td><input type="checkbox" class="file-check" onchange="updateBulkBar()"/></td>{% endif %}
+          {% if is_owner and folder %}<td><input type="checkbox" class="file-check" onchange="updateBulkBar()"/></td>{% endif %}
           <td>
             <a href="/{{ file.key }}/" class="mono">
               {% if file.content_type|slice:":6" == "image/" %}🖼
@@ -86,13 +105,11 @@
             </a>
           </td>
           <td class="muted">{{ file.size|filesizeformat }}</td>
-          <td class="muted">
-            {% if file.expires_at %}{{ file.expires_at|timeuntil|truncatewords:2 }}{% else %}∞{% endif %}
-          </td>
+          <td class="muted">{% if file.expires_at %}{{ file.expires_at|timeuntil|truncatewords:2 }}{% else %}∞{% endif %}</td>
           <td class="muted" style="font-size:.8rem">{{ file.key }}</td>
           <td>
             <a href="/{{ file.key }}/" class="btn-sm">view →</a>
-            {% if is_owner %}
+            {% if is_owner and folder %}
             <button class="btn-sm danger" onclick="removeFromFolder('{{ file.key }}', this)" style="margin-left:.25rem">✕</button>
             {% endif %}
           </td>
@@ -101,14 +118,16 @@
       </tbody>
     </table>
     {% else %}
-    <p class="muted empty">no files in this folder yet.</p>
+    <p class="muted empty">no files here.</p>
     {% endif %}
   </div>
+  {% endif %}
 
-  {% if is_owner %}
+  <!-- Delete folder — only inside a non-root folder -->
+  {% if is_owner and folder %}
   <div class="account-section" style="margin-top:1rem">
-    <button class="btn-sm danger" onclick="deleteFolder()" style="font-size:.8rem">delete folder</button>
-    <span class="muted" style="font-size:.78rem;margin-left:.5rem">removing the folder does not delete the files</span>
+    <button class="btn-sm danger" onclick="deleteFolder()">delete folder</button>
+    <span class="muted" style="font-size:.78rem;margin-left:.5rem">files are not deleted, accessible by key only</span>
   </div>
   {% endif %}
 
@@ -116,29 +135,54 @@
 
 {% if is_owner %}
 <script>
-const FOLDER_ID = {{ folder.id }};
+{% if folder %}const FOLDER_ID = {{ folder.id }};{% else %}const FOLDER_ID = null;{% endif %}
 
+function showNewFolder() {
+  document.getElementById('new-folder-row').style.display = '';
+  document.getElementById('new-folder-name').focus();
+}
+function hideNewFolder() {
+  document.getElementById('new-folder-row').style.display = 'none';
+  document.getElementById('new-folder-name').value = '';
+  document.getElementById('new-folder-err').textContent = '';
+}
+async function createFolder() {
+  const name = document.getElementById('new-folder-name').value.trim();
+  const err  = document.getElementById('new-folder-err');
+  if (!name) { err.textContent = 'enter a name'; return; }
+  const body = { slug: name };
+  if (FOLDER_ID) body.parent_id = FOLDER_ID;
+  const res  = await fetch('/folders/create/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (res.ok) { showToast('folder created!'); location.reload(); }
+  else { err.textContent = data.error || 'failed'; }
+}
+document.getElementById('new-folder-name')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') createFolder();
+  if (e.key === 'Escape') hideNewFolder();
+});
+
+{% if folder %}
 function toggleAll(master) {
   document.querySelectorAll('.file-check').forEach(cb => cb.checked = master.checked);
   updateBulkBar();
 }
-
 function updateBulkBar() {
   const checked = document.querySelectorAll('.file-check:checked');
-  const bar     = document.getElementById('bulk-bar');
   document.getElementById('bulk-count').textContent = checked.length;
-  bar.style.display = checked.length > 0 ? '' : 'none';
+  document.getElementById('bulk-bar').style.display = checked.length > 0 ? '' : 'none';
 }
-
 function getSelected() {
   const rows = [];
   document.querySelectorAll('.file-check:checked').forEach(cb => {
-    const tr = cb.closest('tr');
-    rows.push({ key: tr.dataset.key, row: tr });
+    rows.push({ key: cb.closest('tr').dataset.key, row: cb.closest('tr') });
   });
   return rows;
 }
-
 async function bulkDelete() {
   const items = getSelected();
   if (!items.length) return;
@@ -147,8 +191,7 @@ async function bulkDelete() {
   for (const item of items) {
     try {
       const res = await fetch('/' + item.key + '/delete/', {
-        method: 'DELETE',
-        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') },
       });
       if (res.ok) { item.row.remove(); ok++; } else { fail++; }
     } catch { fail++; }
@@ -157,33 +200,23 @@ async function bulkDelete() {
   updateBulkBar();
   showToast(ok + ' deleted' + (fail ? ', ' + fail + ' failed' : ''));
 }
-
 async function removeFromFolder(key, btn) {
-  if (!confirm('Remove from folder? The file itself is not deleted.')) return;
+  if (!confirm('Remove from folder? The file is not deleted.')) return;
   const res = await fetch('/folders/' + FOLDER_ID + '/remove/' + key + '/', {
-    method: 'POST',
-    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+    method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') },
   });
-  if (res.ok) {
-    btn.closest('tr').remove();
-    showToast('removed from folder.');
-  } else {
-    showToast('failed to remove.');
-  }
+  if (res.ok) { btn.closest('tr').remove(); showToast('removed.'); }
+  else showToast('failed.');
 }
-
 async function deleteFolder() {
-  if (!confirm('Delete this folder? Files inside are NOT deleted, they become loose drops.')) return;
+  if (!confirm('Delete this folder? Files inside are NOT deleted.')) return;
   const res = await fetch('/folders/' + FOLDER_ID + '/delete/', {
-    method: 'POST',
-    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+    method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') },
   });
-  if (res.ok) {
-    window.location.href = '/auth/manage/';
-  } else {
-    showToast('failed to delete folder.');
-  }
+  if (res.ok) window.location.href = '/@{{ profile_user.username }}/';
+  else showToast('failed to delete folder.');
 }
+{% endif %}
 </script>
 {% endif %}
 {% endblock %}
