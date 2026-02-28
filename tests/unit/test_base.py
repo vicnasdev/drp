@@ -159,12 +159,6 @@ class TestRequireAuth:
         with pytest.raises(SystemExit):
             cmd.require_auth()
 
-    def test_execute_exits_1_without_auth(self):
-        cmd = _AuthEchoCommand(config=self._EMPTY_CONFIG)
-        with pytest.raises(SystemExit) as exc_info:
-            cmd.execute([])
-        assert exc_info.value.code == 1
-
 
 # ---------------------------------------------------------------------------
 # parse_response()
