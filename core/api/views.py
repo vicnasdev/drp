@@ -292,14 +292,30 @@ def files_fork(request, key):
 # ---------------------------------------------------------------------------
 
 def _folder_data(folder):
-    items = [
-        {
-            "key":          fi.key,
-            "filename":     fi.label or fi.key,
-            "label":        fi.label,
-        }
-        for fi in folder.items.all()
-    ]
+    # FIX: the original only returned FolderItem key + label — no size, no
+    # expires_at. Shell `ls` showed every file as a blank row. Now we join
+    # against the File table so every item gets its metadata.
+    from core.storage import b2_download_url
+    from core.models import File as FileModel
+
+    item_keys = {fi.key: fi.label for fi in folder.items.all()}
+    files_map = {
+        f.key: f
+        for f in FileModel.objects.filter(key__in=item_keys.keys())
+    }
+
+    items = []
+    for key, label in item_keys.items():
+        f = files_map.get(key)
+        items.append({
+            "key":          key,
+            "filename":     label or (f.filename if f else key),
+            "label":        label,
+            "size_display": _fmt_size(f.size) if f else "",
+            "expires_at":   f.expires_at.isoformat() if f and f.expires_at else None,
+            "download_url": b2_download_url(f.b2_name) if f else None,
+        })
+
     subfolders = [
         {"id": c.id, "slug": c.slug, "is_public": c.is_public}
         for c in folder.children.all()
@@ -413,23 +429,46 @@ def folders_detail(request, folder_id):
 @token_required
 def resolve(request):
     path = request.GET.get("path", "").strip("/")
-    # expected: @username/slug or @username/slug/subslug
+    # expected: @username  OR  @username/slug  OR  @username/slug/subslug
     parts = path.lstrip("@").split("/")
-    if len(parts) < 2:
-        return _err("invalid path")
+
     from django.contrib.auth import get_user_model
     User = get_user_model()
+
+    # FIX: original required >= 2 parts, so `cd ..` from the top-level folder
+    # returned 400 because it sent "@username" (1 part). Now we handle the
+    # root case by returning a synthetic root folder object.
     try:
         user = User.objects.get(username=parts[0])
     except User.DoesNotExist:
         return _err("user not found", 404)
+
+    if len(parts) < 2 or not parts[1]:
+        # Root — return a virtual root descriptor
+        folders = Folder.objects.filter(owner=user, parent=None)
+        return _json({
+            "type":   "folder",
+            "object": {
+                "id":        None,
+                "slug":      "",
+                "is_public": False,
+                "items":     [],
+                "folders":   [{"id": f.id, "slug": f.slug, "is_public": f.is_public} for f in folders],
+                "path":      "/",
+            },
+        })
+
     try:
         folder = Folder.objects.get(owner=user, slug=parts[1], parent=None)
         for part in parts[2:]:
             folder = folder.children.get(slug=part)
     except Folder.DoesNotExist:
         return _err("not found", 404)
-    return _json({"type": "folder", "object": _folder_data(folder)})
+
+    data = _folder_data(folder)
+    # Include the canonical path so the client can update its cwd string.
+    data["path"] = "/" + "/".join(parts[1:])
+    return _json({"type": "folder", "object": data})
 
 
 # ---------------------------------------------------------------------------

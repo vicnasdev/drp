@@ -17,7 +17,7 @@ from cli import cache
 
 def _is_real(path: str) -> bool:
     return path.startswith("../") or path.startswith("./") or path.startswith("/") \
-           or path in ("..", ".")
+           or path == ".."
 
 
 class MvCommand(SpinnerCommand, AuthCommand):

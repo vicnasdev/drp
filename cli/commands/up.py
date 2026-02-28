@@ -50,15 +50,46 @@ class UpCommand(SpinnerCommand, AuthCommand):
 
         # FIX: resolve path relative to real process CWD so that paths typed
         # inside the shell (which has a *virtual* CWD, not a real fs one) still
-        # resolve correctly. Path.resolve() already does this — the bug was that
-        # '../file.txt' would resolve to a path that doesn't exist from the
-        # shell's virtual perspective. We now also check the path relative to
-        # the actual working directory the process was launched from, which is
-        # always correct regardless of virtual shell CWD.
-        p = Path(opts.target).expanduser()
-        if not p.is_absolute():
-            p = Path(os.getcwd()) / p
-        p = p.resolve()
+        # resolve correctly.
+        #
+        # Inside the drp shell the two namespaces are distinct:
+        #   bare name   → drp-space identifier; never silently touches real FS
+        #   ../foo      → real FS: strip one "../" and resolve from the launch dir
+        #   ../../foo   → real FS: goes one level above the launch dir
+        #   ./foo or /foo → normal real FS resolution from launch dir
+        #
+        # Without this, `up file1.txt` inside the shell would silently find the
+        # real file because os.getcwd() is still the launch directory — giving
+        # the illusion that bare names work, while `up ../file1.txt` would
+        # mis-resolve to <launch_dir>/../file1.txt (one level too high).
+        target = opts.target
+        is_real_path = (
+            target.startswith("../")
+            or target.startswith("./")
+            or target.startswith("/")
+            or target == ".."
+        )
+
+        if self.in_shell and not is_real_path:
+            self.bail(
+                f"'{target}' is not a real filesystem path.\n"
+                f"  Inside the drp shell, use a path prefix to reference real files:\n"
+                f"    up ../{target}    ← file in the directory drp was launched from\n"
+                f"    up ./{target}     ← same (relative to launch dir)\n"
+                f"  Use --text to upload a literal string instead."
+            )
+
+        launch_dir = Path(os.getcwd())
+        if target.startswith("../"):
+            # ../ means "launch directory", so ../foo.txt → <launch_dir>/foo.txt
+            # ../../foo.txt → <launch_dir>/../foo.txt  (resolved naturally)
+            p = (launch_dir / target[3:]).resolve()
+        else:
+            p = Path(target).expanduser()
+            if not p.is_absolute():
+                p = (launch_dir / p).resolve()
+            else:
+                p = p.resolve()
 
         if not p.exists():
             self.bail(f"'{opts.target}' not found — use --text to upload a string")
@@ -88,12 +119,19 @@ class UpCommand(SpinnerCommand, AuthCommand):
         # upload so the stored filename is unique.
         filename = _unique_filename(filename)
 
+        # FIX: when running inside the drp shell, link the upload to the current
+        # virtual folder so that `ls` shows the file immediately after uploading.
+        # Without this, every `up` inside the shell produces a "loose drop" that
+        # is invisible to `ls` (which only shows the current folder's contents).
+        shell_folder_id = self.config.get("shell", {}).get("cwd_id") if self.in_shell else None
+
         # FIX: replace the opaque spinner with a real progress bar for file uploads.
         # For stdin/text (unknown size) we keep the spinner since we can't show %.
         size = _file_size(file_obj, p)
         if size is not None and size > 0:
             result = _upload_with_progress(
-                self, client, file_obj, filename, content_type, size, opts
+                self, client, file_obj, filename, content_type, size, opts,
+                folder_id=shell_folder_id,
             )
         else:
             with self.spin(f"Uploading {filename}"):
@@ -103,6 +141,7 @@ class UpCommand(SpinnerCommand, AuthCommand):
                     encrypted=bool(opts.encrypt), expires=opts.expires,
                     public=opts.public, tags=opts.tag or [],
                     schedule=opts.schedule, webhook=opts.webhook,
+                    folder_id=shell_folder_id,
                 )
 
         cache.add({
@@ -183,7 +222,7 @@ def _file_size(file_obj, path: Path | None) -> int | None:
         return None
 
 
-def _upload_with_progress(cmd, client, file_obj, filename, content_type, size, opts) -> dict:
+def _upload_with_progress(cmd, client, file_obj, filename, content_type, size, opts, *, folder_id=None) -> dict:
     """Stream upload with a live terminal progress bar."""
     import sys
     from cli.base.color import Color
@@ -222,6 +261,7 @@ def _upload_with_progress(cmd, client, file_obj, filename, content_type, size, o
         encrypted=bool(opts.encrypt), expires=opts.expires,
         public=opts.public, tags=opts.tag or [],
         schedule=opts.schedule, webhook=opts.webhook,
+        folder_id=folder_id,
     )
     sys.stderr.write("\r\033[K")  # clear progress line
     sys.stderr.flush()

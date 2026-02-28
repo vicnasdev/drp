@@ -27,11 +27,11 @@ class CdCommand(BaseCommand):
             return 1
 
         shell = self.config.setdefault("shell", {})
-        # Use server-provided path if available, otherwise derive from local resolution.
-        # FIX: original used result["path"] which the server never returned → KeyError.
-        # Server now returns "path"; we also fall back locally for safety.
-        shell["cwd"]    = result.get("path") or ("/" + resolved.split("/", 1)[-1].lstrip("/") if "/" in resolved else "/")
-        shell["cwd_id"] = result["object"].get("id")  # None at root
+        # The server now always returns a "path" field in the resolved object.
+        obj  = result.get("object", {})
+        path = obj.get("path") or ("/" + "/".join(resolved.split("/")[2:]) if "/" in resolved else "/")
+        shell["cwd"]    = path if path else "/"
+        shell["cwd_id"] = obj.get("id")   # None at root — that's correct
         return 0
 
 

@@ -22,9 +22,14 @@ from cli import cache
 
 
 def _is_real(path: str) -> bool:
-    """True if the path refers to the real filesystem (starts with . or /)."""
+    """True if the path refers to the real filesystem.
+
+    "." alone always means the current drp virtual folder (like a shell `.`).
+    Only "../" prefix, "./" prefix, "/" prefix, or bare ".." are real-FS paths.
+    This lets `cp ../file.txt .` work: src is real FS, dest is current drp folder.
+    """
     return path.startswith("../") or path.startswith("./") or path.startswith("/") \
-           or path in ("..", ".")
+           or path == ".."
 
 
 def _is_drp_dir(path: str) -> bool:
