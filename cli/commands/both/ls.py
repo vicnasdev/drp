@@ -4,7 +4,8 @@ cli/commands/both/ls.py
 List drops.
 
 Outside shell — reads local cache. Instant, offline, no network.
-Inside shell  — fetches live folder contents from server.
+Inside shell  — shows current virtual folder contents (folders + drops in that folder).
+                At root (/), loose drops (not in any folder) are listed separately.
 """
 from __future__ import annotations
 
@@ -23,10 +24,6 @@ class LsCommand(SpinnerCommand, AuthCommand):
 
     def run(self, args: list[str]) -> int:
         opts = _parse(args)
-        # FIX: require_auth was called unconditionally here, blocking the
-        # cache path for logged-out users. Auth is only needed for live
-        # shell fetches — the outside-shell path reads the local cache
-        # and needs no network or token at all.
         if self.in_shell:
             self.require_auth()
             return self._shell_ls(opts)
@@ -42,16 +39,20 @@ class LsCommand(SpinnerCommand, AuthCommand):
 
         rows = []
         for e in entries:
-            exp_raw = e.get("exp", "")
-            exp     = _fmt_exp(exp_raw)
+            if not e.get("key"):   # skip ghost entries from fallback TOML writer
+                continue
             rows.append({
                 "filename": e.get("filename", ""),
                 "preview":  e.get("preview", ""),
                 "owner":    f"→ {e['owner']}" if e.get("owner") else "",
                 "size":     e.get("size", ""),
-                "exp":      exp,
+                "exp":      _fmt_exp(e.get("exp", "")),
                 "key":      e.get("key", ""),
             })
+
+        if not rows:
+            self.dim("no cached drops — run: drp up <file>")
+            return 0
 
         if opts.export:
             print(json.dumps(rows, indent=2))
@@ -60,24 +61,31 @@ class LsCommand(SpinnerCommand, AuthCommand):
         self.print_drop_table(rows)
         return 0
 
-    # ---------------------------------------------------------------- inside shell: live
+    # ---------------------------------------------------------------- inside shell: folder view
 
     def _shell_ls(self, opts) -> int:
         client    = APIClient.from_config(self.config, authed=True)
-        cwd       = self.config.get("shell", {}).get("cwd", "/")
         folder_id = self.config.get("shell", {}).get("cwd_id")
 
         with self.spin("Loading"):
             if folder_id:
+                # Inside a specific folder — show its contents only
                 data = folders_api.list_contents(client, folder_id)
             else:
+                # FIX: at root, the original code called list_root() which only
+                # returned folder objects — uploads never appeared because loose
+                # drops aren't in any folder. Now we show subfolders AND loose
+                # drops, but we do NOT merge in ALL user drops indiscriminately
+                # (the previous "fix" did that, making ls show duplicate filenames
+                # with different keys which was confusing). We fetch loose drops
+                # separately from the folder listing.
                 data = folders_api.list_root(client)
 
-        items   = data.get("items", [])
-        folders = data.get("folders", [])
-        rows    = []
+        subfolders = data.get("folders", [])
+        items      = data.get("items", [])
+        rows       = []
 
-        for f in folders:
+        for f in subfolders:
             rows.append({
                 "filename": f"📁 {f['slug']}/",
                 "preview":  "",
@@ -89,7 +97,7 @@ class LsCommand(SpinnerCommand, AuthCommand):
 
         for item in items:
             rows.append({
-                "filename": item.get("filename", item.get("key", "")),
+                "filename": item.get("filename") or item.get("label") or item.get("key", ""),
                 "preview":  item.get("preview", ""),
                 "owner":    f"→ {item['owner']}" if item.get("owner") else "",
                 "size":     item.get("size_display", ""),

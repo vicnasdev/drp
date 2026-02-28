@@ -52,6 +52,12 @@ class BaseCommand(OutputMixin, ABC):
         except KeyboardInterrupt:
             self.out("")
             return 130
+        except SystemExit as e:
+            # FIX: argparse calls sys.exit(2) on bad arguments (unrecognised flags,
+            # missing positionals, etc). Inside the shell this killed the entire
+            # process, dropping the user back to bash. Catching SystemExit here
+            # and returning the code keeps the shell alive.
+            return int(e.code) if e.code is not None else 1
         except Exception as e:
             self._handle_unexpected(e)
             return 1

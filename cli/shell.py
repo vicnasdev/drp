@@ -112,9 +112,6 @@ def _setup_readline(config: dict) -> None:
         cmds = list(cmd_registry.ALL.keys()) + ["help", "exit"]
 
         def completer(text, state):
-            # FIX 1: always guard with try/except — any uncaught exception here
-            # causes readline to spin calling the completer forever, freezing
-            # the terminal with no visible output.
             try:
                 options = [c for c in cmds if c.startswith(text)]
                 if state < len(options):
@@ -124,17 +121,17 @@ def _setup_readline(config: dict) -> None:
                 return None
 
         readline.set_completer(completer)
-
-        # FIX 2: without set_completer_delims, readline treats every character
-        # as a potential delimiter and over-calls the completer.
         readline.set_completer_delims(" \t\n")
 
-        # FIX 3: the "freeze" the user sees is readline's built-in pagination:
-        # when tab is pressed with no text, all N commands match and readline
-        # silently waits for "Display all N possibilities? (y/n)" with no
-        # visible prompt. Setting completion-query-items high enough prevents
-        # this prompt from ever appearing.
-        readline.parse_and_bind("set completion-query-items 9999")
+        # FIX: the freeze is readline's completion pagination. When tab is pressed
+        # on empty input, all commands match. readline then asks
+        # "Display all N possibilities? (y/n)" — silently, with no visible prompt,
+        # so the terminal appears frozen waiting for a keypress.
+        # Two settings together eliminate this entirely:
+        #   page-completions off     — never paginate, just print all matches
+        #   completion-query-items 0 — never ask, always display immediately
+        readline.parse_and_bind("set page-completions off")
+        readline.parse_and_bind("set completion-query-items 0")
         readline.parse_and_bind("tab: complete")
 
     except ImportError:

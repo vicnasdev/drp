@@ -319,8 +319,29 @@ def _folder_data(folder):
 def folders_list_create(request):
     if request.method == "GET":
         folders = Folder.objects.filter(owner=request.user, parent=None)
+        # FIX: the original returned items=[] always, so shell `ls` at root was
+        # always empty. Now we include loose drops — drops owned by the user that
+        # are not in any folder — so they appear in the shell at root level.
+        # "In any folder" means: their key appears in at least one FolderItem row.
+        from django.db.models import Subquery, OuterRef
+        filed_keys = FolderItem.objects.values("key")
+        loose_drops = (
+            File.objects.filter(owner=request.user)
+                        .exclude(key__in=filed_keys)
+                        .order_by("-created_at")[:100]
+        )
+        from core.storage import b2_download_url
         return _json({
-            "items":   [],
+            "items": [
+                {
+                    "key":          f.key,
+                    "filename":     f.filename,
+                    "size_display": _fmt_size(f.size),
+                    "expires_at":   f.expires_at.isoformat() if f.expires_at else None,
+                    "download_url": b2_download_url(f.b2_name),
+                }
+                for f in loose_drops
+            ],
             "folders": [{"id": f.id, "slug": f.slug, "is_public": f.is_public} for f in folders],
         })
 
