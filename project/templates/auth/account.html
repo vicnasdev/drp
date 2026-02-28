@@ -24,12 +24,12 @@
   </div>
   {% endif %}
 
-  <!-- Quick overview + manage link -->
+  <!-- Quick overview -->
   <div class="account-section">
     <h2>your drops</h2>
     <p class="muted" style="font-size:.85rem;margin-bottom:.6rem">
       you have <strong>{{ drops|length }}</strong> drop{{ drops|pluralize }} ·
-      <a href="/auth/manage/">open drive →</a>
+      <a href="/@{{ user.username }}/">open files →</a>
     </p>
   </div>
 
