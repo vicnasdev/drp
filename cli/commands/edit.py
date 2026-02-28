@@ -33,9 +33,29 @@ class EditCommand(SpinnerCommand, AuthCommand):
         if not editor:
             self.bail("no editor set — use --editor vim or set $EDITOR")
 
+        # Resolve filename → key (mirrors cat.py logic)
+        key = opts.ref
+        if self.in_shell:
+            from cli.api import folders as folders_api
+            try:
+                folder_id = self.config.get("shell", {}).get("cwd_id")
+                data = folders_api.list_contents(client, folder_id) if folder_id \
+                       else folders_api.list_root(client)
+                match = next(
+                    (item for item in data.get("items", [])
+                     if (item.get("filename") or item.get("label") or "").lower() == opts.ref.lower()),
+                    None,
+                )
+                if match is None:
+                    self.err(f"no drop named '{opts.ref}' in current folder")
+                    return 1
+                key = match["key"]
+            except Exception:
+                pass  # fall through and try opts.ref as a raw key
+
         with self.spin("Fetching"):
-            meta = files_api.fetch(client, opts.ref)
-            raw  = files_api.fetch_content(client, opts.ref)
+            meta = files_api.fetch(client, key)
+            raw  = files_api.fetch_content(client, key)
 
         if not _is_text(meta.get("content_type", "")):
             self.bail("edit only works on text files")

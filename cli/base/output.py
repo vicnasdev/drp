@@ -57,13 +57,21 @@ class OutputMixin:
             for c in columns:
                 widths[c] = max(widths[c], len(str(row.get(c, ""))))
 
-        sep   = "  "
-        head  = sep.join(Color.dim(c.upper().ljust(widths[c])) for c in columns)
-        ruler = Color.dim("-" * (sum(widths.values()) + len(sep) * (len(columns) - 1)))
-        self.out(head)
-        self.out(ruler)
+        def _cell(text: str, w: int) -> str:
+            return f" {text.ljust(w)} "
+
+        top_line = "┬".join("─" * (widths[c] + 2) for c in columns)
+        sep_line = "┼".join("─" * (widths[c] + 2) for c in columns)
+        bot_line = "┴".join("─" * (widths[c] + 2) for c in columns)
+
+        self.out(Color.dim("┌" + top_line + "┐"))
+        header = "│".join(Color.dim(_cell(c.upper(), widths[c])) for c in columns)
+        self.out(Color.dim("│") + header + Color.dim("│"))
+        self.out(Color.dim("├" + sep_line + "┤"))
         for row in rows:
-            self.out(sep.join(str(row.get(c, "")).ljust(widths[c]) for c in columns))
+            line = "│".join(_cell(str(row.get(c, "")), widths[c]) for c in columns)
+            self.out(Color.dim("│") + line + Color.dim("│"))
+        self.out(Color.dim("└" + bot_line + "┘"))
 
     def print_drop_table(self, drops: list[dict]) -> None:
         """

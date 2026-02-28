@@ -70,6 +70,11 @@ def parse_response(resp: "requests.Response") -> dict:  # noqa: F821
         case 401:
             raise AuthError(data.get("error", "authentication required"))
         case 403:
+            server_msg = data.get("error", "")
+            # If the server gave us a specific reason (e.g. "email not verified"),
+            # surface it directly instead of the generic "permission denied" message.
+            if server_msg and server_msg != "permission denied":
+                raise DrpError(server_msg)
             raise PermissionDeniedError(data.get("key", ""))
         case 404:
             raise NotFoundError(data.get("key", ""))

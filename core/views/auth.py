@@ -196,7 +196,7 @@ def _send_verify_email(user):
         message=f"Click to verify your email:\n{verify_url}\n\nIf you didn't sign up, ignore this.",
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
-        fail_silently=True,
+        fail_silently=settings.DEBUG,
     )
 
 

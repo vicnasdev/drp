@@ -169,35 +169,56 @@ def _setup_readline(config: dict) -> None:
     """
     try:
         import readline
+        import re as _re
+        import inspect
 
         cmds = list(cmd_registry.ALL.keys()) + ["help", "exit"]
 
+        # Build a per-command flag list by inspecting each command's source for
+        # add_argument() calls. Done once at shell startup — zero runtime cost.
+        _cmd_flags: dict[str, list[str]] = {}
+        for cmd_name, klass in cmd_registry.ALL.items():
+            flags: list[str] = []
+            try:
+                for src in [inspect.getsource(klass.run)]:
+                    flags += _re.findall(r'add_argument\(["\'](-{1,2}[\w\-]+)["\']', src)
+                mod = inspect.getmodule(klass)
+                if mod and hasattr(mod, "_parse"):
+                    flags += _re.findall(
+                        r'add_argument\(["\'](-{1,2}[\w\-]+)["\']',
+                        inspect.getsource(mod._parse),
+                    )
+            except Exception:
+                pass
+            _cmd_flags[cmd_name] = list(dict.fromkeys(flags))
+
         def completer(text, state):
             try:
-                buf   = readline.get_line_buffer()
-                parts = buf.lstrip().split()
+                buf      = readline.get_line_buffer()
+                parts    = buf.lstrip().split()
+                cmd_name = parts[0] if parts else ""
 
                 # Completing the command name (first token)
                 if len(parts) == 0 or (len(parts) == 1 and not buf.endswith(" ")):
                     options = [c for c in cmds if c.startswith(text)]
                     return options[state] if state < len(options) else None
 
-                # Completing an argument
+                # Completing a flag (starts with -)
+                if text.startswith("-"):
+                    flags   = _cmd_flags.get(cmd_name, [])
+                    matches = [f for f in flags if f.startswith(text)]
+                    return matches[state] if state < len(matches) else None
+
+                # Completing a real filesystem path
                 if text.startswith(("../", "./", "/")) or text in ("..", "."):
-                    # Real filesystem path — resolve from launch dir
                     launch_dir = config.get("shell", {}).get("launch_dir", ".")
                     try:
-                        # Build the real prefix to list
                         if "/" in text:
                             dir_part  = text.rsplit("/", 1)[0]
                             file_part = text.rsplit("/", 1)[1]
-                            # Resolve dir_part relative to launch_dir
-                            if dir_part.startswith("../") or dir_part == "..":
-                                abs_dir = str(Path(launch_dir) / dir_part)
-                            else:
-                                abs_dir = dir_part
-                            entries = os.listdir(abs_dir)
-                            matches = [dir_part + "/" + e for e in entries if e.startswith(file_part)]
+                            abs_dir   = str(Path(launch_dir) / dir_part)
+                            entries   = os.listdir(abs_dir)
+                            matches   = [dir_part + "/" + e for e in entries if e.startswith(file_part)]
                         else:
                             entries = os.listdir(launch_dir)
                             prefix  = text.lstrip("./")
@@ -207,12 +228,12 @@ def _setup_readline(config: dict) -> None:
                             ]
                     except Exception:
                         matches = []
-                else:
-                    # drp path — read from in-memory cache only, zero I/O
-                    cwd_id  = config.get("shell", {}).get("cwd_id")
-                    names   = drive_cache.get_names(cwd_id)
-                    matches = [n for n in names if n.startswith(text)]
+                    return matches[state] if state < len(matches) else None
 
+                # drp path — read from in-memory cache only, zero I/O
+                cwd_id  = config.get("shell", {}).get("cwd_id")
+                names   = drive_cache.get_names(cwd_id)
+                matches = [n for n in names if n.startswith(text)]
                 return matches[state] if state < len(matches) else None
 
             except Exception:
