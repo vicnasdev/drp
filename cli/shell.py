@@ -115,10 +115,24 @@ def _setup_readline(config: dict) -> None:
         cmds = list(cmd_registry.ALL.keys()) + ["help", "exit"]
 
         def completer(text, state):
-            options = [c for c in cmds if c.startswith(text)]
-            return options[state] if state < len(options) else None
+            # FIX: the original completer had no exception guard. Any error
+            # inside here causes readline to spin in a tight loop calling the
+            # completer forever, freezing the terminal. Always return None on
+            # any exception so readline gets the termination signal it needs.
+            try:
+                options = [c for c in cmds if c.startswith(text)]
+                if state < len(options):
+                    return options[state]
+                return None
+            except Exception:
+                return None
 
         readline.set_completer(completer)
+        # FIX: without this, readline treats every character as a possible
+        # delimiter and calls the completer far more times than expected,
+        # compounding the freeze risk above. Restrict delimiters to
+        # whitespace only so each word is completed as a single token.
+        readline.set_completer_delims(" \t\n")
         readline.parse_and_bind("tab: complete")
     except ImportError:
         pass  # readline unavailable on Windows

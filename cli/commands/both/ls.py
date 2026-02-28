@@ -22,9 +22,15 @@ class LsCommand(SpinnerCommand, AuthCommand):
     description = "List your drops"
 
     def run(self, args: list[str]) -> int:
-        self.require_auth()
         opts = _parse(args)
-        return self._shell_ls(opts) if self.in_shell else self._cache_ls(opts)
+        # FIX: require_auth was called unconditionally here, blocking the
+        # cache path for logged-out users. Auth is only needed for live
+        # shell fetches — the outside-shell path reads the local cache
+        # and needs no network or token at all.
+        if self.in_shell:
+            self.require_auth()
+            return self._shell_ls(opts)
+        return self._cache_ls(opts)
 
     # ---------------------------------------------------------------- outside shell: cache
 

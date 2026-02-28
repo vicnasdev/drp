@@ -4,18 +4,19 @@ cli/commands/__init__.py
 Command registry. Adding a new command = one line here + one new file.
 Nothing else to touch.
 """
-from cli.commands.both    import UpCommand, GetCommand, LsCommand, StatusCommand, TokenCommand, AskCommand
+from cli.commands.both    import UpCommand, GetCommand, LsCommand, StatusCommand, TokenCommand, AskCommand, CatCommand
 from cli.commands.outside import SetupCommand, LoginCommand, LogoutCommand, PingCommand
 from cli.commands.shell   import (
-    CdCommand, MkdirCommand, CatCommand, CpCommand, MvCommand, RmCommand,
+    CdCommand, MkdirCommand, CpCommand, MvCommand, RmCommand,
     GetkeyCommand, SetkeyCommand, EditCommand, ForkCommand, ShareCommand,
 )
 
-# Commands available outside the shell
+# Commands available outside the shell (and therefore also inside, via ALL)
 OUTSIDE: dict[str, type] = {
     "up":     UpCommand,
     "get":    GetCommand,
     "ls":     LsCommand,
+    "cat":    CatCommand,   # FIX: was in shell/ + SHELL_ONLY; now in both/ + OUTSIDE
     "status": StatusCommand,
     "token":  TokenCommand,
     "ask":    AskCommand,
@@ -25,11 +26,10 @@ OUTSIDE: dict[str, type] = {
     "ping":   PingCommand,
 }
 
-# Additional commands available only inside the shell
+# Commands available ONLY inside the shell
 SHELL_ONLY: dict[str, type] = {
     "cd":     CdCommand,
     "mkdir":  MkdirCommand,
-    "cat":    CatCommand,
     "cp":     CpCommand,
     "mv":     MvCommand,
     "rm":     RmCommand,

@@ -219,18 +219,20 @@ def files_detail(request, key):
         return _err("not found", 404)
 
     if request.method == "GET":
+        from core.storage import b2_download_url  # FIX: generate a presigned download URL
         return _json({
-            "key":            f.key,
-            "filename":       f.filename,
-            "size":           f.size,
-            "size_display":   _fmt_size(f.size),
-            "content_type":   f.content_type,
-            "expires_at":     f.expires_at.isoformat() if f.expires_at else None,
-            "is_public":      f.is_public,
-            "is_encrypted":   False,
+            "key":             f.key,
+            "filename":        f.filename,
+            "size":            f.size,
+            "size_display":    _fmt_size(f.size),
+            "content_type":    f.content_type,
+            "expires_at":      f.expires_at.isoformat() if f.expires_at else None,
+            "is_public":       f.is_public,
+            "is_encrypted":    False,
             "burn_after_read": f.burn_after_read,
-            "view_count":     f.view_count,
-            "created_at":     f.created_at.isoformat(),
+            "view_count":      f.view_count,
+            "created_at":      f.created_at.isoformat(),
+            "download_url":    b2_download_url(f.b2_name),  # FIX: was missing — caused KeyError in CLI
         })
 
     if request.method == "PATCH":
@@ -431,3 +433,42 @@ def tokens_detail(request, token_id):
         return _err("not found", 404)
     token.delete()
     return _json({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
+# Crash reporting
+# FIX: this endpoint was missing entirely. The CLI posts here after every
+# unhandled exception, but was getting 404s, so CrashReport records were
+# never created and GitHub issues were never filed. The route is now wired
+# in urls.py and delegates to the existing error_reporting_logic module
+# which handles deduplication and GitHub issue creation.
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def crash_report(request):
+    from threading import Thread
+    from core.error_reporting_logic import maybe_file_issue
+
+    data = _body(request)
+    if not data:
+        return _err("no data", 400)
+
+    # Normalise the payload from the CLI into what maybe_file_issue expects.
+    # CLI sends: fingerprint, exc_type, title, traceback (str), cli_version.
+    # maybe_file_issue expects: exc_type, exc_message, traceback (list), cli_version.
+    normalised = {
+        "exc_type":       data.get("exc_type", "UnknownError"),
+        "exc_message":    data.get("title", ""),
+        "traceback":      [data.get("traceback", "")],
+        "cli_version":    data.get("cli_version", ""),
+        "command":        data.get("command", ""),
+        "python_version": data.get("python_version", ""),
+        "platform":       data.get("platform", ""),
+    }
+
+    # Fire-and-forget in a daemon thread — same pattern as the CLI sender —
+    # so the response returns immediately and the CLI isn't kept waiting.
+    Thread(target=maybe_file_issue, args=(normalised,), daemon=True).start()
+
+    return _json({"status": "ok"}, status=202)

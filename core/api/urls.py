@@ -36,4 +36,9 @@ urlpatterns = [
     # API tokens
     path("tokens/",                     views.tokens_list_create,   name="api_tokens"),
     path("tokens/<int:token_id>/",      views.tokens_detail,        name="api_tokens_detail"),
+
+    # FIX: crash reporting endpoint was missing entirely — the CLI was POSTing here
+    # but getting 404s, so no CrashReport records were created and no GitHub issues
+    # were ever filed. Added the route and its view below in views.py.
+    path("crash/",                      views.crash_report,         name="api_crash"),
 ]

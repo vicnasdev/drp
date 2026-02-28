@@ -80,8 +80,14 @@ def _save(entries: list[dict]) -> None:
         with open(CACHE_FILE, "wb") as f:
             tomli_w.dump({"drops": entries}, f)
     else:
-        # Minimal fallback — writes enough for round-trip
-        lines = ["[[drops]]"]
+        # Minimal fallback — writes enough for round-trip.
+        # FIX: the original started lines=["[[drops]]"] before the loop, which
+        # wrote an orphan empty [[drops]] header that parsed as a ghost empty
+        # entry {}. This made all_entries() return [{real}, {}], and on the next
+        # add() call the ghost entry was re-saved alongside the real ones,
+        # growing the file with a phantom record on every write. Starting lines=[]
+        # and only emitting [[drops]] inside the loop fixes both problems.
+        lines = []
         for e in entries:
             lines.append("[[drops]]")
             for k, v in e.items():
@@ -90,7 +96,9 @@ def _save(entries: list[dict]) -> None:
                 if isinstance(v, bool):
                     lines.append(f"{k} = {'true' if v else 'false'}")
                 elif isinstance(v, str):
-                    lines.append(f'{k} = "{v}"')
+                    escaped = v.replace("\\", "\\\\").replace('"', '\\"')
+                    lines.append(f'{k} = "{escaped}"')
                 else:
                     lines.append(f"{k} = {v}")
-        CACHE_FILE.write_text("\n".join(lines))
+            lines.append("")  # blank line between entries for readability
+        CACHE_FILE.write_text("\n".join(lines), encoding="utf-8")
