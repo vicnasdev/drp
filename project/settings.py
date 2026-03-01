@@ -174,9 +174,11 @@ ADSENSE_SLOT   = os.environ.get("ADSENSE_SLOT", "")
 TURNSTILE_SITE_KEY   = os.environ.get('TURNSTILE_SITE_KEY', '')
 TURNSTILE_SECRET_KEY = os.environ.get('TURNSTILE_SECRET_KEY', '')
 
-# ── GitHub webhook ────────────────────────────────────────────────────────────
-GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_ISSUES_TOKEN', '')# Hardcoded per environment — no more `make set-domain`
-GITHUB_WEBHOOK_URL = f"https://{DOMAIN}/api/github-webhook/" if DOMAIN else ""
+# ── GitHub ─────────────────────────────────────────────────────────────────────
+GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_WEBHOOK_SECRET', '')
+GITHUB_WEBHOOK_URL    = f"https://{DOMAIN}/api/github-webhook/" if DOMAIN else ""
+GITHUB_ISSUES_TOKEN   = os.environ.get('GITHUB_ISSUES_TOKEN', '')
+GITHUB_REPO           = os.environ.get('GITHUB_REPO', 'vicnasdev/drp')
 # ── Help bot (LLM — OpenAI-compatible, e.g. Ollama) ──────────────────────────
 LLM_BASE_URL = os.environ.get('LLM_BASE_URL', '')   # e.g. http://ollama.railway.internal:11434/v1
 LLM_MODEL    = os.environ.get('LLM_MODEL', 'qwen2.5:1.5b')
