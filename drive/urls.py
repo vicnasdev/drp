@@ -3,6 +3,9 @@ from django.urls import path
 from drive import views
 
 urlpatterns = [
+    path("", views.home_view, name="home"),
+    path("contact/", views.contact_view, name="contact"),
+    path("use-cases/", views.use_cases_view, name="use_cases"),
     path("explore/", views.explore, name="explore"),
     path("embed/<str:key>/", views.embed, name="embed"),
     path("@<str:username>/", views.profile, name="profile"),

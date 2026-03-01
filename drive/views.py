@@ -14,6 +14,30 @@ from django.views.decorators.http import require_POST
 from drive.models import Bookmark, File, Folder, Key, Like
 
 
+# ── home / contact ───────────────────────────────────────────────────────
+
+def home_view(request):
+    """GET  /  — landing page with upload form."""
+    return render(request, "home.html")
+
+
+def contact_view(request):
+    """GET/POST  /contact/  — contact / bug-report form."""
+    if request.method == "POST":
+        category = request.POST.get("category", "")
+        description = request.POST.get("description", "")
+        if not category or not description:
+            return render(request, "contact/bug_report.html", {"error": "All fields are required."})
+        # In production this would file a GitHub issue or send an email.
+        return render(request, "contact/bug_report_done.html")
+    return render(request, "contact/bug_report.html")
+
+
+def use_cases_view(request):
+    """GET  /use-cases/  — static page."""
+    return render(request, "pages/use_cases.html")
+
+
 # ── helpers ──────────────────────────────────────────────────────────────
 
 def _check_password(request, obj, session_prefix):
