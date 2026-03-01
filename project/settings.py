@@ -149,18 +149,8 @@ else:
     SITE_URL = "http://localhost:8000"
 
 # ── Email ─────────────────────────────────────────────────────────────────────
-RESEND_API_KEY     = os.environ.get("RESEND_API_KEY", "")
-DEFAULT_FROM_EMAIL = os.environ.get(
-    "DEFAULT_FROM_EMAIL",
-    f"noreply@{DOMAIN}" if DOMAIN else "noreply@localhost",
-)
-
-if RESEND_API_KEY:
-    EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "core.email_backend.ResendEmailBackend")
-else:
-    EMAIL_BACKEND = os.environ.get(
-        "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
-    )
+RESEND_API_KEY       = os.environ.get("RESEND_API_KEY", "")
+TEST_RECIPIENT_EMAIL = os.environ.get("TEST_RECIPIENT_EMAIL", "")
 
 # ── Lemon Squeezy ─────────────────────────────────────────────────────────────
 LEMONSQUEEZY_API_KEY            = os.environ.get("LEMONSQUEEZY_API_KEY", "")
