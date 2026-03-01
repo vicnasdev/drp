@@ -33,6 +33,8 @@ LOGGING = {
     "root": {"handlers": ["console"], "level": "WARNING"},
     "loggers": {
         "core": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+        "django.security.csrf": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
+        "django.request": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
     },
 }
 
@@ -152,17 +154,12 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     f"noreply@{DOMAIN}" if DOMAIN else "noreply@localhost",
 )
 
-# Use Resend SMTP — avoids Cloudflare WAF blocking the REST API from shared IPs
-EMAIL_BACKEND       = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST          = "smtp.resend.com"
-EMAIL_PORT          = 465
-EMAIL_HOST_USER     = "resend"
-EMAIL_HOST_PASSWORD = RESEND_API_KEY
-EMAIL_USE_SSL       = True
-EMAIL_USE_TLS       = False
-
-if not RESEND_API_KEY:
-    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend" 
+if RESEND_API_KEY:
+    EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "core.email_backend.ResendEmailBackend")
+else:
+    EMAIL_BACKEND = os.environ.get(
+        "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+    )
 
 # ── Lemon Squeezy ─────────────────────────────────────────────────────────────
 LEMONSQUEEZY_API_KEY            = os.environ.get("LEMONSQUEEZY_API_KEY", "")
