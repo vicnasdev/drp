@@ -5,7 +5,7 @@
 {% block content %}
 <div class="auth-page">
   <h1>create account</h1>
-  <p class="muted">free accounts sync your drops across devices.</p>
+  <p class="muted">verify your email to keep your files across devices.</p>
 
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
@@ -40,19 +40,19 @@
           <input type="radio" name="plan" value="free" checked hidden/>
           <div class="plan-option-name">Free</div>
           <div class="plan-option-price">$0</div>
-          <div class="plan-option-detail">200MB · 24h idle</div>
+          <div class="plan-option-detail">{{ free_limits.max_file_mb }}MB · {{ free_limits.expiry_display }} expiry</div>
         </label>
         <label class="plan-option" id="opt-starter">
           <input type="radio" name="plan" value="starter" hidden/>
           <div class="plan-option-name">Starter</div>
-          <div class="plan-option-price">CA$5<span>/mo</span></div>
-          <div class="plan-option-detail">1GB · locked drops</div>
+          <div class="plan-option-price">CA${{ starter_limits.price_monthly }}<span>/mo</span></div>
+          <div class="plan-option-detail">{{ starter_limits.max_file_mb }}MB · locked files</div>
         </label>
         <label class="plan-option" id="opt-pro">
           <input type="radio" name="plan" value="pro" hidden/>
           <div class="plan-option-name">Pro</div>
-          <div class="plan-option-price">CA$10<span>/mo</span></div>
-          <div class="plan-option-detail">5GB · 3yr expiry</div>
+          <div class="plan-option-price">CA${{ pro_limits.price_monthly }}<span>/mo</span></div>
+          <div class="plan-option-detail">{{ pro_limits.storage_gb }}GB · {{ pro_limits.expiry_display }} expiry</div>
         </label>
       </div>
       <p class="muted" id="paidNote" style="font-size:.78rem;margin-top:.4rem;display:none">

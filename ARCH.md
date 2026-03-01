@@ -36,19 +36,21 @@ drp is a file and text sharing service. Everything uploaded is a **file** identi
 | `GITHUB_REPO` | `vicnasdev/drp` | Target repo for filed issues. Format: `owner/repo`. |
 | `LLM_BASE_URL` | — | OpenAI-compatible endpoint for the help bot (e.g. Ollama). Help bot is disabled if unset. |
 | `LLM_MODEL` | `qwen2.5:1.5b` | Model name passed to the LLM. |
-| `BUG_REPORT_DAILY_LIMIT` | `3` | Max bug reports a user can submit per calendar day. |
+| `CONTACT_DAILY_LIMIT` | `3` | Max contact submissions a user can send per calendar day. |
 | `ADMIN_EMAIL` | — | Admin contact address. Informational only. |
 
 ---
 
 ## Plans
 
-| Plan | Storage | Max file | Max key expiry | Folders | Password-protected files | Custom keys | Help bot calls/hr |
-|---|---|---|---|---|---|---|---|
-| anonymous | — | 200 MB | 1 day | none | no | no | 0 |
-| free | 1 GB | 200 MB | 7 days | 3 | no | yes | 5 |
-| starter | 5 GB | 1 GB | 365 days | 10 | yes | yes | 30 |
-| pro | 20 GB | 5 GB | 3 years | unlimited | yes | yes | 120 |
+| Plan | Storage | Max file | Max key expiry | Password-protected files | Custom keys | Help bot calls/hr |
+|---|---|---|---|---|---|---|
+| anonymous | — | 200 MB | 1 day | no | no | 0 |
+| free | 1 GB | 200 MB | 7 days | no | yes | 5 |
+| starter | 5 GB | 1 GB | 365 days | yes | yes | 30 |
+| pro | 20 GB | 5 GB | 3 years | yes | yes | 120 |
+
+Folders are unlimited on every plan.
 
 Plans are stored on the user profile. Limits are enforced at upload time. Billing is handled via Lemon Squeezy webhooks which set the plan field. On a paid plan selection at registration, the user is sent to Lemon Squeezy checkout immediately.
 
@@ -114,8 +116,8 @@ One like per user per file. Tracked by IP for anonymous sessions.
 ### Bookmarks
 Users can save any file by key. The bookmark button is an inline partial updated without a page reload.
 
-### Bug reports (`/report-bug/`)
-Logged-in users only. Category + description. Rate-limited to `BUG_REPORT_DAILY_LIMIT` per day. Identity can be hidden.
+### Contact (`/contact/`)
+Logged-in users only. Category (bug, feature request, question, billing, other) + description. Rate-limited to `CONTACT_DAILY_LIMIT` per day. Identity can be hidden.
 
 ### Help bot
 LLM-backed Q&A. Requires `LLM_BASE_URL`. History stored per user (last 20 exchanges). Rate-limited by plan tier.

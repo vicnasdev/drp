@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
-{% block title %}drp — bug{% endblock %}
+{% block title %}drp — contact{% endblock %}
 {% load static %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/auth.css' %}"/>{% endblock %}
 
 {% block content %}
 <div class="auth-page" style="max-width:560px">
-  <h1>issue</h1>
+  <h1>contact</h1>
   <p class="muted" style="margin:.4rem 0 1.5rem">
-    Found something broken? Let us know. Reports go straight to our issue tracker.
+    Bug, feature idea, or question — let us know.
   </p>
 
   {% if error %}<p class="error" style="margin-bottom:1rem;color:var(--danger)">{{ error }}</p>{% endif %}
@@ -22,16 +22,18 @@
                      color:var(--text);font-size:.95rem;padding:.55rem .8rem;outline:none;
                      transition:border-color .15s;width:100%">
         <option value="" disabled selected>— choose one —</option>
-        {% for value, label in categories %}
-          <option value="{{ value }}">{{ label }}</option>
-        {% endfor %}
+        <option value="bug">Bug report</option>
+        <option value="feature">Feature request</option>
+        <option value="question">Question</option>
+        <option value="billing">Billing</option>
+        <option value="other">Other</option>
       </select>
     </div>
 
     <div class="field">
       <label for="description">Description <span style="color:var(--danger)">*</span></label>
       <textarea name="description" id="description" required minlength="20" maxlength="3000" rows="6"
-                placeholder="What happened? What did you expect? Steps to reproduce if it's a bug."
+                placeholder="Describe what happened, what you'd like, or what you need help with."
                 style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
                        color:var(--text);font-size:.95rem;padding:.55rem .8rem;outline:none;
                        transition:border-color .15s;width:100%;resize:vertical;font-family:inherit"></textarea>
@@ -42,11 +44,11 @@
       <input type="checkbox" name="hide_identity" id="hide_identity" value="1" checked
              style="width:1rem;height:1rem;accent-color:var(--accent);flex-shrink:0"/>
       <label for="hide_identity" style="font-size:.85rem;color:var(--muted);text-transform:none;letter-spacing:0;cursor:pointer">
-        Hide my identity — don't include my email in the report
+        Hide my identity — don't include my email
       </label>
     </div>
 
-    <button type="submit" class="btn">submit report</button>
+    <button type="submit" class="btn">submit</button>
   </form>
 </div>
 

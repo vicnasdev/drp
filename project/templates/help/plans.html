@@ -3,7 +3,7 @@
 
 {% block help_content %}
 <h1>plans</h1>
-<p class="lead">Free to use anonymously. A free account gives you longer-lived drops and cross-device sync. Paid plans add storage, larger uploads, locked drops, and explicit expiry you control.</p>
+<p class="lead">Every visitor gets an account automatically. Free accounts get longer key expiry and cross-device sync. Paid plans add storage, larger uploads, locked files, and explicit expiry you control.</p>
 
 <h2>overview</h2>
 
@@ -13,17 +13,16 @@
   {% if plan_key == 'anon' %}
   <div class="plan-col plan-col--free">
     <div class="plan-col-head">
-      <span class="plan-name">Anonymous</span>
+      <span class="plan-name">Guest</span>
       <span class="plan-price">free</span>
     </div>
     <ul class="plan-features">
-      <li>Text up to <strong>{{ lim.max_text_kb }} KB</strong></li>
       <li>Files up to <strong>{{ lim.max_file_mb }} MB</strong></li>
-      <li>Clipboard: {{ lim.clipboard_idle_hours }} h idle · {{ lim.clipboard_max_lifetime_days }} d max</li>
-      <li>Files: 90 days from upload</li>
-      <li class="plan-no">No account required — but no sync</li>
-      <li class="plan-no">No custom expiry</li>
-      <li class="plan-no">No locked drops</li>
+      <li>Key expiry: <strong>{{ lim.max_expiry_days }} day{{ lim.max_expiry_days|pluralize }}</strong></li>
+      <li class="plan-no">Automatic account — sign up to keep files</li>
+      <li class="plan-no">No storage quota</li>
+      <li class="plan-no">No custom keys</li>
+      <li class="plan-no">No locked files</li>
       <li class="plan-no">No password protection</li>
     </ul>
   </div>
@@ -35,16 +34,15 @@
       <span class="plan-price">free</span>
     </div>
     <ul class="plan-features">
-      <li>Text up to <strong>{{ lim.max_text_kb }} KB</strong></li>
       <li>Files up to <strong>{{ lim.max_file_mb }} MB</strong></li>
-      <li>Clipboard: {{ lim.clipboard_idle_hours }} h idle · {{ lim.clipboard_max_lifetime_days }} d max</li>
-      <li>Files: 90 days from upload</li>
+      <li><strong>{{ lim.storage_gb }} GB</strong> storage</li>
+      <li>Up to <strong>{{ lim.max_expiry_days }} day{{ lim.max_expiry_days|pluralize }}</strong></li>
+      <li>Unlimited folders</li>
+      <li>Custom keys</li>
       <li>Bookmarks &amp; cross-device sync</li>
       <li>Export / import</li>
-      <li class="plan-no">No custom expiry</li>
-      <li class="plan-no">No locked drops</li>
+      <li class="plan-no">No locked files</li>
       <li class="plan-no">No password protection</li>
-      <li class="plan-no">No folders</li>
     </ul>
   </div>
 
@@ -56,15 +54,13 @@
       <span class="plan-price-usd">~US$3.50/mo</span>
     </div>
     <ul class="plan-features">
-      <li>Text up to <strong>{% widthratio lim.max_text_kb 1024 1 %} MB</strong></li>
       <li>Files up to <strong>{% widthratio lim.max_file_mb 1024 1 %} GB</strong></li>
       <li><strong>{{ lim.storage_gb }} GB</strong> storage quota</li>
-      <li>Explicit expiry up to <strong>{% widthratio lim.max_expiry_days 365 1 %} year</strong></li>
-      <li>Drops locked to your account</li>
-      <li>Password-protected drops</li>
-      <li>Unlimited renewals</li>
+      <li>Key expiry up to <strong>{% widthratio lim.max_expiry_days 365 1 %} year</strong></li>
+      <li>Files locked to your account</li>
+      <li>Password-protected files</li>
       <li>Bookmarks, export / import</li>
-      <li>Up to <strong>{{ lim.max_folders }} folders</strong></li>
+      <li>Unlimited folders</li>
     </ul>
   </div>
 
@@ -76,19 +72,13 @@
       <span class="plan-price-usd">~US$7/mo</span>
     </div>
     <ul class="plan-features">
-      <li>Text up to <strong>{% widthratio lim.max_text_kb 1024 1 %} MB</strong></li>
       <li>Files up to <strong>{% widthratio lim.max_file_mb 1024 1 %} GB</strong></li>
       <li><strong>{{ lim.storage_gb }} GB</strong> storage quota</li>
-      <li>Explicit expiry up to <strong>{% widthratio lim.max_expiry_days 365 1 %} years</strong></li>
-      <li>Drops locked to your account</li>
-      <li>Password-protected drops</li>
-      <li>Unlimited renewals</li>
+      <li>Key expiry up to <strong>{% widthratio lim.max_expiry_days 365 1 %} years</strong></li>
+      <li>Files locked to your account</li>
+      <li>Password-protected files</li>
       <li>Bookmarks, export / import</li>
-      {% if lim.max_folders is None %}
-      <li><strong>Unlimited folders</strong></li>
-      {% else %}
-      <li><strong>{{ lim.max_folders }} folders</strong></li>
-      {% endif %}
+      <li>Unlimited folders</li>
     </ul>
   </div>
   {% endif %}
@@ -96,26 +86,24 @@
 
 </div>
 
-<h2>expiry</h2>
-<p><strong>Anonymous &amp; free clipboard drops</strong> idle out — they don't expire on a fixed timer, they expire when nobody reads them. Anonymous drops idle after 24 h and are hard-deleted at 7 days. Free account drops idle after 48 h with a 30-day hard cap.</p>
-<p><strong>File drops</strong> (anonymous and free) expire 90 days after upload regardless of access.</p>
-<p><strong>Paid drops</strong> let you set an explicit date — up to 1 year on Starter, up to 3 years on Pro. They can be renewed at any time, pushing the expiry forward by the same duration. No renewal limit.</p>
+<h2>key expiry</h2>
+<p>Every key has an <code>expires_at</code> timestamp set at upload time. Guest and free keys use their plan maximum automatically. Paid plans let you choose any duration up to the plan maximum.</p>
 
-<h2>locked drops</h2>
-<p>On anonymous and free plans, anyone who knows your key can overwrite its content after the 24-hour post-creation window. This is intentional for quick ephemeral sharing.</p>
-<p>Paid drops are permanently locked to your account the moment you create them. Only you can edit, rename, delete, or renew them.</p>
+<h2>locked files</h2>
+<p>On guest and free plans, anyone who knows a key can access its content. This is intentional for quick ephemeral sharing.</p>
+<p>Paid files are permanently locked to your account the moment you create them. Only you can edit, rename, delete, or manage them.</p>
 
 <h2>storage quota</h2>
-<p>Quota counts file drops only — text clipboards are free. Your usage is shown on your <a href="/auth/account/">account page</a>. Uploads that would push you over quota are rejected immediately with a clear error. Deleting a file drop frees the storage instantly.</p>
+<p>Your usage is shown on your <a href="/auth/account/">account page</a>. Uploads that would push you over quota are rejected immediately with a clear error. Deleting a file frees the storage instantly.</p>
 
 <h2>password protection</h2>
-<p>Paid accounts can add a password to any drop they own. Stored as a PBKDF2 hash — never in plain text. Browsers remember unlocked drops for the session. The CLI prompts automatically.</p>
+<p>Paid accounts can add a password to any file they own. Stored as a PBKDF2 hash — never in plain text. Browsers remember unlocked files for the session. The CLI prompts automatically.</p>
 
 <h2>folders</h2>
-<p>Folders let you group drops under a shareable URL: <code>/@username/folder-name/</code>. Anyone can view a folder you share — individual password-protected drops still require their password when opened. Invite members with reader, writer, or admin roles using folder tokens. Free accounts can view folders but cannot create them. Starter accounts get up to 10 folders; Pro accounts get unlimited.</p>
+<p>Folders let you group files under a shareable URL: <code>/@username/folder-name/</code>. Every plan gets unlimited folders. Anyone can view a folder you share — individual password-protected files still require their password when opened. Invite members with reader, writer, or admin roles using folder tokens.</p>
 
 <h2>billing</h2>
-<p>Paid plans bill monthly via <a href="https://www.lemonsqueezy.com" rel="noopener">Lemon Squeezy</a>. Upgrade from your <a href="/auth/account/">account page</a>. Cancelling returns you to the free plan at the end of the billing period — drops are not deleted, but paid-only limits no longer apply to new uploads. Manage or cancel anytime in the <a href="/billing/portal/">billing portal</a>.</p>
+<p>Paid plans bill monthly via <a href="https://www.lemonsqueezy.com" rel="noopener">Lemon Squeezy</a>. Upgrade from your <a href="/auth/account/">account page</a>. Cancelling returns you to the free plan at the end of the billing period — files are not deleted, but paid-only limits no longer apply to new uploads. Manage or cancel anytime in the <a href="/billing/portal/">billing portal</a>.</p>
 
 <p style="margin-top:1.5rem">
   <a href="/auth/register/" class="btn">create a free account</a>

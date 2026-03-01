@@ -4,10 +4,10 @@
 
 {% block content %}
 <div class="drop-page" style="max-width:700px;margin:2rem auto">
-  <h2 style="margin-bottom:1rem">explore public drops</h2>
+  <h2 style="margin-bottom:1rem">explore public files</h2>
 
   <form method="get" action="/explore/" style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap">
-    <input name="q" type="text" value="{{ q }}" placeholder="search drops…"
+    <input name="q" type="text" value="{{ q }}" placeholder="search files…"
            style="flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:.9rem;padding:.5rem .7rem;outline:none">
     <input name="tag" type="text" value="{{ tag }}" placeholder="tag…"
            style="width:120px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:.9rem;padding:.5rem .7rem;outline:none">
@@ -36,13 +36,13 @@
         <div style="display:flex;align-items:center;gap:.75rem">
           <button class="like-btn" data-key="{{ drop.key }}"
                   style="background:none;border:none;cursor:pointer;font-size:.9rem;color:var(--muted);display:flex;align-items:center;gap:.25rem;padding:0"
-                  title="{% if user.is_authenticated %}like{% else %}log in to like{% endif %}"
-                  {% if not user.is_authenticated %}disabled{% endif %}>
+                  title="{% if user.is_authenticated and not user.profile.is_anonymous %}like{% else %}log in to like{% endif %}"
+                  {% if not user.is_authenticated or user.profile.is_anonymous %}disabled{% endif %}>
             <span class="like-icon">{% if drop.pk in user_liked_ids %}❤️{% else %}🤍{% endif %}</span>
             <span class="like-count">{{ drop.like_count }}</span>
           </button>
           <span class="muted" style="font-size:.8rem">
-            {% if drop.owner %}@{{ drop.owner.username }}{% else %}anon{% endif %}
+            {% if drop.owner %}@{{ drop.owner.username }}{% else %}guest{% endif %}
           </span>
         </div>
       </div>
@@ -60,7 +60,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="muted">No public drops found{% if q or tag %} matching your search{% endif %}.</p>
+  <p class="muted">No public files found{% if q or tag %} matching your search{% endif %}.</p>
   {% endif %}
 </div>
 

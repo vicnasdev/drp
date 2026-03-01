@@ -4,13 +4,13 @@
 {% block content %}
 <div style="max-width:760px;margin:0 auto;padding:2rem 1rem">
   <h1 style="font-size:1.4rem;margin-bottom:.3rem">use cases</h1>
-  <p class="muted" style="font-size:.9rem;margin-bottom:2rem">Dead simple. No sign-up needed for basic use. Each demo auto-plays — click any terminal to restart it. Click the copy button to grab the command.</p>
+  <p class="muted" style="font-size:.9rem;margin-bottom:2rem">Dead simple. Works instantly — you get an account automatically. Each demo auto-plays — click any terminal to restart it.</p>
 
   <!-- ── 1. Clipboard sync ────────────────────────────────────────────────── -->
   <section class="uc-section">
     <div class="uc-text">
       <h2>📋 clipboard sync across devices</h2>
-      <p>Pipe anything through drp on one machine, retrieve it on another. No apps, no sign-in required. Simplest way to sync text cross-device.</p>
+      <p>Pipe anything through drp on one machine, retrieve it on another. Works instantly. Simplest way to sync text cross-device.</p>
     </div>
     <div class="term" data-delay="1200" data-scene="clipboard">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
@@ -22,7 +22,7 @@
   <section class="uc-section">
     <div class="uc-text">
       <h2>📎 instant file sharing</h2>
-      <p>Upload any file and get a shareable link. Set expiry, make it public, or password-protect it. No signup needed for basic use.</p>
+      <p>Upload any file and get a shareable link. Set expiry, make it public, or password-protect it.</p>
     </div>
     <div class="term" data-delay="1500" data-scene="files">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
@@ -34,7 +34,7 @@
   <section class="uc-section">
     <div class="uc-text">
       <h2>🧠 smart get & API fetch</h2>
-      <p>Auto-detect JSON, CSV, XML, or YAML and parse it instantly — works on both clipboard and file drops. Extract nested fields with dot-notation. Fetch external APIs directly and extract data.</p>
+      <p>Auto-detect JSON, CSV, XML, or YAML and parse it instantly. Extract nested fields with dot-notation. Fetch external APIs directly and extract data.</p>
       <p class="muted" style="font-size:.8rem">🔒 URL fetch requires Starter or Pro plan.</p>
     </div>
     <div class="term" data-delay="1800" data-scene="smartget">
@@ -67,61 +67,49 @@
     </div>
   </section>
 
-  <!-- ── 6. Switch text ↔ file ────────────────────────────────────────────── -->
-  <section class="uc-section">
-    <div class="uc-text">
-      <h2>🔄 switch text ↔ file</h2>
-      <p>Convert a clipboard drop into a file (auto-detects format for extension) or a text-based file back into a clipboard. Same key, instant conversion.</p>
-    </div>
-    <div class="term" data-delay="2700" data-scene="switch">
-      <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
-      <pre class="term-body"></pre>
-    </div>
-  </section>
-
-  <!-- ── 7. Serve directories ─────────────────────────────────────────────── -->
+  <!-- ── 6. Serve directories ─────────────────────────────────────────────── -->
   <section class="uc-section">
     <div class="uc-text">
       <h2>🚀 serve entire directories</h2>
       <p>Upload a whole directory or glob pattern in one command. Get a URL table for every file. Perfect for sharing build artifacts, project files, or log bundles.</p>
     </div>
-    <div class="term" data-delay="3000" data-scene="serve">
+    <div class="term" data-delay="2700" data-scene="serve">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>
   </section>
 
-  <!-- ── 8. Folders ───────────────────────────────────────────────────────────────── -->
+  <!-- ── 7. Folders ─────────────────────────────────────────────────────────── -->
   <section class="uc-section">
     <div class="uc-text">
       <h2>📁 folders</h2>
-      <p>Group related drops into folders. Share an entire set with one link. Invite members with reader, writer, or admin roles.</p>
+      <p>Group related files into folders. Share an entire set with one link. Invite members with reader, writer, or admin roles.</p>
     </div>
-    <div class="term" data-delay="3300" data-scene="folders">
+    <div class="term" data-delay="3000" data-scene="folders">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>
   </section>
 
-  <!-- ── 9. Embeds ────────────────────────────────────────────────────────── -->
+  <!-- ── 8. Embeds ──────────────────────────────────────────────────────── -->
   <section class="uc-section">
     <div class="uc-text">
       <h2>🔗 embeddable & stable URLs</h2>
-      <p>Embed drops in docs, wikis, or READMEs. Update the content without changing the URL. Perfect for documentation that evolves.</p>
+      <p>Embed files in docs, wikis, or READMEs. Update the content without changing the URL. Perfect for documentation that evolves.</p>
     </div>
-    <div class="term" data-delay="3600" data-scene="embeds">
+    <div class="term" data-delay="3300" data-scene="embeds">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>
   </section>
 
-  <!-- ── 10. Help bot ─────────────────────────────────────────────────────── -->
+  <!-- ── 9. Help bot ───────────────────────────────────────────────────── -->
   <section class="uc-section">
     <div class="uc-text">
       <h2>🤖 built-in help bot</h2>
       <p>Ask questions about drp right from the CLI or the docs page. The AI bot answers using the official documentation — no hallucinations, always accurate.</p>
     </div>
-    <div class="term" data-delay="3900" data-scene="helpbot">
+    <div class="term" data-delay="3600" data-scene="helpbot">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
       <pre class="term-body"></pre>
     </div>
@@ -215,7 +203,7 @@ const SCENES = {
     { type: 'wait',  ms: 1000 },
     { type: 'print', text: '' },
     { type: 'print', text: '<span class="t-comment"># recipient opens link → enters password → sees secret</span>' },
-    { type: 'print', text: '<span class="t-comment"># drop is destroyed. gone forever.</span>' },
+    { type: 'print', text: '<span class="t-comment"># file is destroyed. gone forever.</span>' },
   ],
   clipboard: [
     { type: 'print', text: '<span class="t-comment"># on your laptop</span>' },
@@ -232,18 +220,18 @@ const SCENES = {
   files: [
     { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">report.pdf</span> <span class="t-flag">--expiry 7d</span>', speed: 35 },
     { type: 'wait',  ms: 500 },
-    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/f/rpt42/</span>  <span class="t-output">(7 days)</span>' },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/rpt42/</span>  <span class="t-output">(7 days)</span>' },
     { type: 'wait',  ms: 800 },
     { type: 'print', text: '' },
     { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">screenshot.png</span> <span class="t-flag">--public</span>', speed: 35 },
     { type: 'wait',  ms: 500 },
-    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/f/scr01/</span>  <span class="t-output">(public)</span>' },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/scr01/</span>  <span class="t-output">(public)</span>' },
     { type: 'wait',  ms: 800 },
     { type: 'print', text: '' },
-    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp ls</span> <span class="t-flag">-f</span>', speed: 40 },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp ls</span>', speed: 40 },
     { type: 'wait',  ms: 400 },
-    { type: 'print', text: '<span class="t-output">  f/rpt42   report.pdf       2.4 MB   7d</span>' },
-    { type: 'print', text: '<span class="t-output">  f/scr01   screenshot.png   340 KB   public</span>' },
+    { type: 'print', text: '<span class="t-output">  rpt42   report.pdf       2.4 MB   7d</span>' },
+    { type: 'print', text: '<span class="t-output">  scr01   screenshot.png   340 KB   public</span>' },
   ],
   pipes: [
     { type: 'print', text: '<span class="t-comment"># share command output</span>' },
@@ -282,7 +270,7 @@ const SCENES = {
     { type: 'wait',  ms: 600 },
     { type: 'type',  text: '<span class="t-prompt">drp:/></span> <span class="t-cmd">ls</span> <span class="t-string">project-docs/</span>', speed: 35 },
     { type: 'wait',  ms: 400 },
-    { type: 'print', text: '<span class="t-output">  project-docs/ (2 drops)</span>' },
+    { type: 'print', text: '<span class="t-output">  project-docs/ (2 files)</span>' },
     { type: 'print', text: '<span class="t-output">    api-spec.yaml</span>' },
     { type: 'print', text: '<span class="t-output">    readme.md</span>' },
   ],
@@ -304,16 +292,16 @@ const SCENES = {
   helpbot: [
     { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp ask</span> <span class="t-string">"how do I upload a file?"</span>', speed: 30 },
     { type: 'wait',  ms: 1200 },
-    { type: 'print', text: '<span class="t-output">  Use `drp up &lt;file&gt;` to upload a file drop.</span>' },
+    { type: 'print', text: '<span class="t-output">  Use `drp up &lt;file&gt;` to upload a file.</span>' },
     { type: 'print', text: '<span class="t-output">  Add `--expires 30d` for a custom expiry (paid).</span>' },
-    { type: 'print', text: '<span class="t-output">  The URL will be https://drp.fyi/f/&lt;key&gt;/</span>' },
+    { type: 'print', text: '<span class="t-output">  The URL will be https://drp.fyi/&lt;key&gt;/</span>' },
     { type: 'wait',  ms: 1500 },
     { type: 'print', text: '' },
     { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp ask</span> <span class="t-string">"what plans are available?"</span>', speed: 30 },
     { type: 'wait',  ms: 1200 },
-    { type: 'print', text: '<span class="t-output">  Free — 200 MB files, 7-day clipboard expiry.</span>' },
-    { type: 'print', text: '<span class="t-output">  Starter (CA$5/mo) — 1 GB files, 5 GB storage, custom expiry.</span>' },
-    { type: 'print', text: '<span class="t-output">  Pro (CA$10/mo) — 5 GB files, 20 GB storage, unlimited folders.</span>' },
+    { type: 'print', text: '<span class="t-output">  Free — 7-day key expiry, custom keys.</span>' },
+    { type: 'print', text: '<span class="t-output">  Starter — larger uploads, locked files, password protection.</span>' },
+    { type: 'print', text: '<span class="t-output">  Pro — max storage, longer expiry, password protection.</span>' },
   ],
   smartget: [
     { type: 'print', text: '<span class="t-comment"># upload some JSON</span>' },
@@ -340,40 +328,21 @@ const SCENES = {
     { type: 'wait',  ms: 600 },
     { type: 'print', text: '<span class="t-output">198234</span>' },
   ],
-  switch: [
-    { type: 'print', text: '<span class="t-comment"># upload some CSV as text</span>' },
-    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">"name,age\nAlice,30\nBob,25"</span> <span class="t-flag">-k</span> <span class="t-string">roster</span>', speed: 25 },
-    { type: 'wait',  ms: 500 },
-    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/roster/</span>' },
-    { type: 'wait',  ms: 800 },
-    { type: 'print', text: '' },
-    { type: 'print', text: '<span class="t-comment"># convert clipboard → downloadable file</span>' },
-    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp switch</span> <span class="t-string">roster</span>', speed: 35 },
-    { type: 'wait',  ms: 600 },
-    { type: 'print', text: '<span class="t-success">  ✓</span> <span class="t-output">/roster/ → /f/roster/</span>' },
-    { type: 'print', text: '<span class="t-output">    filename: roster.csv</span>' },
-    { type: 'wait',  ms: 800 },
-    { type: 'print', text: '' },
-    { type: 'print', text: '<span class="t-comment"># convert back to text</span>' },
-    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp switch</span> <span class="t-flag">-f</span> <span class="t-string">roster</span>', speed: 35 },
-    { type: 'wait',  ms: 600 },
-    { type: 'print', text: '<span class="t-success">  ✓</span> <span class="t-output">/f/roster/ → /roster/</span>' },
-  ],
   serve: [
-    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp serve</span> <span class="t-string">./dist/</span>', speed: 30 },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">./dist/</span>', speed: 30 },
     { type: 'wait',  ms: 800 },
     { type: 'print', text: '<span class="t-output">  uploading 3 files…</span>' },
     { type: 'wait',  ms: 600 },
-    { type: 'print', text: '<span class="t-success">  ✓</span> <span class="t-output">index.html</span>    <span class="t-url">https://drp.fyi/f/a1b2/</span>' },
-    { type: 'print', text: '<span class="t-success">  ✓</span> <span class="t-output">style.css</span>     <span class="t-url">https://drp.fyi/f/c3d4/</span>' },
-    { type: 'print', text: '<span class="t-success">  ✓</span> <span class="t-output">app.js</span>        <span class="t-url">https://drp.fyi/f/e5f6/</span>' },
+    { type: 'print', text: '<span class="t-success">  ✓</span> <span class="t-output">index.html</span>    <span class="t-url">https://drp.fyi/a1b2/</span>' },
+    { type: 'print', text: '<span class="t-success">  ✓</span> <span class="t-output">style.css</span>     <span class="t-url">https://drp.fyi/c3d4/</span>' },
+    { type: 'print', text: '<span class="t-success">  ✓</span> <span class="t-output">app.js</span>        <span class="t-url">https://drp.fyi/e5f6/</span>' },
     { type: 'wait',  ms: 800 },
     { type: 'print', text: '' },
     { type: 'print', text: '<span class="t-comment"># with glob + expiry</span>' },
-    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp serve</span> <span class="t-string">"*.log"</span> <span class="t-flag">--expires 7d</span>', speed: 30 },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">"*.log"</span> <span class="t-flag">--expires 7d</span>', speed: 30 },
     { type: 'wait',  ms: 600 },
-    { type: 'print', text: '<span class="t-success">  ✓</span> <span class="t-output">app.log</span>       <span class="t-url">https://drp.fyi/f/g7h8/</span>  <span class="t-output">(7d)</span>' },
-    { type: 'print', text: '<span class="t-success">  ✓</span> <span class="t-output">error.log</span>     <span class="t-url">https://drp.fyi/f/i9j0/</span>  <span class="t-output">(7d)</span>' },
+    { type: 'print', text: '<span class="t-success">  ✓</span> <span class="t-output">app.log</span>       <span class="t-url">https://drp.fyi/g7h8/</span>  <span class="t-output">(7d)</span>' },
+    { type: 'print', text: '<span class="t-success">  ✓</span> <span class="t-output">error.log</span>     <span class="t-url">https://drp.fyi/i9j0/</span>  <span class="t-output">(7d)</span>' },
   ],
 };
 

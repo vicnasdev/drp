@@ -81,6 +81,7 @@ TEMPLATES = [
                 "core.context_processors.ads",
                 "core.context_processors.domain",
                 "core.context_processors.helpbot",
+                "core.context_processors.plans",
             ],
         },
     },
@@ -101,7 +102,7 @@ DATABASES = {
     }
 }
 
-if os.environ.get("DB_URL") and not os.environ.get("_PYTEST_UNIT"):
+if os.environ.get("DB_URL"):
     import dj_database_url
     DATABASES["default"] = dj_database_url.parse(os.environ.get("DB_URL"))
 
@@ -185,5 +186,5 @@ GITHUB_REPO           = os.environ.get('GITHUB_REPO', 'vicnasdev/drp')
 LLM_BASE_URL = os.environ.get('LLM_BASE_URL', '')   # e.g. http://ollama.railway.internal:11434/v1
 LLM_MODEL    = os.environ.get('LLM_MODEL', 'qwen2.5:1.5b')
 
-# ── Bug reports ───────────────────────────────────────────────────────────────
-BUG_REPORT_DAILY_LIMIT = 3   # max reports per user per day
+# ── Contact ────────────────────────────────────────────────────────────────────
+CONTACT_DAILY_LIMIT = 3   # max contact submissions per user per day

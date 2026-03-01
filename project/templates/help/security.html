@@ -7,27 +7,22 @@
 
 <section>
   <h2>Your data is safe</h2>
-  <p>Whether you're using drp anonymously or with a paid plan, your privacy and security are paramount. Here's how we protect you:</p>
+  <p>Whether you're using drp as a guest or with a paid plan, your privacy and security are paramount. Here's how we protect you:</p>
 </section>
 
 <section>
   <h2>Access control by plan</h2>
-  <p><strong>Folders are plan-aware.</strong> When you downgrade your plan, your existing data is preserved but access is restricted based on your quota. When you upgrade again, full access is immediately restored. Your data is never deleted.</p>
-  <ul>
-    <li><strong>Pro plan:</strong> Unlimited folders</li>
-    <li><strong>Starter plan:</strong> Up to 10 folders</li>
-    <li><strong>Free plan:</strong> No folders (read-only access to shared drops)</li>
-  </ul>
+  <p><strong>Folders are available on every plan.</strong> When you downgrade your plan, your existing data is preserved but access is restricted based on your storage quota. When you upgrade again, full access is immediately restored. Your data is never deleted.</p>
 </section>
 
 <section>
   <h2>Password protection is rate-limited</h2>
-  <p>Drops with password protection are defended against brute-force attacks. <strong>Maximum 10 password attempts per hour per IP address.</strong> After hitting the limit, you'll need to wait an hour before trying again.</p>
+  <p>Files with password protection are defended against brute-force attacks. <strong>Maximum 10 password attempts per hour per IP address.</strong> After hitting the limit, you'll need to wait an hour before trying again.</p>
 </section>
 
 <section>
   <h2>Webhooks are validated</h2>
-  <p>If you use webhooks to notify external systems when drops are created or accessed, those URLs are validated before use. We automatically reject:</p>
+  <p>If you use webhooks to notify external systems when files are created or accessed, those URLs are validated before use. We automatically reject:</p>
   <ul>
     <li>URLs pointing to localhost or local IP addresses (127.0.0.1, 10.x.x.x, 192.168.x.x, etc.)</li>
     <li>URLs containing credentials (username:password@host)</li>
@@ -43,7 +38,7 @@
 
 <section>
   <h2>Passwords are hashed, not stored in plain text</h2>
-  <p>Drop passwords are hashed using Django's battle-tested password hashing system (PBKDF2), not stored in plain text. Even if your account data were somehow compromised, your passwords would be unreadable.</p>
+  <p>File passwords are hashed using Django's battle-tested password hashing system (PBKDF2), not stored in plain text. Even if your account data were somehow compromised, your passwords would be unreadable.</p>
 </section>
 
 <section>
@@ -52,8 +47,8 @@
 </section>
 
 <section>
-  <h2>Anonymous drops are pseudo-random, not sequential</h2>
-  <p>Drop keys for anonymous drops are generated using cryptographically secure random functions, not sequential numbers. Every attempt to guess a key is computationally infeasible.</p>
+  <h2>Keys are pseudo-random, not sequential</h2>
+  <p>File keys are generated using cryptographically secure random functions, not sequential numbers. Every attempt to guess a key is computationally infeasible.</p>
 </section>
 
 <section>
@@ -75,10 +70,10 @@
   <h2>Best practices for you</h2>
   <p>Security is a shared responsibility. Here's what you can do:</p>
   <ul>
-    <li><strong>Don't use anonymous drops for sensitive information.</strong> They are only protected by a hard-to-guess URL. If you need real privacy, use a password and set an expiry.</li>
+    <li><strong>Don't use guest files for sensitive information.</strong> They are only protected by a hard-to-guess URL. If you need real privacy, use a password and set an expiry.</li>
     <li><strong>Use strong passwords.</strong> A simple password like "abc123" can be guessed in seconds. Aim for 12+ characters with mixed case, numbers, and symbols.</li>
     <li><strong>Set appropriate expiry times.</strong> The shorter the expiry, the less time an attacker has to exploit a compromised link.</li>
-    <li><strong>Don't share drop links in plain text emails or messages.</strong> URLs are logged in email providers and message histories. Consider using a password-protected drop with a separate password delivery channel.</li>
+    <li><strong>Don't share file links in plain text emails or messages.</strong> URLs are logged in email providers and message histories. Consider using a password-protected file with a separate password delivery channel.</li>
     <li><strong>Regular security updates.</strong> Keep your OS, browser, and password manager updated to patch known vulnerabilities.</li>
   </ul>
 </section>

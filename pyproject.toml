@@ -27,7 +27,9 @@ readme = "PYPI_DEV_README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 dependencies = [
+    "cmd2>=2.4",
     "requests>=2.28",
+    "rich>=13.0",
     "pygments>=2.14",
     "tomli>=2.0; python_version < '3.11'",
     "tomli-w>=1.0",

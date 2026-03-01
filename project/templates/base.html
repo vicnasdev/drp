@@ -20,15 +20,19 @@
     <nav>
       <a href="/use-cases/">use cases</a>
       <a href="/explore/">explore</a>
-      <a href="/features/">features</a>
       {% if user.is_staff %}<a href="/admin/">admin</a>{% endif %}
       {% if user.is_authenticated %}
-        <a href="/@{{ user.username }}/">files</a>
-        <a href="/auth/account/">
-          {% if user.profile.is_paid %}<span class="plan-badge">{{ user.profile.plan }}</span> {% endif %}
-          @{{ user.username }}
-        </a>
-        <a href="/auth/logout/">log out</a>
+        {% if user.profile.is_anonymous %}
+          <a href="/auth/login/">log in</a>
+          <a href="/auth/register/" class="btn-nav">sign up</a>
+        {% else %}
+          <a href="/@{{ user.username }}/">files</a>
+          <a href="/auth/account/">
+            {% if user.profile.is_paid %}<span class="plan-badge">{{ user.profile.plan }}</span> {% endif %}
+            @{{ user.username }}
+          </a>
+          <a href="/auth/logout/">log out</a>
+        {% endif %}
       {% else %}
         <a href="/auth/login/">log in</a>
         <a href="/auth/register/" class="btn-nav">sign up free</a>
@@ -46,12 +50,12 @@
   </main>
   <footer>
     <small>
-      anon: 24h · free: 7d · paid: custom expiry ·
+      guest: {{ guest_expiry|default:"24h" }} · free: {{ free_expiry|default:"7d" }} · paid: custom expiry ·
       <a href="/help/">help</a> ·
       <a href="/billing/licensing/">licensing</a> ·
       <a href="/privacy/">privacy</a> ·
       <a href="/terms/">terms</a> ·
-      <a href="/report-bug/">issue</a> ·
+      <a href="/contact/">contact</a> ·
       <a href="https://github.com/vicnasdev/drp">source</a>
     </small>
   </footer>

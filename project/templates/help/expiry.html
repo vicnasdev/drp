@@ -1,50 +1,44 @@
 {% extends 'help/base.html' %}
-{% block title %}drp — expiry{% endblock %}
+{% block title %}drp — key expiry{% endblock %}
 
 {% block help_content %}
-<h1>expiry</h1>
-<p class="lead">How long drops live depends on whether you're anonymous, on a free account, or a paid plan — and whether the drop is text or a file.</p>
+<h1>key expiry</h1>
+<p class="lead">Keys expire, not files. Every key has an <code>expires_at</code> timestamp set
+at upload time based on your plan. When a key expires, the URL stops working.</p>
 
-<h2>clipboards (text)</h2>
-<p>Clipboards use <strong>activity-based expiry</strong>. They don't expire on a fixed timer — they idle out when nobody accesses them. A clipboard that's still being read regularly stays alive.</p>
-<p>To avoid unnecessary database writes, accesses within a 5-minute window of the previous access don't reset the idle clock. For a 24–48 hour idle timeout this is invisible in practice.</p>
+<h2>expiry by plan</h2>
 
+{% if plans %}
 <table>
-  <tr><th>tier</th><th>idle timeout</th><th>max lifetime</th></tr>
-  <tr><td>Anonymous</td><td>24h since last access</td><td>7 days from creation</td></tr>
-  <tr><td>Free account</td><td>48h since last access</td><td>30 days from creation</td></tr>
-  <tr><td>Starter / Pro</td><td>explicit date you set</td><td>up to 1–3 years</td></tr>
+  <tr><th>plan</th><th>max key expiry</th></tr>
+  {% for plan_key, lim in plans %}
+  <tr>
+    <td>{{ lim.label }}</td>
+    <td>{{ lim.expiry_display }}</td>
+  </tr>
+  {% endfor %}
 </table>
-
-<p>The max lifetime is a hard ceiling — even an actively accessed anonymous clipboard is deleted after 7 days. Signing up for a free account extends that to 30 days with no other cost.</p>
-
-<h2>files</h2>
-<p>Files use <strong>fixed expiry</strong>, not idle-based.</p>
-
+{% else %}
 <table>
-  <tr><th>tier</th><th>expiry</th></tr>
-  <tr><td>Anonymous</td><td>90 days after upload</td></tr>
-  <tr><td>Free account</td><td>90 days after upload</td></tr>
-  <tr><td>Starter</td><td>explicit date, up to 1 year</td></tr>
-  <tr><td>Pro</td><td>explicit date, up to 3 years</td></tr>
+  <tr><th>plan</th><th>max key expiry</th></tr>
+  <tr><td>Guest</td><td>1 day</td></tr>
+  <tr><td>Free</td><td>7 days</td></tr>
+  <tr><td>Starter</td><td>1 year</td></tr>
+  <tr><td>Pro</td><td>3 years</td></tr>
 </table>
+{% endif %}
 
-<p>Accessing a file resets the idle clock for the drop page view, but does not extend the file's expiry date.</p>
+<p>Expiry is set once at upload time. Guest and free keys use the plan maximum automatically.
+Paid users can choose any duration up to their plan maximum via the web expiry selector
+or the CLI <code>--expires</code> flag.</p>
 
-<h2>setting expiry on paid drops</h2>
-<p>When creating a drop as a Starter or Pro user, you can set an explicit expiry date. On the web interface, use the expiry selector before saving. Via the CLI, the expiry is inherited from your account defaults — use <code>drp renew</code> to adjust after the fact.</p>
+<h2>what happens when a key expires</h2>
+<p>When someone visits an expired key's URL, the server returns <strong>410 Gone</strong> and
+deletes the underlying content (including its B2 object for file uploads). A background
+<code>cleanup</code> management command also sweeps for expired keys periodically.</p>
 
-<h2>renewing</h2>
-<p>Paid drops can be renewed at any time. Renewing pushes the expiry forward by the same duration as the original — a drop set to expire in 90 days gets another 90 days from now. There's no renewal limit.</p>
-
-<pre><code>drp renew key        # renew a clipboard
-drp renew f/key      # renew a file</code></pre>
-
-<p>You can also renew from the drop page — click <strong>renew</strong> next to the expiry date.</p>
-
-<h2>what happens when a drop expires</h2>
-<p>Expired drops are deleted on the next access — when someone visits the URL, the server checks expiry, deletes the drop (including its B2 object for file drops), and returns a 410 Gone response. A background <code>cleanup</code> management command also sweeps for expired drops periodically.</p>
-
-<h2>claiming anonymous drops</h2>
-<p>If you create drops before signing up, they're tracked by a browser cookie. When you register or log in, those drops are automatically claimed — transferred to your account and extended to free-tier lifetimes. This happens once per session cookie.</p>
+<h2>claiming guest files</h2>
+<p>If you create files as a guest before signing up, they're tracked by a browser cookie.
+When you register or log in, those files are automatically claimed — transferred to your
+account and extended to free-tier lifetimes. This happens once per session cookie.</p>
 {% endblock %}

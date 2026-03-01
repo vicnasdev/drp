@@ -36,19 +36,19 @@
   {% else %}
     {% with ext=drop.filename|lower %}
     {% if '.png' in ext or '.jpg' in ext or '.jpeg' in ext or '.gif' in ext or '.webp' in ext or '.svg' in ext %}
-      <img src="/f/{{ drop.key }}/raw/" alt="{{ drop.filename }}">
+      <img src="/{{ drop.key }}/raw/" alt="{{ drop.filename }}">
     {% else %}
       <div class="file-info">
         <span>📎 {{ drop.filename }}</span>
         <span>({{ drop.filesize|filesizeformat }})</span>
-        <a href="/f/{{ drop.key }}/download/">download</a>
+        <a href="/{{ drop.key }}/download/">download</a>
       </div>
     {% endif %}
     {% endwith %}
   {% endif %}
 
   <div class="embed-footer">
-    <a href="/{% if ns == 'f' %}f/{% endif %}{{ drop.key }}/" target="_blank">open on drp</a>
+    <a href="/{{ drop.key }}/" target="_blank">open on drp</a>
   </div>
 
   {% if drop.content_type|slice:":5" == "text/" %}

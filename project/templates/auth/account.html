@@ -26,9 +26,9 @@
 
   <!-- Quick overview -->
   <div class="account-section">
-    <h2>your drops</h2>
+    <h2>your files</h2>
     <p class="muted" style="font-size:.85rem;margin-bottom:.6rem">
-      you have <strong>{{ drops|length }}</strong> drop{{ drops|pluralize }} ·
+      you have <strong>{{ drops|length }}</strong> file{{ drops|pluralize }} ·
       <a href="/@{{ user.username }}/">open files →</a>
     </p>
   </div>
@@ -39,9 +39,9 @@
     <div class="storage-bar-wrap">
       <div class="storage-label">
         {% if profile.is_paid %}
-          {{ profile.storage_used_gb|floatformat:2 }} GB / {{ profile.storage_quota_gb }} GB used
-        {% else %}
-          0 B / 1 GB used
+          {{ profile.storage_used_gb|floatformat:2 }} GB / {{ plan_limits.storage_gb }} GB used
+        {% elif plan_limits %}
+          {{ profile.storage_used_gb|floatformat:2 }} GB / {{ plan_limits.storage_gb }} GB used
         {% endif %}
       </div>
       <div class="storage-bar">
@@ -77,13 +77,11 @@
     <div class="paid-perks" style="margin-bottom:1rem">
       <p class="muted" style="font-size:.82rem;margin-bottom:.4rem">your plan includes:</p>
       <ul class="upsell-list">
-        <li>🔑 password-protect any drop</li>
-        <li>🔒 drops locked to your account</li>
+        <li>🔑 password-protect any file</li>
+        <li>🔒 files locked to your account</li>
         <li>📅 explicit expiry dates</li>
         <li>📦 {{ plan_limits.max_file_mb }}MB per file · {{ plan_limits.storage_gb }}GB total</li>
-        <li>📁
-          {% if plan_limits.max_folders %}up to {{ plan_limits.max_folders }} folders
-          {% else %}unlimited folders{% endif %}
+        <li>📁 Unlimited folders
           · <a href="/@{{ user.username }}/">view yours</a>
         </li>
       </ul>
@@ -94,7 +92,7 @@
     <!-- Free: upgrade CTA with feature comparison -->
     <div class="plan-status" style="margin-bottom:1rem">
       <span class="plan-badge">Free</span>
-      <span class="muted" style="font-size:.85rem">7d key expiry · up to 1 GB</span>
+      <span class="muted" style="font-size:.85rem">{{ plan_limits.max_expiry_days }}d key expiry · up to {{ plan_limits.storage_gb }} GB</span>
     </div>
     <p class="muted" style="font-size:.85rem;margin-bottom:1rem">
       upgrade to unlock password protection, explicit expiry, and more.
@@ -102,29 +100,27 @@
     <div class="plan-grid">
       <div class="plan-card">
         <div class="plan-name">Starter</div>
-        <div class="plan-price">CA$5<span>/mo</span></div>
-        <div class="plan-price-usd">~US$3.50/mo</div>
+        <div class="plan-price">CA${{ starter_limits.price_monthly }}<span>/mo</span></div>
         <ul>
-          <li>1 GB per file</li>
-          <li>5 GB total storage</li>
-          <li>Up to 1 year expiry</li>
-          <li>Drops locked to your account</li>
-          <li>🔑 Password-protect drops</li>
-          <li>📁 Up to 10 folders</li>
+          <li>{{ starter_limits.max_file_mb }} MB per file</li>
+          <li>{{ starter_limits.storage_gb }} GB total storage</li>
+          <li>Up to {{ starter_limits.expiry_display }} expiry</li>
+          <li>Files locked to your account</li>
+          <li>� Password-protect files</li>
+          <li>📁 Unlimited folders</li>
         </ul>
         <a href="/billing/checkout/starter/"
            class="btn" style="margin-top:1rem;display:block;text-align:center">upgrade →</a>
       </div>
       <div class="plan-card plan-card--pro">
         <div class="plan-name">Pro</div>
-        <div class="plan-price">CA$10<span>/mo</span></div>
-        <div class="plan-price-usd">~US$7/mo</div>
+        <div class="plan-price">CA${{ pro_limits.price_monthly }}<span>/mo</span></div>
         <ul>
-          <li>5 GB per file</li>
-          <li>20 GB total storage</li>
-          <li>Up to 3 years expiry</li>
-          <li>Drops locked to your account</li>
-          <li>🔑 Password-protect drops</li>
+          <li>{{ pro_limits.max_file_mb }} MB per file</li>
+          <li>{{ pro_limits.storage_gb }} GB total storage</li>
+          <li>Up to {{ pro_limits.expiry_display }} expiry</li>
+          <li>Files locked to your account</li>
+          <li>� Password-protect files</li>
           <li>📁 Unlimited folders</li>
         </ul>
         <a href="/billing/checkout/pro/"

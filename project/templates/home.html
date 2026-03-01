@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}drp — drop it.{% endblock %}
+{% block title %}drp — share it.{% endblock %}
 {% load static %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/home.css' %}"/>{% endblock %}
 
@@ -8,7 +8,7 @@
 
   <!-- Left: Create + Get -->
   <div class="creator">
-    <h1>drop it.</h1>
+    <h1>share it.</h1>
     <p class="tagline">paste text or drop a file. get a key. share the link.</p>
 
     <div class="gh-star" id="ghStar" style="display:none">
@@ -21,7 +21,7 @@
 
     {% if claimed %}
     <div class="claim-banner">
-      ✓ {{ claimed }} drop{{ claimed|pluralize }} claimed and added to your account.
+      ✓ {{ claimed }} file{{ claimed|pluralize }} claimed and added to your account.
     </div>
     {% endif %}
 
@@ -61,26 +61,20 @@
         <div id="progressSpeed" style="font-size:.75rem;color:var(--muted);margin-top:.2rem"></div>
       </div>
 
-      {% if user.is_authenticated and user.profile.is_paid %}
+      <!-- Expiry selector — available to all users, options depend on plan -->
       <div class="expiry-row">
-        <label for="expiryDays">expires in</label>
+        <label for="expiryDays">key expires in</label>
         <select id="expiryDays">
-          <option value="7">7 days</option>
-          <option value="30">30 days</option>
-          <option value="90" selected>90 days</option>
-          <option value="180">180 days</option>
-          {% if user.profile.plan == 'starter' %}
-          <option value="365">1 year</option>
-          {% endif %}
-          {% if user.profile.plan == 'pro' %}
-          <option value="365">1 year</option>
-          <option value="730">2 years</option>
-          <option value="1095">3 years</option>
-          {% endif %}
+          {% for opt in expiry_options %}
+          <option value="{{ opt.days }}"{% if opt.selected %} selected{% endif %}>{{ opt.label }}</option>
+          {% endfor %}
         </select>
-        <span class="muted" style="font-size:.8rem">from creation</span>
+        {% if user.profile.is_anonymous %}
+        <span class="muted" style="font-size:.8rem">
+          <a href="/auth/register/">sign up</a> for longer expiry
+        </span>
+        {% endif %}
       </div>
-      {% endif %}
     </div>
 
     <!-- Get panel -->
@@ -92,7 +86,7 @@
       </div>
       <p id="getError" class="error hidden"></p>
 
-      <!-- Text drop result -->
+      <!-- Text result -->
       <div id="getResult" class="clip-existing hidden">
         <pre id="getContent" style="white-space:pre-wrap;word-break:break-all;font-size:.88rem;font-family:monospace"></pre>
         <div class="clip-actions" style="margin-top:.7rem">
@@ -101,7 +95,7 @@
         </div>
       </div>
 
-      <!-- File drop result -->
+      <!-- File result -->
       <div id="getFileResult" class="file-card big hidden" style="margin-top:.8rem">
         <span class="file-icon">📎</span>
         <div>
@@ -113,101 +107,96 @@
     </div>
   </div>
 
-  <!-- Right: Dashboard -->
+  <!-- Right: Dashboard — only for real (non-anonymous) accounts -->
+  {% if not user.profile.is_anonymous %}
   <div class="dashboard">
-    {% if user.is_authenticated %}
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem">
-        <h3 style="margin-bottom:0">my drops</h3>
-        <div style="display:flex;gap:.4rem">
-          <a href="/auth/account/export/" class="btn-sm">↓ export</a>
-          <label for="importInput" class="btn-sm" style="cursor:pointer">↑ import</label>
-          <input type="file" id="importInput" accept=".json" hidden/>
-        </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem">
+      <h3 style="margin-bottom:0">my files</h3>
+      <div style="display:flex;gap:.4rem">
+        <a href="/auth/account/export/" class="btn-sm">↓ export</a>
+        <label for="importInput" class="btn-sm" style="cursor:pointer">↑ import</label>
+        <input type="file" id="importInput" accept=".json" hidden/>
       </div>
-      <div class="drop-list" id="myDrops">
-        {% if server_drops %}
-          {% for drop in server_drops %}
-          <div class="drop-item">
-            <span class="drop-icon">{% if drop.content_type|slice:":6" == "image/" %}🖼{% elif drop.content_type|slice:":5" == "text/" %}📄{% else %}📎{% endif %}</span>
-            <a href="/{{ drop.key }}/" class="drop-key">{{ drop.key }}</a>
-            <span class="drop-label muted">
-              {{ drop.filename|default:drop.key|truncatechars:20 }}
-            </span>
-            {% if drop.expires_at %}
-            <span class="drop-expiry muted">{{ drop.expires_at|date:"M j" }}</span>
-            {% endif %}
-          </div>
-          {% endfor %}
-        {% endif %}
-        {% if saved_drops %}
-          {% for s in saved_drops %}
-          <div class="drop-item">
-            <span class="drop-icon">🔖</span>
-            <a href="/{{ s.file_key }}/" class="drop-key">→ {{ s.file_key }}</a>
-            <span class="drop-label muted">{{ s.created_at|date:"M j" }}</span>
-          </div>
-          {% endfor %}
-        {% endif %}
-        {% if not server_drops and not saved_drops %}
-          <p class="empty muted">nothing yet.</p>
-        {% endif %}
-      </div>
-
-      {% if folders %}
-      <h3 style="margin-top:1.2rem;margin-bottom:.4rem">folders</h3>
-      <div class="drop-list">
-        {% for folder in folders %}
+    </div>
+    <div class="drop-list" id="myDrops">
+      {% if server_drops %}
+        {% for drop in server_drops %}
         <div class="drop-item">
-          <span class="drop-icon">📂</span>
-          <a href="/@{{ user.username }}/{{ folder.slug }}/" class="drop-key">drive: /{{ folder.slug }}/</a>
-          <span class="drop-label muted">{{ folder.items.count }} drop{{ folder.items.count|pluralize }}</span>
+          <span class="drop-icon">{% if drop.content_type|slice:":6" == "image/" %}🖼{% elif drop.content_type|slice:":5" == "text/" %}📄{% else %}📎{% endif %}</span>
+          <a href="/{{ drop.key }}/" class="drop-key">{{ drop.key }}</a>
+          <span class="drop-label muted">
+            {{ drop.filename|default:drop.key|truncatechars:20 }}
+          </span>
+          {% if drop.expires_at %}
+          <span class="drop-expiry muted">{{ drop.expires_at|date:"M j" }}</span>
+          {% endif %}
         </div>
         {% endfor %}
-      </div>
       {% endif %}
-
-      <div class="storage-bar-wrap" style="margin-top:.8rem">
-        <div class="storage-label muted">
-          {% if user.profile.is_paid %}
-            {{ user.profile.storage_used_gb|floatformat:2 }} GB / {{ user.profile.storage_quota_gb }} GB used
-          {% else %}
-            0 B / 1 GB used
-          {% endif %}
+      {% if saved_drops %}
+        {% for s in saved_drops %}
+        <div class="drop-item">
+          <span class="drop-icon">🔖</span>
+          <a href="/{{ s.file_key }}/" class="drop-key">→ {{ s.file_key }}</a>
+          <span class="drop-label muted">{{ s.created_at|date:"M j" }}</span>
         </div>
-        <div class="storage-bar">
-          {% if user.profile.is_paid %}
-          <div class="storage-bar-fill" style="width:{% widthratio user.profile.storage_used_bytes user.profile.storage_quota_bytes 100 %}%"></div>
-          {% else %}
-          <div class="storage-bar-fill" style="width:0%"></div>
-          {% endif %}
-        </div>
-      </div>
+        {% endfor %}
+      {% endif %}
+      {% if not server_drops and not saved_drops %}
+        <p class="empty muted">nothing yet.</p>
+      {% endif %}
+    </div>
 
-    {% else %}
-      <h3>my drops</h3>
-      <div id="myDrops" class="drop-list">
-        <p class="empty muted" id="anonEmpty">nothing yet.</p>
+    {% if folders %}
+    <h3 style="margin-top:1.2rem;margin-bottom:.4rem">folders</h3>
+    <div class="drop-list">
+      {% for folder in folders %}
+      <div class="drop-item">
+        <span class="drop-icon">📂</span>
+        <a href="/@{{ user.username }}/{{ folder.slug }}/" class="drop-key">drive: /{{ folder.slug }}/</a>
+        <span class="drop-label muted">{{ folder.items.count }} file{{ folder.items.count|pluralize }}</span>
       </div>
-      <div class="dashboard-actions" id="anonActions" style="display:none">
-        <button class="btn-sm" id="exportBtn">↓ export</button>
-        <button class="btn-sm danger" id="clearAll">clear all</button>
-      </div>
-
-      <div class="anon-upsell">
-        <p class="upsell-heading">free account unlocks:</p>
-        <ul class="upsell-list">
-          <li>✓ claim &amp; keep drops you create</li>
-          <li>✓ 7-day key expiry (vs 24h anon)</li>
-          <li>✓ save &amp; bookmark others' drops</li>
-          <li>✓ export &amp; import folders</li>
-        </ul>
-        <div style="display:flex;gap:.5rem;margin-top:.6rem;flex-wrap:wrap">
-          <a href="/auth/register/" class="btn" style="font-size:.82rem;padding:.4rem .9rem">sign up free</a>
-          <a href="/auth/login/" class="btn-sm">log in</a>
-        </div>
-      </div>
+      {% endfor %}
+    </div>
     {% endif %}
+
+    <div class="storage-bar-wrap" style="margin-top:.8rem">
+      <div class="storage-label muted">
+        {% if user.profile.is_paid %}
+          {{ user.profile.storage_used_gb|floatformat:2 }} GB / {{ user.profile.storage_quota_gb }} GB used
+        {% elif plan_limits %}
+          {{ user.profile.storage_used_gb|floatformat:2 }} GB / {{ plan_limits.storage_gb }} GB used
+        {% endif %}
+      </div>
+      <div class="storage-bar">
+        {% if user.profile.is_paid %}
+        <div class="storage-bar-fill" style="width:{% widthratio user.profile.storage_used_bytes user.profile.storage_quota_bytes 100 %}%"></div>
+        {% else %}
+        <div class="storage-bar-fill" style="width:0%"></div>
+        {% endif %}
+      </div>
+    </div>
+
   </div>
+
+  {% else %}
+  <!-- Anon users see an upsell instead of a dashboard -->
+  <div class="dashboard">
+    <h3 style="margin-bottom:.6rem">create a free account</h3>
+    <p class="muted" style="font-size:.85rem;margin-bottom:.8rem">Sign up to unlock:</p>
+    <ul class="upsell-list">
+      <li>✓ longer key expiry</li>
+      <li>✓ bookmark &amp; sync across devices</li>
+      <li>✓ custom keys</li>
+      <li>✓ export &amp; import</li>
+      <li>✓ folders</li>
+    </ul>
+    <div style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap">
+      <a href="/auth/register/" class="btn" style="font-size:.85rem;padding:.45rem 1rem">sign up free</a>
+      <a href="/auth/login/" class="btn-sm" style="font-size:.82rem;padding:.4rem .8rem">log in</a>
+    </div>
+  </div>
+  {% endif %}
 
 </div>
 
@@ -220,8 +209,7 @@
 <div class="ad-middle-wrapper" style="margin-top:1.5rem">
   <div style="text-align:center">
     <div style="display:flex;gap:.5rem;justify-content:center">
-      <button class="btn" id="clipActionBtn">Get clip</button>
-      <button class="btn" id="fileActionBtn">Get file</button>
+      <button class="btn" id="actionBtn">save</button>
     </div>
     <p id="errorMsg" class="error hidden"></p>
 
@@ -231,19 +219,19 @@
       <button class="btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('resultUrl').href); showToast('copied!')">copy</button>
     </div>
 
-    {% if not user.is_authenticated %}
+    {% if user.profile.is_anonymous %}
     <p id="anonNudge" class="anon-nudge hidden">
-      Drop expires in 24 hours. <a href="/auth/register/">Sign up free</a> to keep it for 7 days.
+      Key expires in {{ anon_expiry_label|default:"24 hours" }}. <a href="/auth/register/">Sign up</a> for longer expiry.
     </p>
     {% endif %}
   </div>
 </div>
 
-<!-- Public drops feed -->
+<!-- Public files feed -->
 {% if public_drops %}
 <div style="max-width:700px;margin:2rem auto;padding:0 1rem">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.8rem">
-    <h2 style="font-size:1.1rem;color:var(--text);margin:0">public drops</h2>
+    <h2 style="font-size:1.1rem;color:var(--text);margin:0">public files</h2>
     <a href="/explore/" class="btn-sm">explore all</a>
   </div>
   <div class="drop-list">
@@ -266,14 +254,9 @@
 
 {% block scripts %}
 <script>
-const IS_AUTHED = {{ user.is_authenticated|yesno:"true,false" }};
-const IS_PAID   = {{ user.is_authenticated|yesno:"true,false" }}
-                  && {{ user.profile.is_paid|default:"false"|yesno:"true,false" }};
-
-// Clear local anon drops after they've been claimed on login/register
-if (IS_AUTHED && new URLSearchParams(window.location.search).get('claimed')) {
-  localStorage.removeItem('drp_drops');
-}
+const IS_AUTHED = true;  // every visitor has a real account
+const IS_ANON   = {{ user.profile.is_anonymous|default:"false"|yesno:"true,false" }};
+const IS_PAID   = {{ user.profile.is_paid|default:"false"|yesno:"true,false" }};
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 let activeTab = 'save';
@@ -284,13 +267,14 @@ function switchTab(tab) {
   document.getElementById('panelGet').classList.toggle('hidden', tab !== 'get');
   document.getElementById('tabSave').classList.toggle('active', tab === 'save');
   document.getElementById('tabGet').classList.toggle('active', tab === 'get');
+  document.getElementById('actionBtn').textContent = tab === 'save' ? 'save' : 'get';
   if (tab === 'get') document.getElementById('getKeyInput').focus();
 }
 
-// ── Get drop ──────────────────────────────────────────────────────────────────
+// ── Get file ──────────────────────────────────────────────────────────────────
 let _currentGetKey = '';
 
-async function doGet(isFile) {
+async function doGet() {
   const key    = document.getElementById('getKeyInput').value.trim();
   const errEl  = document.getElementById('getError');
   const resEl  = document.getElementById('getResult');
@@ -308,7 +292,7 @@ async function doGet(isFile) {
   _currentGetKey = key;
   const url = `/${key}/`;
 
-  const btn = isFile ? document.getElementById('fileActionBtn') : document.getElementById('clipActionBtn');
+  const btn = document.getElementById('actionBtn');
   btn.disabled = true;
   const orig = btn.textContent;
   btn.textContent = '…';
@@ -334,7 +318,7 @@ async function doGet(isFile) {
       document.getElementById('getFileLink').href = `/${key}/download/`;
       fileEl.classList.remove('hidden');
     } else {
-      errEl.textContent = `Key not found or wrong type.`;
+      errEl.textContent = 'Key not found.';
       errEl.classList.remove('hidden');
     }
   } catch (e) {
@@ -351,113 +335,35 @@ function copyGetContent() {
   showToast('copied!');
 }
 
-document.getElementById('clipActionBtn').addEventListener('click', () => {
-  if (activeTab === 'get') doGet(false);
-  else doSave('clip');
-});
-document.getElementById('fileActionBtn').addEventListener('click', () => {
-  if (activeTab === 'get') doGet(true);
-  else doSave('file');
+document.getElementById('actionBtn').addEventListener('click', () => {
+  if (activeTab === 'get') doGet();
+  else doSave();
 });
 document.getElementById('getKeyInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') doGet(false);
+  if (e.key === 'Enter') doGet();
 });
 
-// ── Import (logged-in) ────────────────────────────────────────────────────────
-if (IS_AUTHED) {
-  const importInput = document.getElementById('importInput');
-  if (importInput) {
-    importInput.addEventListener('change', async function (e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      let data;
-      try { data = JSON.parse(await file.text()); } catch { showToast('Invalid JSON file.'); return; }
-      const res = await fetch('/auth/account/import/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-        body: JSON.stringify(data),
-      });
-      const result = await res.json();
-      if (res.ok) {
-        showToast(`Imported ${result.imported} drop(s).${result.skipped ? ' ' + result.skipped + ' already saved.' : ''}`);
-        if (result.imported > 0) setTimeout(() => location.reload(), 1200);
-      } else {
-        showToast(result.error || 'Import failed.');
-      }
-      e.target.value = '';
+// ── Import ────────────────────────────────────────────────────────────────────
+const importInput = document.getElementById('importInput');
+if (importInput) {
+  importInput.addEventListener('change', async function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    let data;
+    try { data = JSON.parse(await file.text()); } catch { showToast('Invalid JSON file.'); return; }
+    const res = await fetch('/auth/account/import/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify(data),
     });
-  }
-}
-
-// ── Local (anon) drop list ────────────────────────────────────────────────────
-function getMyDrops() {
-  try { return JSON.parse(localStorage.getItem('drp_drops') || '[]'); } catch { return []; }
-}
-function saveMyDrops(drops) { localStorage.setItem('drp_drops', JSON.stringify(drops)); }
-function addDropLocal(key, content_type, label) {
-  const drops = getMyDrops().filter(d => d.key !== key);
-  drops.unshift({ key, content_type, label, saved: Date.now() });
-  saveMyDrops(drops.slice(0, 50));
-  renderLocalDashboard();
-}
-async function removeDrop(key) {
-  const res = await fetch(`/${key}/delete/`, {
-    method: 'DELETE',
-    headers: { 'X-CSRFToken': getCookie('csrftoken') },
-  });
-  if (res.ok || res.status === 404) {
-    saveMyDrops(getMyDrops().filter(d => d.key !== key));
-    renderLocalDashboard();
-    showToast('drop deleted.');
-  } else {
-    showToast('Delete failed.');
-  }
-}
-
-function renderLocalDashboard() {
-  if (IS_AUTHED) return;
-  const drops    = getMyDrops();
-  const el       = document.getElementById('myDrops');
-  const emptyEl  = document.getElementById('anonEmpty');
-  const actionsEl = document.getElementById('anonActions');
-  if (!drops.length) {
-    el.innerHTML = '';
-    if (emptyEl)   { emptyEl.style.display = ''; el.appendChild(emptyEl); }
-    if (actionsEl)   actionsEl.style.display = 'none';
-    return;
-  }
-  if (emptyEl)   emptyEl.style.display = 'none';
-  if (actionsEl) actionsEl.style.display = '';
-  el.innerHTML = drops.map(d => {
-    const ct = d.content_type || '';
-    const icon = ct.startsWith('image/') ? '🖼' : ct.startsWith('text/') ? '📄' : ct === 'application/json' ? '📄' : '📎';
-    return `
-    <div class="drop-item">
-      <span class="drop-icon">${icon}</span>
-      <a href="/${d.key}/" class="drop-key">${d.key}</a>
-      <span class="drop-label muted">${d.label || ''}</span>
-      <button class="btn-sm danger" onclick="removeDrop('${d.key}')">✕</button>
-    </div>
-  `;
-  }).join('');
-}
-
-if (!IS_AUTHED) {
-  renderLocalDashboard();
-
-  document.getElementById('clearAll').addEventListener('click', () => {
-    if (!confirm('Clear local list? Drops on the server are not affected.')) return;
-    localStorage.removeItem('drp_drops');
-    renderLocalDashboard();
-  });
-
-  document.getElementById('exportBtn').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({version:1, exported: new Date().toISOString(), drops: getMyDrops()}, null, 2)], {type:'application/json'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `drp-dashboard-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    showToast('exported!');
+    const result = await res.json();
+    if (res.ok) {
+      showToast(`Imported ${result.imported} file(s).${result.skipped ? ' ' + result.skipped + ' already saved.' : ''}`);
+      if (result.imported > 0) setTimeout(() => location.reload(), 1200);
+    } else {
+      showToast(result.error || 'Import failed.');
+    }
+    e.target.value = '';
   });
 }
 
@@ -534,23 +440,18 @@ function updateProgress(loaded, total) {
 }
 
 // ── Save ──────────────────────────────────────────────────────────────────────
-async function doSave(type) {
+async function doSave() {
   const key    = keyInput.value.trim();
   const text   = textInput.value.trim();
   const errEl  = document.getElementById('errorMsg');
-  const btn    = type === 'file'
-    ? document.getElementById('fileActionBtn')
-    : document.getElementById('clipActionBtn');
+  const btn    = document.getElementById('actionBtn');
   const origLabel = btn.textContent;
   errEl.classList.add('hidden');
 
-  if (type === 'clip' && !text) {
-    errEl.textContent = 'Add some text first.';
-    errEl.classList.remove('hidden');
-    return;
-  }
-  if (type === 'file' && !selectedFile) {
-    errEl.textContent = 'Drop or select a file first.';
+  const isFile = !!selectedFile;
+
+  if (!isFile && !text) {
+    errEl.textContent = 'Add some text or select a file first.';
     errEl.classList.remove('hidden');
     return;
   }
@@ -563,7 +464,7 @@ async function doSave(type) {
   const expiryEl = document.getElementById('expiryDays');
   if (expiryEl) fd.append('expiry_days', expiryEl.value);
 
-  if (type === 'file') {
+  if (isFile) {
     fd.append('file', selectedFile);
     showProgress();
   } else {
@@ -583,15 +484,12 @@ async function doSave(type) {
     try {
       const data = JSON.parse(xhr.responseText);
       if (xhr.status === 200) {
-        if (!IS_AUTHED) {
-          addDropLocal(data.key, data.content_type,
-            selectedFile ? selectedFile.name : text.slice(0, 30));
+        if (IS_ANON) {
+          // Guest user — show nudge
           const nudge = document.getElementById('anonNudge');
           if (nudge) nudge.classList.remove('hidden');
-        } else {
-          window.location.reload();
-          return;
         }
+        // Show result link
         const base = `/${data.key}/`;
         document.getElementById('resultUrl').href        = window.location.origin + base;
         document.getElementById('resultUrl').textContent = window.location.origin + base;
@@ -603,7 +501,7 @@ async function doSave(type) {
         clearFile();
         btn.disabled    = false;
         btn.textContent = origLabel;
-        showToast('drop created!');
+        showToast('file saved!');
       } else {
         errEl.textContent = data.error || 'Something went wrong.';
         errEl.classList.remove('hidden');
