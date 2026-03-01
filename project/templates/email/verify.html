@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#111;color:#ccc;padding:2rem;">
+  <div style="max-width:480px;margin:0 auto;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:2rem;">
+    <h1 style="font-size:1.4rem;font-weight:800;letter-spacing:-1px;margin:0 0 1rem;color:#fff;">verify your email</h1>
+    <p style="margin:0 0 1.5rem;color:#999;font-size:.9rem;">
+      Hi {{ user.username }}, click the button below to confirm your email address.
+    </p>
+    <a href="{{ link }}"
+       style="display:inline-block;background:#5b8dee;color:#fff;text-decoration:none;padding:.6rem 1.6rem;border-radius:6px;font-weight:700;font-size:.9rem;">
+      verify email
+    </a>
+    <p style="margin:1.5rem 0 0;color:#666;font-size:.78rem;">
+      This link expires in 24 hours. If you didn't create a drp account, you can ignore this email.
+    </p>
+  </div>
+</body>
+</html>

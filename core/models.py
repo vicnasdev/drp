@@ -84,6 +84,14 @@ class UserProfile(models.Model):
     is_anonymous = models.BooleanField(default=False)
     storage_used = models.BigIntegerField(default=0)
 
+    # Email verification
+    email_verified = models.BooleanField(default=False)
+
+    # Notification preferences
+    notify_product_updates = models.BooleanField(default=True)
+    notify_billing = models.BooleanField(default=True)
+    notify_bug_fix = models.BooleanField(default=True)
+
     # Lemon Squeezy
     ls_customer_id = models.CharField(max_length=64, blank=True, default="")
     ls_subscription_id = models.CharField(max_length=64, blank=True, default="")

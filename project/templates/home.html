@@ -75,6 +75,48 @@
         </span>
         {% endif %}
       </div>
+
+      <!-- Advanced options toggle -->
+      <button type="button" class="advanced-toggle" id="advancedToggle" onclick="toggleAdvanced()">
+        <span id="advancedArrow">▸</span> advanced options
+      </button>
+      <div id="advancedPanel" class="advanced-panel hidden">
+        <!-- Encryption key -->
+        <div class="adv-row">
+          <label for="encryptInput">🔐 encrypt</label>
+          <input type="password" id="encryptInput" placeholder="passphrase (AES-256)"
+                 autocomplete="off" spellcheck="false"/>
+          <span class="muted" style="font-size:.78rem">client-side. server never sees plaintext.</span>
+        </div>
+        <!-- Password -->
+        <div class="adv-row">
+          <label for="passwordInput">🔒 password</label>
+          <input type="password" id="passwordInput" placeholder="key password"
+                 autocomplete="off"
+                 {% if not can_set_password %}disabled title="Starter/Pro only"{% endif %}/>
+          {% if not can_set_password %}
+          <span class="muted" style="font-size:.78rem"><a href="/help/plans/">upgrade</a> to set passwords</span>
+          {% endif %}
+        </div>
+        <!-- Burn after read -->
+        <div class="adv-row">
+          <label>
+            <input type="checkbox" id="burnCheck"/> 🔥 burn after read
+          </label>
+        </div>
+        <!-- Publish -->
+        <div class="adv-row">
+          <label>
+            <input type="checkbox" id="publishCheck"/> 📢 publish on <a href="/explore/">/explore</a>
+          </label>
+        </div>
+        <!-- Tags -->
+        <div class="adv-row">
+          <label for="tagsInput">🏷 tags</label>
+          <input type="text" id="tagsInput" placeholder="comma-separated: python, snippet"
+                 autocomplete="off" spellcheck="false"/>
+        </div>
+      </div>
     </div>
 
     <!-- Get panel -->
@@ -227,15 +269,15 @@
   </div>
 </div>
 
-<!-- Public files feed -->
-{% if public_drops %}
+<!-- Published files feed -->
+{% if published_drops %}
 <div style="max-width:700px;margin:2rem auto;padding:0 1rem">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.8rem">
-    <h2 style="font-size:1.1rem;color:var(--text);margin:0">public files</h2>
+    <h2 style="font-size:1.1rem;color:var(--text);margin:0">published files</h2>
     <a href="/explore/" class="btn-sm">explore all</a>
   </div>
   <div class="drop-list">
-    {% for drop in public_drops %}
+    {% for drop in published_drops %}
     <div class="drop-item">
       <span class="drop-icon">{% if drop.content_type|slice:":6" == "image/" %}🖼{% elif drop.content_type|slice:":5" == "text/" %}📄{% else %}📎{% endif %}</span>
       <a href="/{{ drop.key }}/" class="drop-key">
@@ -464,11 +506,42 @@ async function doSave() {
   const expiryEl = document.getElementById('expiryDays');
   if (expiryEl) fd.append('expiry_days', expiryEl.value);
 
+  // Advanced options
+  const encryptPass = document.getElementById('encryptInput').value;
+  const keyPassword = document.getElementById('passwordInput').value;
+  const burnCheck   = document.getElementById('burnCheck').checked;
+  const publishCheck = document.getElementById('publishCheck').checked;
+  const tagsRaw     = document.getElementById('tagsInput').value.trim();
+
+  if (keyPassword) fd.append('password', keyPassword);
+  if (burnCheck)   fd.append('burn', '1');
+  if (publishCheck) fd.append('publish', '1');
+  if (tagsRaw) {
+    const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+    fd.append('tags', JSON.stringify(tags));
+  }
+
   if (isFile) {
-    fd.append('file', selectedFile);
+    if (encryptPass) {
+      // Client-side AES-256-GCM encryption before upload
+      const encrypted = await encryptFile(selectedFile, encryptPass);
+      fd.append('file', encrypted, selectedFile.name);
+      fd.append('encrypted', '1');
+    } else {
+      fd.append('file', selectedFile);
+    }
     showProgress();
   } else {
-    fd.append('content', text);
+    if (encryptPass) {
+      const enc = new TextEncoder();
+      const blob = new Blob([enc.encode(text)], { type: 'text/plain' });
+      const encrypted = await encryptFile(blob, encryptPass);
+      fd.append('file', encrypted, 'paste.txt');
+      fd.append('encrypted', '1');
+      showProgress();
+    } else {
+      fd.append('content', text);
+    }
   }
 
   const xhr = new XMLHttpRequest();
@@ -525,6 +598,43 @@ async function doSave() {
   });
 
   xhr.send(fd);
+}
+
+// ── Advanced options toggle ───────────────────────────────────────────────────
+function toggleAdvanced() {
+  const panel = document.getElementById('advancedPanel');
+  const arrow = document.getElementById('advancedArrow');
+  const open  = panel.classList.toggle('hidden');
+  arrow.textContent = open ? '▸' : '▾';
+}
+
+// ── Client-side AES-256-GCM encryption ────────────────────────────────────────
+async function deriveKey(passphrase, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt']
+  );
+}
+
+async function encryptFile(file, passphrase) {
+  const data = new Uint8Array(await file.arrayBuffer());
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(passphrase, salt);
+  const ct   = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data));
+  // Format: [16-byte salt][12-byte iv][ciphertext]
+  const out  = new Uint8Array(salt.length + iv.length + ct.length);
+  out.set(salt, 0);
+  out.set(iv, salt.length);
+  out.set(ct, salt.length + iv.length);
+  return new Blob([out], { type: 'application/octet-stream' });
 }
 
 /* ── GitHub star banner (dismiss) ── */

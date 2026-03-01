@@ -14,8 +14,11 @@
         <a href="/@{{ profile_user.username }}/" class="muted" style="text-decoration:none;font-size:.9rem">/@{{ profile_user.username }}/</a>
         <span class="muted">›</span>
         <h1 style="margin:0">{{ folder.slug }}/</h1>
-        {% if folder.is_public %}
-          <span style="font-size:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:.1rem .4rem;color:var(--muted)">public</span>
+        {% if folder.path_public %}
+          <span class="badge-sm">path access</span>
+        {% endif %}
+        {% if folder.is_password_protected %}
+          <span class="badge-sm">🔒</span>
         {% endif %}
       {% else %}
         <h1 style="margin:0">/@{{ profile_user.username }}/</h1>
@@ -24,6 +27,14 @@
         {% endif %}
       {% endif %}
     </div>
+    {% if is_owner and folder %}
+    <div class="folder-actions" style="margin-top:.5rem;display:flex;gap:.4rem;flex-wrap:wrap">
+      <button class="btn-sm" onclick="promptRename()">rename</button>
+      <button class="btn-sm" onclick="promptPassword()">{{ folder.is_password_protected|yesno:"change password,set password" }}</button>
+      <button class="btn-sm" onclick="togglePathAccess()">{{ folder.path_public|yesno:"disable path access,enable path access" }}</button>
+      <button class="btn-sm danger" onclick="deleteFolder()">delete folder</button>
+    </div>
+    {% endif %}
   </div>
 
   <!-- Subfolders / root folders -->
@@ -47,7 +58,7 @@
 
     {% if subfolders %}
     <table class="drops-table">
-      <thead><tr><th>name</th><th>files</th><th></th></tr></thead>
+      <thead><tr><th>name</th><th></th><th></th></tr></thead>
       <tbody>
         {% for sub in subfolders %}
         <tr>
@@ -55,9 +66,13 @@
             <a href="/@{{ profile_user.username }}/{% if folder %}{{ folder.slug }}/{% endif %}{{ sub.slug }}/" class="mono">
               📁 {{ sub.slug }}/
             </a>
+            {% if sub.is_password_protected %}<span class="badge-sm" title="password protected">🔒</span>{% endif %}
+            {% if sub.path_public %}<span class="badge-sm" title="path access enabled">🌐</span>{% endif %}
           </td>
-          <td class="muted">{{ sub.items.count }}</td>
-          <td><a href="/@{{ profile_user.username }}/{% if folder %}{{ folder.slug }}/{% endif %}{{ sub.slug }}/" class="btn-sm">open →</a></td>
+          <td class="muted" style="font-size:.78rem">{{ sub.files.count }} file{{ sub.files.count|pluralize }}</td>
+          <td style="text-align:right">
+            <a href="/@{{ profile_user.username }}/{% if folder %}{{ folder.slug }}/{% endif %}{{ sub.slug }}/" class="btn-sm">open →</a>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -67,7 +82,7 @@
     {% endif %}
   </div>
 
-  <!-- Files — only inside a subfolder, or public files for visitors -->
+  <!-- Files — only inside a subfolder, or for visitors at root -->
   {% if folder or not is_owner %}
   <div class="account-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
@@ -87,7 +102,6 @@
           {% if is_owner and folder %}<th style="width:2rem"><input type="checkbox" id="select-all" onchange="toggleAll(this)"/></th>{% endif %}
           <th>filename</th>
           <th>size</th>
-          <th>exp</th>
           <th>key</th>
           <th></th>
         </tr>
@@ -103,14 +117,14 @@
               {% else %}📎{% endif %}
               {{ file.filename|default:file.key|truncatechars:40 }}
             </a>
+            {% if file.encrypted %}<span class="badge-sm" title="encrypted">🔐</span>{% endif %}
           </td>
-          <td class="muted">{{ file.size|filesizeformat }}</td>
-          <td class="muted">{% if file.expires_at %}{{ file.expires_at|timeuntil|truncatewords:2 }}{% else %}∞{% endif %}</td>
+          <td class="muted">{{ file.filesize|filesizeformat }}</td>
           <td class="muted" style="font-size:.8rem">{{ file.key }}</td>
-          <td>
+          <td style="text-align:right">
             <a href="/{{ file.key }}/" class="btn-sm">view →</a>
             {% if is_owner and folder %}
-            <button class="btn-sm danger" onclick="removeFromFolder('{{ file.key }}', this)" style="margin-left:.25rem">✕</button>
+            <button class="btn-sm danger" onclick="removeFromFolder('{{ file.key }}', this)" title="Remove from folder">✕</button>
             {% endif %}
           </td>
         </tr>
@@ -123,20 +137,30 @@
   </div>
   {% endif %}
 
-  <!-- Delete folder — only inside a non-root folder -->
-  {% if is_owner and folder %}
-  <div class="account-section" style="margin-top:1rem">
-    <button class="btn-sm danger" onclick="deleteFolder()">delete folder</button>
-    <span class="muted" style="font-size:.78rem;margin-left:.5rem">files are not deleted, accessible by key only</span>
-  </div>
-  {% endif %}
+</div>
 
+<!-- Modal overlay for prompts -->
+<div id="modal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div id="modalContent"></div>
+  </div>
 </div>
 
 {% if is_owner %}
 <script>
 {% if folder %}const FOLDER_ID = {{ folder.id }};{% else %}const FOLDER_ID = null;{% endif %}
+const USERNAME = '{{ profile_user.username }}';
 
+// ── Modal ──
+function openModal(html) {
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modal').classList.remove('hidden');
+  const inp = document.querySelector('#modalContent input');
+  if (inp) inp.focus();
+}
+function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+
+// ── Folder CRUD ──
 function showNewFolder() {
   document.getElementById('new-folder-row').style.display = '';
   document.getElementById('new-folder-name').focus();
@@ -152,7 +176,7 @@ async function createFolder() {
   if (!name) { err.textContent = 'enter a name'; return; }
   const body = { slug: name };
   if (FOLDER_ID) body.parent_id = FOLDER_ID;
-  const res  = await fetch('/folders/create/', {
+  const res  = await fetch('/api/v1/folders/create/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
     body: JSON.stringify(body),
@@ -167,6 +191,83 @@ document.getElementById('new-folder-name')?.addEventListener('keydown', e => {
 });
 
 {% if folder %}
+// ── Rename ──
+function promptRename() {
+  openModal(`
+    <h3 style="margin:0 0 .6rem">rename folder</h3>
+    <input type="text" id="renameInput" value="{{ folder.slug }}" placeholder="new name"
+           style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:.5rem .7rem;font-size:.9rem;outline:none;box-sizing:border-box"/>
+    <p id="renameErr" style="font-size:.82rem;color:var(--danger);margin:.3rem 0 0"></p>
+    <div style="display:flex;gap:.4rem;margin-top:.8rem;justify-content:flex-end">
+      <button class="btn-sm" onclick="closeModal()">cancel</button>
+      <button class="btn-sm" onclick="doRename()">rename</button>
+    </div>
+  `);
+  document.getElementById('renameInput').addEventListener('keydown', e => { if(e.key==='Enter') doRename(); });
+}
+async function doRename() {
+  const name = document.getElementById('renameInput').value.trim();
+  if (!name) { document.getElementById('renameErr').textContent = 'enter a name'; return; }
+  const res = await fetch('/api/v1/folders/' + FOLDER_ID + '/rename/', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+    body: JSON.stringify({slug: name}),
+  });
+  if (res.ok) { showToast('renamed!'); location.href = '/@' + USERNAME + '/' + name + '/'; }
+  else { const d = await res.json(); document.getElementById('renameErr').textContent = d.error || 'failed'; }
+}
+
+// ── Password ──
+function promptPassword() {
+  openModal(`
+    <h3 style="margin:0 0 .6rem">folder password</h3>
+    <p class="muted" style="font-size:.82rem;margin-bottom:.5rem">Set a password to protect this folder. Leave blank to remove.</p>
+    <input type="password" id="folderPwInput" placeholder="new password (or blank to remove)"
+           style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:.5rem .7rem;font-size:.9rem;outline:none;box-sizing:border-box"/>
+    <p id="pwErr" style="font-size:.82rem;color:var(--danger);margin:.3rem 0 0"></p>
+    <div style="display:flex;gap:.4rem;margin-top:.8rem;justify-content:flex-end">
+      <button class="btn-sm" onclick="closeModal()">cancel</button>
+      <button class="btn-sm" onclick="doSetPassword()">save</button>
+    </div>
+  `);
+  document.getElementById('folderPwInput').addEventListener('keydown', e => { if(e.key==='Enter') doSetPassword(); });
+}
+async function doSetPassword() {
+  const pw = document.getElementById('folderPwInput').value;
+  const res = await fetch('/api/v1/folders/' + FOLDER_ID + '/password/', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+    body: JSON.stringify({password: pw}),
+  });
+  if (res.ok) { showToast(pw ? 'password set!' : 'password removed.'); location.reload(); }
+  else { const d = await res.json(); document.getElementById('pwErr').textContent = d.error || 'failed'; }
+}
+
+// ── Path access ──
+async function togglePathAccess() {
+  const currently = {{ folder.path_public|yesno:"true,false" }};
+  const action = currently ? 'disable' : 'enable';
+  if (!confirm(action.charAt(0).toUpperCase() + action.slice(1) + ' path access for this folder?')) return;
+  const res = await fetch('/api/v1/folders/' + FOLDER_ID + '/path-access/', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+    body: JSON.stringify({path_public: !currently}),
+  });
+  if (res.ok) { showToast('path access ' + (currently ? 'disabled' : 'enabled')); location.reload(); }
+  else showToast('failed.');
+}
+
+// ── Delete folder ──
+async function deleteFolder() {
+  if (!confirm('Delete this folder? Files inside are NOT deleted.')) return;
+  const res = await fetch('/api/v1/folders/' + FOLDER_ID + '/delete/', {
+    method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') },
+  });
+  if (res.ok) window.location.href = '/@' + USERNAME + '/';
+  else showToast('failed to delete folder.');
+}
+
+// ── Bulk file ops ──
 function toggleAll(master) {
   document.querySelectorAll('.file-check').forEach(cb => cb.checked = master.checked);
   updateBulkBar();
@@ -202,19 +303,11 @@ async function bulkDelete() {
 }
 async function removeFromFolder(key, btn) {
   if (!confirm('Remove from folder? The file is not deleted.')) return;
-  const res = await fetch('/folders/' + FOLDER_ID + '/remove/' + key + '/', {
+  const res = await fetch('/api/v1/folders/' + FOLDER_ID + '/remove/' + key + '/', {
     method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') },
   });
   if (res.ok) { btn.closest('tr').remove(); showToast('removed.'); }
   else showToast('failed.');
-}
-async function deleteFolder() {
-  if (!confirm('Delete this folder? Files inside are NOT deleted.')) return;
-  const res = await fetch('/folders/' + FOLDER_ID + '/delete/', {
-    method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') },
-  });
-  if (res.ok) window.location.href = '/@{{ profile_user.username }}/';
-  else showToast('failed to delete folder.');
 }
 {% endif %}
 </script>

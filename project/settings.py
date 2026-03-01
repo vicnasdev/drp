@@ -154,6 +154,8 @@ else:
 # ── Email ─────────────────────────────────────────────────────────────────────
 RESEND_API_KEY       = os.environ.get("RESEND_API_KEY", "")
 TEST_RECIPIENT_EMAIL = os.environ.get("TEST_RECIPIENT_EMAIL", "")
+DEFAULT_FROM_EMAIL   = os.environ.get("DEFAULT_FROM_EMAIL", "drp <noreply@drp.fyi>")
+EMAIL_BACKEND        = "django.core.mail.backends.console.EmailBackend"
 
 # ── Lemon Squeezy ─────────────────────────────────────────────────────────────
 LEMONSQUEEZY_API_KEY            = os.environ.get("LEMONSQUEEZY_API_KEY", "")

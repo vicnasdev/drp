@@ -14,11 +14,11 @@ from cli.commands import Arg, Command, all_commands, get_command
 
 EXPECTED_COMMANDS = [
     "up", "get", "cat", "cp", "mv", "rm", "ls", "cd", "mkdir",
-    "edit", "fork", "share", "ask", "ping", "status", "login",
-    "logout", "token", "getkey", "setkey", "setup",
+    "edit", "fork", "ask", "ping", "status", "login",
+    "logout", "token", "getkey", "setkey", "setup", "decrypt",
 ]
 
-SHELL_ONLY = {"cp", "mv", "cd", "mkdir", "edit", "share", "getkey", "setkey"}
+SHELL_ONLY = {"cp", "mv", "cd", "mkdir", "edit", "getkey", "setkey"}
 
 
 class TestRegistry:
@@ -110,10 +110,10 @@ class TestSpecificCommands:
         tag = next(a for a in cmd.args if a.name == "--tag")
         assert tag.repeatable
 
-    def test_get_has_decrypt(self):
+    def test_get_has_encryption_key(self):
         cmd = get_command("get")
-        decrypt = next(a for a in cmd.args if a.name == "--decrypt")
-        assert decrypt.type == "passphrase"
+        ek = next(a for a in cmd.args if a.name == "--encryption-key")
+        assert ek.type == "passphrase"
 
     def test_ls_sort_choices(self):
         cmd = get_command("ls")

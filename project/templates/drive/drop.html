@@ -52,7 +52,36 @@
       {% if drop.is_password_protected %}
         · 🔑 password protected
       {% endif %}
+      {% if file.encrypted %}
+        · 🔐 encrypted
+      {% endif %}
     </p>
+
+    {% if file.encrypted %}
+    <div id="decryptPrompt" class="decrypt-prompt">
+      <p class="muted" style="font-size:.88rem;margin-bottom:.5rem">This file is encrypted. Enter the passphrase to decrypt in your browser.</p>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <input type="password" id="decryptInput" placeholder="passphrase"
+               autocomplete="off" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:.4rem .7rem;font-size:.88rem;outline:none"/>
+        <button class="btn" id="decryptBtn" onclick="doDecrypt()">decrypt</button>
+      </div>
+      <p id="decryptError" class="error hidden" style="margin-top:.3rem;font-size:.82rem"></p>
+      {% if is_owner %}
+      <details style="margin-top:.6rem">
+        <summary class="muted" style="font-size:.78rem;cursor:pointer">permanently remove encryption</summary>
+        <p class="muted" style="font-size:.78rem;margin:.3rem 0">
+          This will decrypt the file on the server. The encryption is removed and the file becomes plaintext.
+        </p>
+        <div style="display:flex;gap:.5rem;align-items:center;margin-top:.3rem">
+          <input type="password" id="permDecryptInput" placeholder="encryption key"
+                 autocomplete="off" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:.4rem .7rem;font-size:.85rem;outline:none"/>
+          <button class="btn-sm danger" onclick="doPermDecrypt()">decrypt permanently</button>
+        </div>
+        <p id="permDecryptStatus" class="hidden" style="margin-top:.3rem;font-size:.82rem"></p>
+      </details>
+      {% endif %}
+    </div>
+    {% endif %}
 
     {% if drop.expires_at %}
     <p class="share-hint">
@@ -634,5 +663,96 @@ async function saveFileEdit() {
     saveBtn.textContent = 'save';
   }
 }
+
+{% if file.encrypted %}
+// ── Decryption (AES-256-GCM, matches home page encrypt format) ─────────────
+async function deriveKey(passphrase, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+}
+
+async function doDecrypt() {
+  const input  = document.getElementById('decryptInput');
+  const errEl  = document.getElementById('decryptError');
+  const prompt = document.getElementById('decryptPrompt');
+  const pass   = input.value;
+  errEl.classList.add('hidden');
+  if (!pass) { errEl.textContent = 'Enter a passphrase.'; errEl.classList.remove('hidden'); return; }
+
+  const btn = document.getElementById('decryptBtn');
+  btn.disabled = true; btn.textContent = '…';
+
+  try {
+    // Fetch encrypted bytes
+    const res  = await fetch(`/${KEY}/raw/`);
+    const buf  = new Uint8Array(await res.arrayBuffer());
+    const salt = buf.slice(0, 16);
+    const iv   = buf.slice(16, 28);
+    const ct   = buf.slice(28);
+    const key  = await deriveKey(pass, salt);
+    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    const plainArr = new Uint8Array(plainBuf);
+
+    // Replace content on the page
+    const contentType = '{{ file.content_type }}';
+    if (contentType.startsWith('text/')) {
+      const text = new TextDecoder().decode(plainArr);
+      const el = document.getElementById('clipContent') || document.getElementById('getContent');
+      if (el) el.textContent = text;
+    } else {
+      // Offer decrypted file as download
+      const blob = new Blob([plainArr]);
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = '{{ file.filename }}'; a.click();
+      URL.revokeObjectURL(url);
+    }
+    prompt.style.display = 'none';
+    showToast('decrypted!');
+  } catch (e) {
+    errEl.textContent = 'Decryption failed. Wrong passphrase?';
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = 'decrypt';
+  }
+}
+
+// Allow Enter key in passphrase input
+document.getElementById('decryptInput')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doDecrypt();
+});
+
+{% if is_owner %}
+async function doPermDecrypt() {
+  const passphrase = document.getElementById('permDecryptInput').value;
+  const status = document.getElementById('permDecryptStatus');
+  if (!passphrase) { status.textContent = 'enter the encryption key'; status.className = 'error'; return; }
+  status.className = ''; status.textContent = 'decrypting…';
+  try {
+    const res = await fetch('/{{ drop.key }}/decrypt/', {
+      method: 'POST',
+      headers: {'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json'},
+      body: JSON.stringify({encryption_key: passphrase}),
+    });
+    const data = await res.json();
+    if (res.ok) { status.className = ''; status.textContent = '✓ encryption removed'; location.reload(); }
+    else { status.className = 'error'; status.textContent = data.error || 'failed'; }
+  } catch (err) { status.className = 'error'; status.textContent = err.message; }
+}
+document.getElementById('permDecryptInput')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doPermDecrypt();
+});
+{% endif %}
+
+{% endif %}
 </script>
 {% endblock %}

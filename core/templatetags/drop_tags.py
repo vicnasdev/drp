@@ -43,3 +43,29 @@ def tag_color(tag):
     """Deterministic colour class for a tag."""
     colors = ["blue", "green", "orange", "purple", "red", "teal"]
     return colors[hash(tag) % len(colors)]
+
+
+@register.filter
+def split(value, delimiter=","):
+    """Split a string by delimiter.  If already a list, return as-is."""
+    if isinstance(value, list):
+        return value
+    try:
+        return [x.strip() for x in value.split(delimiter)]
+    except (AttributeError, TypeError):
+        return []
+
+
+@register.filter
+def is_saved_by(drop, user):
+    """Check if a drop/key is bookmarked by the user."""
+    if not user or not user.is_authenticated:
+        return False
+    try:
+        from drive.models import Bookmark
+        key_obj = drop if hasattr(drop, "key") else None
+        if key_obj is None:
+            return False
+        return Bookmark.objects.filter(user=user, key=key_obj).exists()
+    except Exception:
+        return False

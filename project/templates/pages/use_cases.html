@@ -22,7 +22,7 @@
   <section class="uc-section">
     <div class="uc-text">
       <h2>📎 instant file sharing</h2>
-      <p>Upload any file and get a shareable link. Set expiry, make it public, or password-protect it.</p>
+      <p>Upload any file and get a shareable link. Set expiry, publish it, or password-protect it.</p>
     </div>
     <div class="term" data-delay="1500" data-scene="files">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
@@ -83,7 +83,7 @@
   <section class="uc-section">
     <div class="uc-text">
       <h2>📁 folders</h2>
-      <p>Group related files into folders. Share an entire set with one link. Invite members with reader, writer, or admin roles.</p>
+      <p>Group related files into folders. Navigate your drive like a filesystem in the shell.</p>
     </div>
     <div class="term" data-delay="3000" data-scene="folders">
       <div class="term-bar"><span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span><span class="term-title">terminal</span></div>
@@ -223,18 +223,18 @@ const SCENES = {
     { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/rpt42/</span>  <span class="t-output">(7 days)</span>' },
     { type: 'wait',  ms: 800 },
     { type: 'print', text: '' },
-    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">screenshot.png</span> <span class="t-flag">--public</span>', speed: 35 },
+    { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp up</span> <span class="t-string">screenshot.png</span> <span class="t-flag">--publish</span>', speed: 35 },
     { type: 'wait',  ms: 500 },
-    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/scr01/</span>  <span class="t-output">(public)</span>' },
+    { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/scr01/</span>  <span class="t-output">(published)</span>' },
     { type: 'wait',  ms: 800 },
     { type: 'print', text: '' },
     { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">drp ls</span>', speed: 40 },
     { type: 'wait',  ms: 400 },
     { type: 'print', text: '<span class="t-output">  rpt42   report.pdf       2.4 MB   7d</span>' },
-    { type: 'print', text: '<span class="t-output">  scr01   screenshot.png   340 KB   public</span>' },
+    { type: 'print', text: '<span class="t-output">  scr01   screenshot.png   340 KB   published</span>' },
   ],
   pipes: [
-    { type: 'print', text: '<span class="t-comment"># share command output</span>' },
+    { type: 'print', text: '<span class="t-comment"># pipe into drp</span>' },
     { type: 'type',  text: '<span class="t-prompt">$</span> <span class="t-cmd">git diff</span> <span class="t-cmd">| drp up</span> <span class="t-flag">--key</span> <span class="t-string">today-diff</span>', speed: 30 },
     { type: 'wait',  ms: 500 },
     { type: 'print', text: '<span class="t-success">✓</span> <span class="t-url">https://drp.fyi/today-diff/</span>' },

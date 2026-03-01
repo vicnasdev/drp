@@ -12,8 +12,8 @@ cmd = register(Command(
             required=True),
         Arg("--editor",
             "Override $EDITOR, e.g. --editor nano."),
-        Arg("--decrypt",
-            "Decrypt before editing, re-encrypt before re-uploading.",
+        Arg("--encryption-key",
+            "Passphrase for client-side encrypted content. Decrypts for editing, re-encrypts on save.",
             type="passphrase"),
     ),
 ))

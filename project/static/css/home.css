@@ -137,6 +137,26 @@ textarea:disabled { opacity: .4; }
 .expiry-row label { color: var(--muted); }
 .expiry-row select { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); padding: .3rem .6rem; font-size: .88rem; outline: none; }
 
+/* ── Advanced options panel ── */
+.advanced-toggle {
+  background: none; border: none; cursor: pointer;
+  font-size: .82rem; color: var(--muted); padding: .3rem 0; margin-bottom: .3rem;
+  font-family: inherit; font-weight: 500; display: flex; align-items: center; gap: .3rem;
+}
+.advanced-toggle:hover { color: var(--text); }
+.advanced-panel { display: flex; flex-direction: column; gap: .5rem; margin-bottom: .6rem;
+  padding: .7rem; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); }
+.advanced-panel.hidden { display: none; }
+.adv-row { display: flex; align-items: center; gap: .5rem; font-size: .85rem; flex-wrap: wrap; }
+.adv-row label { color: var(--muted); white-space: nowrap; }
+.adv-row input[type="text"],
+.adv-row input[type="password"] {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); padding: .3rem .6rem; font-size: .85rem; outline: none; flex: 1; min-width: 150px;
+}
+.adv-row input[type="checkbox"] { accent-color: var(--accent); }
+
 /* ── Home tabs (save / get) ── */
 .home-tabs {
   display: flex;

@@ -34,7 +34,7 @@ https://drp.fyi/raw/mykey/      ← plain text (curl-friendly)
 ![img](https://drp.fyi/raw/avatar/)  ← markdown image
 ```
 
-**Collections** — organize drops into folders with sub-collections, shareable URLs, and shell navigation.
+**Collections** — organize files into folders with sub-folders and shell navigation.
 
 **Plans** — anonymous drops work instantly. [Sign up free](https://drp.fyi/auth/register/) for longer expiry, or go [Starter/Pro](https://drp.fyi/help/plans/) for collections, passwords, API tokens, and more.
 

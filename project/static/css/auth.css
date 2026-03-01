@@ -57,3 +57,11 @@
   .account-header h1 { font-size: 1.4rem; }
   .plan-status { flex-direction: column; align-items: flex-start; gap: .3rem; }
 }
+
+/* ── Inline badge ── */
+.badge-sm { font-size:.72rem; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:.1rem .35rem; color:var(--muted); vertical-align:middle; margin-left:.2rem; }
+
+/* ── Modal overlay ── */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:100; }
+.modal-box { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:1.2rem 1.4rem; min-width:320px; max-width:420px; width:90vw; }
+.modal-box h3 { font-size:1rem; font-weight:700; }
