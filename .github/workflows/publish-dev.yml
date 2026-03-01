@@ -158,9 +158,8 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Publishing ${pkg} ${version} (latest on PyPI: ${latest:-none})"
 
-      - name: Stamp version into CLI
-        run: |
-          sed -i "s/__version__ = _resolve_version()/__version__ = '${{ steps.version.outputs.version }}'/" cli/__init__.py
+      - name: Stamp version
+        run: echo '${{ steps.version.outputs.version }}' > VERSION
 
       - name: Build drp-dev
         run: pip install build && python -m build
