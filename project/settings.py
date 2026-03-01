@@ -184,7 +184,7 @@ TURNSTILE_SITE_KEY   = os.environ.get('TURNSTILE_SITE_KEY', '')
 TURNSTILE_SECRET_KEY = os.environ.get('TURNSTILE_SECRET_KEY', '')
 
 # ── GitHub webhook ────────────────────────────────────────────────────────────
-GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_WEBHOOK_SECRET', '')# Hardcoded per environment — no more `make set-domain`
+GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_ISSUES_TOKEN', '')# Hardcoded per environment — no more `make set-domain`
 GITHUB_WEBHOOK_URL = f"https://{DOMAIN}/api/github-webhook/" if DOMAIN else ""
 # ── Help bot (LLM — OpenAI-compatible, e.g. Ollama) ──────────────────────────
 LLM_BASE_URL = os.environ.get('LLM_BASE_URL', '')   # e.g. http://ollama.railway.internal:11434/v1
