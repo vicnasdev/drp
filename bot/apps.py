@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class HelpConfig(AppConfig):
+class BotConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'help'
+    name = 'bot'
