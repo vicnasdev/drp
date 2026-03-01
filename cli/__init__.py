@@ -1,9 +1,10 @@
 """drp CLI — file and text sharing from the command line."""
 
-from pathlib import Path as _Path
+from importlib.metadata import version as _version, PackageNotFoundError
 
-_version_file = _Path(__file__).resolve().parent.parent / "VERSION"
 try:
-    __version__ = _version_file.read_text().strip()
-except FileNotFoundError:
-    __version__ = "0.0.0"
+    __version__ = _version("drp-dev")
+except PackageNotFoundError:
+    # Running from source checkout (not pip-installed)
+    from pathlib import Path as _Path
+    __version__ = (_Path(__file__).resolve().parent.parent / "VERSION").read_text().strip()

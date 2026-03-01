@@ -78,7 +78,7 @@ Issues    = "https://github.com/vicnasdev/drp/issues"
 drp = "cli.main:main"
 
 [tool.setuptools.dynamic]
-version = {attr = "cli.__version__"}
+version = {file = "VERSION"}
 
 [tool.setuptools.packages.find]
 include = ["cli*"]
