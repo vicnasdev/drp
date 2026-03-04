@@ -1,8 +1,7 @@
 """
 Entry point for the drp CLI.
 
-    drp                     → interactive shell (REPL)
-    drp <command> [args]    → run a single command and exit
+    drp <command> [args]    → run a single command
 """
 
 from __future__ import annotations

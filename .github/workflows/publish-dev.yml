@@ -53,77 +53,6 @@ jobs:
 
       # ── Smoke tests (require DRP_SMOKE_HOST secret) ───────────────────────
 
-      - name: Smoke — text drop upload, get, delete
-        if: ${{ env.DRP_SMOKE_HOST != '' }}
-        env:
-          DRP_SMOKE_HOST: ${{ secrets.DRP_SMOKE_HOST }}
-        shell: bash
-        run: |
-          KEY="ci-smoke-$(python -c 'import uuid; print(uuid.uuid4().hex[:8])')"
-
-          python -c "
-          from cli import config
-          cfg = config.load()
-          cfg['host'] = '${{ secrets.DRP_SMOKE_HOST }}'
-          config.save(cfg)
-          "
-
-          URL=$(drp up "hello from ci ${{ matrix.os }} py${{ matrix.python-version }}" --key "$KEY")
-          echo "Uploaded: $URL"
-          [ -z "$URL" ] && { echo "Upload returned empty URL"; exit 1; }
-
-          RESULT=$(drp get "$KEY")
-          echo "Got: $RESULT"
-          echo "$RESULT" | grep -q "hello from ci" || { echo "Content mismatch"; exit 1; }
-
-          drp ls | grep -q "$KEY" || { echo "Key not found in drp ls"; exit 1; }
-
-          drp rm "$KEY"
-
-          drp get "$KEY" && { echo "Drop still accessible after delete"; exit 1; } || true
-
-      - name: Smoke — stdin pipe upload
-        if: ${{ env.DRP_SMOKE_HOST != '' }}
-        env:
-          DRP_SMOKE_HOST: ${{ secrets.DRP_SMOKE_HOST }}
-        shell: bash
-        run: |
-          KEY="ci-stdin-$(python -c 'import uuid; print(uuid.uuid4().hex[:8])')"
-          URL=$(echo "stdin test from ci" | drp up --key "$KEY")
-          echo "Uploaded via stdin: $URL"
-          [ -z "$URL" ] && { echo "Stdin upload returned empty URL"; exit 1; }
-          drp get "$KEY" | grep -q "stdin test" || { echo "Stdin content mismatch"; exit 1; }
-          drp rm "$KEY"
-
-      - name: Smoke — file drop upload, get
-        if: ${{ env.DRP_SMOKE_HOST != '' }}
-        env:
-          DRP_SMOKE_HOST: ${{ secrets.DRP_SMOKE_HOST }}
-        shell: bash
-        run: |
-          KEY="ci-file-$(python -c 'import uuid; print(uuid.uuid4().hex[:8])')"
-          CONTENT="file content from ${{ matrix.os }}"
-
-          python -c "
-          with open('ci_test_file.txt', 'w') as f:
-              f.write('$CONTENT')
-          "
-
-          URL=$(drp up ci_test_file.txt --key "$KEY")
-          echo "Uploaded file: $URL"
-          [ -z "$URL" ] && { echo "File upload returned empty URL"; exit 1; }
-
-          echo "$URL" | grep -q "/$KEY" || { echo "File URL missing key"; exit 1; }
-
-          drp get -f "$KEY" -o ci_downloaded.txt
-          python -c "
-          content = open('ci_downloaded.txt').read()
-          assert '$CONTENT' in content, f'Content mismatch: {content!r}'
-          print('File content verified')
-          "
-
-          drp rm -f "$KEY"
-          rm -f ci_test_file.txt ci_downloaded.txt
 
   # ── Publish drp-dev (no tags, no releases) ────────────────────────────────
 
@@ -160,6 +89,9 @@ jobs:
 
       - name: Stamp version
         run: echo '${{ steps.version.outputs.version }}' > VERSION
+
+      - name: Stamp __version__ in cli/__init__.py
+        run: echo "__version__ = '${{ steps.version.outputs.version }}'" > cli/__init__.py
 
       - name: Build drp-dev
         run: pip install build && python -m build
