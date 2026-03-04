@@ -5,12 +5,13 @@
 __pycache__/
 *.py[cod]
 *.$py.class
+build/
 
 .history/
 *.db
 *.sqlite
 *.sqlite3
-staticfiles/*
-!staticfiles/.gitkeep
+**/staticfiles/*
+!**/staticfiles/.gitkeep
 *.egg-info/
-TODO.md
+tmp/
