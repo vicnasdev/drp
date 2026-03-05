@@ -109,9 +109,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         cmd_func.run(parsed)
     except Exception as exc:
-        from cli.crash.reporter import report
-        crash_url = f"https://{server}/api/v1/crash/"
-        report(cmd, exc, url=crash_url)
+        from cli.crash.reporter import report, user_message
+        fp = report(cmd, exc, url=f"https://{server}/api/v1/crash/")
+        print(f"[red]✗[/red] {user_message(cmd, fp)}")
         return 1
 
     return 0

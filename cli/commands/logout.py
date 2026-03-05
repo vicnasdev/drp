@@ -12,14 +12,10 @@ def run(args):
     token = get_secret("token")
 
     if token and server:
-        data = requests.get(f"https://{server}/api/v1/status/", headers={"Authorization": f"Token {token}"}).json()
+        data = requests.get(f"https://{server}/api/v1/auth/status/", headers={"Authorization": f"Token {token}"}).json()
         if data.get("plan") == "anonymous":
             print("[yellow]Warning: your guest account and all its data will be permanently deleted.[/yellow]")
-
-        try:
-            requests.post(f"https://{server}/api/v1/auth/logout/", headers={"Authorization": f"Token {token}"})
-        except Exception:
-            pass
+        requests.post(f"https://{server}/api/v1/auth/logout/", headers={"Authorization": f"Token {token}"})
 
     del_secret("token")
     print("[green]✓[/green] Logged out.")
