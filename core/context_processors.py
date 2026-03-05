@@ -1,6 +1,5 @@
 from django.conf import settings
-
-from core.models import ANONYMOUS_LIMITS, Plan, plan_display
+from core.models import LIMITS, Plan
 
 
 def ads(request):
@@ -17,72 +16,28 @@ def domain(request):
     }
 
 
-def helpbot(request):
-    return {
-        "HELPBOT_ENABLED": bool(getattr(settings, "LLM_BASE_URL", "")),
-    }
-
-
-# ── Plan context ──────────────────────────────────────────────────────────────
-
 def plans(request):
-    """Inject plan display data into every template.
-
-    Available in templates:
-        guest_limits, free_limits, starter_limits, pro_limits
-        guest_expiry, free_expiry  — short strings for footer
-        expiry_options  — list for home.html expiry selector
-        anon_expiry_label  — e.g. "1 day" for guest nudge
-        plan_limits  — current user's plan limits
-    """
-    guest = plan_display("anonymous")
-    guest["label"] = "Guest"
-    free = plan_display(Plan.FREE)
-    starter = plan_display(Plan.STARTER)
-    pro = plan_display(Plan.PRO)
-
-    ctx = {
-        "guest_limits": guest,
-        "free_limits": free,
-        "starter_limits": starter,
-        "pro_limits": pro,
-        "guest_expiry": guest["expiry_display"],
-        "free_expiry": free["expiry_display"],
-        "anon_expiry_label": guest["expiry_display"],
-    }
-
     user = getattr(request, "user", None)
-    if user and user.is_authenticated:
-        profile = getattr(user, "profile", None)
-        if profile:
-            if profile.is_anonymous:
-                ctx["plan_limits"] = guest
-                ctx["expiry_options"] = _expiry_options(guest["max_expiry_days"])
-            else:
-                user_lim = plan_display(profile.plan)
-                ctx["plan_limits"] = user_lim
-                ctx["expiry_options"] = _expiry_options(user_lim["max_expiry_days"])
-    else:
-        ctx["plan_limits"] = guest
-        ctx["expiry_options"] = _expiry_options(guest["max_expiry_days"])
+    profile = getattr(user, "profile", None) if user and user.is_authenticated else None
+    current_plan = profile.plan if profile else Plan.ANONYMOUS
+
+    ctx = {f"{plan.value}_limits": LIMITS[plan] for plan in Plan}
+    ctx["plan_limits"] = LIMITS[current_plan]
+    ctx["expiry_options"] = _expiry_options(LIMITS[current_plan]["max_expiry_days"])
 
     return ctx
 
 
+def _expiry_label(days: int) -> str:
+    if days >= 365 and days % 365 == 0:
+        y = days // 365
+        return f"{y} year{'s' if y != 1 else ''}"
+    return f"{days} day{'s' if days != 1 else ''}"
+
+
 def _expiry_options(max_days: int) -> list[dict]:
-    """Build a list of expiry options up to *max_days*."""
-    all_opts = [
-        (1, "1 day"),
-        (7, "7 days"),
-        (30, "30 days"),
-        (90, "90 days"),
-        (365, "1 year"),
-        (365 * 3, "3 years"),
-    ]
-    options = []
-    for days, label in all_opts:
-        if days <= max_days:
-            options.append({"days": days, "label": label, "selected": False})
+    breakpoints = sorted(set(LIMITS[plan]["max_expiry_days"] for plan in Plan))
+    options = [{"days": d, "label": _expiry_label(d), "selected": False} for d in breakpoints if d <= max_days]
     if options:
         options[-1]["selected"] = True
     return options
