@@ -11,7 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 
 from api.models import CrashReport
-from core.models import create_guest_user, create_token, validate_token
+from core.models import create_guest_user, create_token, validate_token, LIMITS
 
 logger = logging.getLogger(__name__)
 
@@ -77,10 +77,12 @@ def status(request):
         return JsonResponse({"error": "unauthorized"}, status=401)
     profile = user.profile
     return JsonResponse({
-        "username": user.username,
-        "plan": profile.plan,
-        "storage_used": profile.storage_used,
-    })
+    "username": user.username,
+    "plan": profile.plan,
+    "storage_used": profile.storage_used,
+    "storage_used_gb": round(profile.storage_used / 1024**3, 2),
+    "storage_limit_gb": round(LIMITS[profile.plan]["storage_bytes"] / 1024**3, 2),
+})
 
 
 # ── Ping ──────────────────────────────────────────────────────────────────────
