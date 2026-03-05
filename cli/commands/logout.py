@@ -15,7 +15,10 @@ def run(args):
     if token and server:
         data = requests.get(f"https://{server}/api/v1/auth/status/", headers={"Authorization": f"Token {token}"}).json()
         if data.get("plan") == "anonymous":
-            print("[yellow]Warning: your guest account and all its data will be permanently deleted.[/yellow]")
+            ans = input("[yellow]Warning: your guest account and all its data will be permanently deleted.[/yellow]\nConfirm(YES/NO): ")
+            if ans != "YES":
+                print("Operation canceled")
+                return 1
         requests.post(f"https://{server}/api/v1/auth/logout/", headers={"Authorization": f"Token {token}"})
 
     del_secret("token")
