@@ -7,6 +7,6 @@ def spin(func: object, text: str):
     def res(*args):
         with console.status(text):
             sleep(0.1)
-            print()
+            console.print()
             func(*args)
     return res
