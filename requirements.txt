@@ -10,3 +10,4 @@ boto3
 markdown
 pytest-timeout
 qrcode[pil]
+rich==14.3.3
