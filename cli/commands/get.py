@@ -12,7 +12,7 @@ cmd = register(Command(
     args=(
         Arg("path",
             "Path on the drive",
-            required=True),
+            required=False),
         Arg(
             "--key",
             "Key of a file"
