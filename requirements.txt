@@ -10,7 +10,6 @@ boto3
 markdown
 pytest-timeout
 qrcode[pil]
-rich
 platformdirs
 keyring
 halo

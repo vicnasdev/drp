@@ -1,8 +1,7 @@
-from halo import Halo
+from rich.console import Console
 
 def spin(func: object, text: str):
     def res(*args):
-        with Halo(text=text) as spinner:
+        with Console.status(text):
             func(*args)
-            spinner.stop()
     return res
