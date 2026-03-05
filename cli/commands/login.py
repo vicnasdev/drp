@@ -1,28 +1,51 @@
 """login — Authenticate"""
 
+import requests
+from rich import print
+
 from . import Arg, Command, register
-from cli.config import set as set_config
+from cli.config import set_config, set_secret
 from cli.defaults import server
 
 cmd = register(Command(
     name="login",
     description="Authenticate.",
     args=(
-        Arg("--server", "drp server", required=True, default=server),
-        Arg("--token", "Authentication token"),
+        Arg("-s/--server", "drp server", required=True, default=server),
+        Arg("-t/--token", "Authentication token"),
         Arg("username", "Username or email"),
         Arg("password", "Password"),
-        Arg("--duration", "Duration of the session"),
+        Arg("-d/--duration", "Duration of the session (e.g. 7d, 2h)"),
     )
 ))
 
+
 def run(args: dict[str, str]):
-    # POST /api/v1/auth/login with {username, password, duration} or {token}
-    # store returned token with keyring.set_password("drp", "token", token)
-    # store server with set_config("server", server)
-    # store machine_info() alongside token so dashboard can show device name
-    
     set_config("server", args["server"])
-    pass
+
+    if args.get("token"):
+        set_secret("token", args["token"])
+        print("[green]✓[/green] Token saved.")
+        return
+
+    if args.get("username") and args.get("password"):
+        body = {"username": args["username"], "password": args["password"]}
+        if args.get("duration"):
+            body["duration"] = args["duration"]
+        resp = requests.post(f"https://{args['server']}/api/v1/auth/login/", json=body)
+        if resp.status_code != 200:
+            print(f"[red]✗[/red] Login failed: {resp.json().get('error', 'unknown error')}")
+            return
+        set_secret("token", resp.json()["token"])
+        print(f"[green]✓[/green] Logged in as {args['username']}.")
+        return
+
+    resp = requests.post(f"https://{args['server']}/api/v1/auth/guest/")
+    if resp.status_code != 200:
+        print("[red]✗[/red] Could not create guest session.")
+        return
+    set_secret("token", resp.json()["token"])
+    print("[green]✓[/green] Guest session started.")
+
 
 cmd.run = run

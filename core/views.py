@@ -11,11 +11,11 @@ from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
-from core.models import Plan, UserProfile, plan_display
+from core.models import Plan, UserProfile, is_anonymous
 
 logger = logging.getLogger(__name__)
 
-# ── error handler ────────────────────────────────────────────────────────
+_signer = TimestampSigner(salt="email-verify")
 
 _ERROR_MESSAGES = {
     400: "Bad request.",
@@ -25,12 +25,10 @@ _ERROR_MESSAGES = {
 }
 
 
+# ── helpers ───────────────────────────────────────────────────────────────────
+
 def error_view(request, exception=None, status=None):
-    """Unified error handler for 400/403/404/500."""
-    # Django passes status via the handler variable name, not as an arg.
-    # Determine from caller context.
     code = status or getattr(exception, "status_code", None) or 500
-    # handler404 passes the exception with no status_code attr
     if exception is not None and code == 500:
         code = 404
     if code >= 500:
@@ -41,13 +39,7 @@ def error_view(request, exception=None, status=None):
     }, status=code)
 
 
-# ── helpers ──────────────────────────────────────────────────────────────
-
-_signer = TimestampSigner(salt="email-verify")
-
-
 def _send_verification_email(user):
-    """Send a signed verification link to *user*."""
     token = _signer.sign(str(user.pk))
     link = f"https://{settings.DOMAIN}/auth/verify/{token}/"
     html = render_to_string("email/verify.html", {"user": user, "link": link})
@@ -61,7 +53,7 @@ def _send_verification_email(user):
     )
 
 
-# ── auth views ───────────────────────────────────────────────────────────
+# ── auth ──────────────────────────────────────────────────────────────────────
 
 def login_view(request):
     if request.user.is_authenticated:
@@ -69,10 +61,8 @@ def login_view(request):
     if request.method == "POST":
         identifier = request.POST.get("email", "").strip()
         password = request.POST.get("password", "")
-        # Allow login by username or email
         user = authenticate(request, username=identifier, password=password)
         if user is None:
-            # Try email lookup
             try:
                 u = User.objects.get(email=identifier)
                 user = authenticate(request, username=u.username, password=password)
@@ -88,30 +78,21 @@ def login_view(request):
 def register_view(request):
     if request.user.is_authenticated:
         return redirect("account")
-    ctx = {
-        "free_limits": plan_display("free"),
-        "starter_limits": plan_display("starter"),
-        "pro_limits": plan_display("pro"),
-    }
     if request.method == "POST":
         username = request.POST.get("username", "").strip()
         email = request.POST.get("email", "").strip()
         password = request.POST.get("password", "")
         password2 = request.POST.get("password2", "")
-        plan_choice = request.POST.get("plan", "free")
+        plan_choice = request.POST.get("plan", Plan.FREE)
 
         if not username or not email or not password:
-            ctx["error"] = "All fields are required."
-            return render(request, "auth/register.html", ctx)
+            return render(request, "auth/register.html", {"error": "All fields are required."})
         if password != password2:
-            ctx["error"] = "Passwords do not match."
-            return render(request, "auth/register.html", ctx)
+            return render(request, "auth/register.html", {"error": "Passwords do not match."})
         if User.objects.filter(username=username).exists():
-            ctx["error"] = "That username is taken."
-            return render(request, "auth/register.html", ctx)
+            return render(request, "auth/register.html", {"error": "That username is taken."})
         if User.objects.filter(email=email).exists():
-            ctx["error"] = "An account with that email already exists."
-            return render(request, "auth/register.html", ctx)
+            return render(request, "auth/register.html", {"error": "An account with that email already exists."})
 
         user = User.objects.create_user(username=username, email=email, password=password)
         UserProfile.objects.create(user=user, plan=plan_choice)
@@ -122,51 +103,46 @@ def register_view(request):
             return redirect(f"/billing/checkout/{plan_choice}/")
         return redirect("account")
 
-    return render(request, "auth/register.html", ctx)
+    return render(request, "auth/register.html")
 
 
 def logout_view(request):
+    user = request.user
     logout(request)
+    if is_anonymous(user):
+        delete_account(user)
     return redirect("/")
 
 
-# ── account ──────────────────────────────────────────────────────────────
+# ── account ───────────────────────────────────────────────────────────────────
 
 @login_required(login_url="/auth/login/")
 def account_view(request):
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
-    from drive.models import Key  # avoid circular import at module level
-
+    from drive.models import Key
     drops = Key.objects.filter(file__owner=request.user).select_related("file")
     return render(request, "auth/account.html", {
         "profile": profile,
         "drops": drops,
-        "plan_limits": plan_display(profile.plan),
-        "starter_limits": plan_display("starter"),
-        "pro_limits": plan_display("pro"),
     })
 
 
 @login_required(login_url="/auth/login/")
 def account_settings(request):
-    """POST — save notification preferences."""
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     if request.method == "POST":
         profile.notify_product_updates = bool(request.POST.get("notify_product_updates"))
         profile.notify_billing = bool(request.POST.get("notify_billing"))
         profile.notify_bug_fix = bool(request.POST.get("notify_bug_fix"))
-        profile.save(update_fields=[
-            "notify_product_updates", "notify_billing", "notify_bug_fix",
-        ])
+        profile.save(update_fields=["notify_product_updates", "notify_billing", "notify_bug_fix"])
     return redirect("account")
 
 
-# ── email verification ───────────────────────────────────────────────────
+# ── email verification ────────────────────────────────────────────────────────
 
 def verify_email(request, token):
-    """GET  /auth/verify/<token>/  — confirm email."""
     try:
-        pk = _signer.unsign(token, max_age=86400)  # 24 h
+        pk = _signer.unsign(token, max_age=86400)
     except SignatureExpired:
         return render(request, "auth/verify_expired.html", {
             "email": request.user.email if request.user.is_authenticated else "",
@@ -187,10 +163,7 @@ def verify_email(request, token):
 
 @login_required(login_url="/auth/login/")
 def verify_resend(request):
-    """POST — resend verification email."""
     if request.method == "POST":
         _send_verification_email(request.user)
-        return render(request, "auth/verify_resend.html", {
-            "sent": True, "email": request.user.email,
-        })
+        return render(request, "auth/verify_resend.html", {"sent": True, "email": request.user.email})
     return render(request, "auth/verify_resend.html", {"sent": False})
