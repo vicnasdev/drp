@@ -70,6 +70,8 @@ def validate_args(parsed: dict, cmd_func) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
+    if args and args[0] in ["--help", "-h"]:
+        args = ["help"]
 
     cmd = args[0] if args else "help"
 
