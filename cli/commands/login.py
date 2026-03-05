@@ -4,12 +4,15 @@ import requests
 from rich import print
 
 from . import Arg, Command, register
-from cli.config import set as set_config, set_secret
+from cli.config import set as set_config, set_secret, get_secret
 from cli.defaults import server
-
-
+from cli.utils import spin
 
 def run(args: dict[str, str]):
+    if get_secret("token"):
+        print("Please logout first")
+        return 1
+        
     set_config("server", args["server"])
 
     if args.get("token"):
@@ -46,5 +49,5 @@ cmd = register(Command(
         Arg("password", "Password"),
         Arg("-d/--duration", "Duration of the session (e.g. 7d, 2h)"),
     ),
-    run=run
+    run=spin(run, "Contacting server")
 ))

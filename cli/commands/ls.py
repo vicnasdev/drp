@@ -1,6 +1,10 @@
 """ls — List files and folders."""
 
 from . import Arg, Command, register
+from cli.utils import spin
+
+def run():
+    print("Soon.")
 
 cmd = register(Command(
     name="ls",
@@ -13,4 +17,5 @@ cmd = register(Command(
             "Sort by field.",
             choices=("name", "size", "exp")),
     ),
+    run=spin(run, "Loading")
 ))

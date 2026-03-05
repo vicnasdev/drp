@@ -1,6 +1,10 @@
 """up — Upload a file, directory, glob, or text."""
 
 from . import Arg, Command, register
+from cli.utils import spin
+
+def run():
+    print("Soon.")
 
 cmd = register(Command(
     name="up",
@@ -33,4 +37,5 @@ cmd = register(Command(
             "Treat target as literal text content, not a filename.",
             type="bool"),
     ),
+    run=spin(run, "Loading")
 ))

@@ -13,3 +13,4 @@ qrcode[pil]
 rich
 platformdirs
 keyring
+halo

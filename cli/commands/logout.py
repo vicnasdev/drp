@@ -5,6 +5,7 @@ from rich import print
 
 from . import Command, register
 from cli.config import del_secret, get as get_config, get_secret
+from cli.utils import spin
 
 
 def run(args):
@@ -23,5 +24,5 @@ def run(args):
 cmd = register(Command(
     name="logout",
     description="Revoke the current bearer token on the server and clear local config.",
-    run=run
+    run=spin(run, "Contacting server")
 ))

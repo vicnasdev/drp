@@ -1,6 +1,10 @@
 """get — Download a file to disk."""
 
 from . import Arg, Command, register
+from cli.utils import spin
+
+def run():
+    print("Soon.")
 
 cmd = register(Command(
     name="get",
@@ -19,4 +23,5 @@ cmd = register(Command(
             "Passphrase for client-side encrypted content. Decrypts after download.",
             type="passphrase"),
     ),
+    run=spin(run, "Loading")
 ))

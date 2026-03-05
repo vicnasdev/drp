@@ -33,6 +33,7 @@ dependencies = [
     "tomli>=2.0; python_version < '3.11'",
     "tomli-w>=1.0",
     "platformdirs>=4.0",
+    "halo"
 ]
 authors = [{name = "Vic Nas"}]
 keywords = ["cli", "file-sharing", "pastebin", "drops"]

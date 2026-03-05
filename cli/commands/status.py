@@ -5,6 +5,7 @@ from rich import print
 
 from . import Command, register
 from cli.config import get as get_config, get_secret
+from cli.utils import spin
 
 
 def run(args: dict[str, str]):
@@ -28,5 +29,5 @@ def run(args: dict[str, str]):
 cmd = register(Command(
     name="status",
     description="Display account info: username, plan, storage, file count.",
-    run=run
+    run=spin(run, "Asking")
 ))

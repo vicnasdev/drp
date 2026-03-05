@@ -1,6 +1,10 @@
 """cat — Display a file's content in the terminal with syntax highlighting."""
 
 from . import Arg, Command, register
+from cli.utils import spin
+
+def run():
+    print("Soon.")
 
 cmd = register(Command(
     name="cat",
@@ -23,4 +27,5 @@ cmd = register(Command(
         Arg("--highlight",
             "Force a syntax lexer, e.g. --highlight python. Overrides auto-detection."),
     ),
+    run=spin(run, "Loading")
 ))

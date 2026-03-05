@@ -1,6 +1,10 @@
 """rm — Delete a file or folder."""
 
 from . import Arg, Command, register
+from cli.utils import spin
+
+def run():
+    print("Soon.")
 
 cmd = register(Command(
     name="rm",
@@ -10,4 +14,5 @@ cmd = register(Command(
             "Key, filename, or folder path to delete.",
             required=True),
     ),
+    run=spin(run, "Loading")
 ))
