@@ -7,7 +7,8 @@ from pathlib import Path
 import markdown
 from django.shortcuts import render
 
-from cli.commands import Arg, Command, all_commands
+from cli.commands import Arg, Command, _COMMANDS
+from core.models import LIMITS, Plan
 
 # ── README rendering ──────────────────────────────────────────────────────────
 
@@ -15,7 +16,6 @@ _README = Path(__file__).resolve().parent.parent / "README.md"
 
 
 def _readme_html() -> str:
-    """Convert the project README to safe HTML."""
     try:
         text = _README.read_text()
     except FileNotFoundError:
@@ -24,18 +24,9 @@ def _readme_html() -> str:
 
 
 # ── CLI template adapters ─────────────────────────────────────────────────────
-#
-# The help/cli.html template expects a ``parser_info`` context object with
-# .description, .commands (list of TemplateCmd), and .epilog.
-# Each TemplateCmd has .name, .help, .args (list of TemplateArg), .epilog.
-#
-# We map our Command / Arg dataclasses into these lightweight wrappers.
-
 
 @dataclass
 class TemplateArg:
-    """Thin adapter so the CLI template can render an Arg."""
-
     name: str
     help: str
     positional: bool
@@ -48,31 +39,21 @@ class TemplateArg:
 
 @dataclass
 class TemplateCmd:
-    """Thin adapter so the CLI template can render a Command."""
-
     name: str
     help: str
     args: list[TemplateArg] = field(default_factory=list)
     epilog: str = ""
 
 
-def _is_positional(arg: Arg) -> bool:
-    return not arg.name.startswith("-")
-
-
 def _adapt_arg(arg: Arg) -> TemplateArg:
-    positional = _is_positional(arg)
-    is_flag = arg.type == "bool"
-    # Build a display-friendly metavar from the arg name
-    metavar = re.sub(r"^-+", "", arg.name).replace("-", "_").upper()
-    flags = arg.name if not positional else ""
+    positional = not arg.name.startswith("-")
     return TemplateArg(
         name=arg.name,
         help=arg.description,
         positional=positional,
-        flags=flags,
-        metavar=metavar,
-        is_flag=is_flag,
+        flags=arg.name if not positional else "",
+        metavar=re.sub(r"^-+", "", arg.name).replace("-", "_").upper(),
+        is_flag=arg.type == "bool",
         required=arg.required,
         default=str(arg.default) if arg.default is not None else "",
     )
@@ -94,10 +75,9 @@ class ParserInfo:
 
 
 def _parser_info() -> ParserInfo:
-    cmds = all_commands()
     return ParserInfo(
         description="Share text and files from your terminal.",
-        commands=[_adapt_command(c) for c in sorted(cmds.values(), key=lambda c: c.name)],
+        commands=[_adapt_command(c) for c in sorted(_COMMANDS.values(), key=lambda c: c.name)],
         epilog=(
             "# push text\n"
             "echo 'hello' | drp up\n\n"
@@ -111,34 +91,16 @@ def _parser_info() -> ParserInfo:
     )
 
 
-from core.models import Plan, plan_display
-
-
 # ── Plan context helper ───────────────────────────────────────────────────────
 
 def _plans_context():
-    """Return context dicts for all plan tiers (guest through pro)."""
-    guest = plan_display("anonymous")
-    guest["label"] = "Guest"
-    free = plan_display(Plan.FREE)
-    starter = plan_display(Plan.STARTER)
-    pro = plan_display(Plan.PRO)
     return {
-        "plans": [
-            ("guest", guest),
-            ("free", free),
-            ("starter", starter),
-            ("pro", pro),
-        ],
-        "guest_limits": guest,
-        "free_limits": free,
-        "starter_limits": starter,
-        "pro_limits": pro,
+        f"{plan.value}_limits": LIMITS[plan]
+        for plan in Plan
     }
 
 
 # ── Views ─────────────────────────────────────────────────────────────────────
-
 
 def help_index(request):
     return render(request, "help/index.html", {"readme_html": _readme_html()})

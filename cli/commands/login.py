@@ -4,20 +4,9 @@ import requests
 from rich import print
 
 from . import Arg, Command, register
-from cli.config import set_config, set_secret
+from cli.config import set as set_config, set_secret
 from cli.defaults import server
 
-cmd = register(Command(
-    name="login",
-    description="Authenticate.",
-    args=(
-        Arg("-s/--server", "drp server", required=True, default=server),
-        Arg("-t/--token", "Authentication token"),
-        Arg("username", "Username or email"),
-        Arg("password", "Password"),
-        Arg("-d/--duration", "Duration of the session (e.g. 7d, 2h)"),
-    )
-))
 
 
 def run(args: dict[str, str]):
@@ -47,5 +36,15 @@ def run(args: dict[str, str]):
     set_secret("token", resp.json()["token"])
     print("[green]✓[/green] Guest session started.")
 
-
-cmd.run = run
+cmd = register(Command(
+    name="login",
+    description="Authenticate.",
+    args=(
+        Arg("-s/--server", "drp server", required=True, default=server),
+        Arg("-t/--token", "Authentication token"),
+        Arg("username", "Username or email"),
+        Arg("password", "Password"),
+        Arg("-d/--duration", "Duration of the session (e.g. 7d, 2h)"),
+    ),
+    run=run
+))

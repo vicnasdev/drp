@@ -83,7 +83,7 @@ def get_command(name: str) -> Command | None:
 
 
 # Load commands
-import importlib, pkgutil, cli.commands
+import importlib, pkgutil
 
-for _, module_name, _ in pkgutil.iter_modules(cli.commands.__path__):
-    importlib.import_module(f"cli.commands.{module_name}")
+for _, module_name, _ in pkgutil.iter_modules(__path__):
+    importlib.import_module(f"{__name__}.{module_name}")

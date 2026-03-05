@@ -4,12 +4,7 @@ import requests
 from rich import print
 
 from . import Command, register
-from cli.config import get_config, get_secret
-
-cmd = register(Command(
-    name="status",
-    description="Display account info: username, plan, storage, file count.",
-))
+from cli.config import get as get_config, get_secret
 
 
 def run(args: dict[str, str]):
@@ -30,5 +25,8 @@ def run(args: dict[str, str]):
     print(f"Storage: {data['storage_used_gb']} GB / {data['storage_limit_gb']} GB")
     print(f"Files: {data['file_count']}")
 
-
-cmd.run = run
+cmd = register(Command(
+    name="status",
+    description="Display account info: username, plan, storage, file count.",
+    run=run
+))
