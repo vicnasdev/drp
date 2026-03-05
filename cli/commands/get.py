@@ -3,7 +3,7 @@
 from . import Arg, Command, register
 from cli.utils import spin
 
-def run():
+def run(args):
     print("Soon.")
 
 cmd = register(Command(
