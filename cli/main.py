@@ -5,7 +5,7 @@ Entry point for the drp CLI.
 """
 
 from cli.commands import _COMMANDS
-from cli.config import get as get_config
+from cli.config import get as get_config, get_secret
 from cli.defaults import server as default_server
 from rich import print
 
@@ -94,7 +94,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     server = get_config("server")
-    if cmd != "login" and not server:
+    token = get_secret("token")
+    if cmd != "login" and not (server and token):
         print("[yellow]No server configured.[/yellow] Run:")
         print(f"  [bold]drp login -s {default_server}[/bold]                       — anonymous session")
         print(f"  [bold]drp login -s {default_server} -u user -p pass -d 30d[/bold] — authenticated session")
