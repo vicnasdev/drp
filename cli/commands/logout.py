@@ -6,12 +6,21 @@ from rich import print
 from . import Command, register
 from cli.config import del_secret, get as get_config, get_secret
 
+cmd = register(Command(
+    name="logout",
+    description="Revoke the current bearer token on the server and clear local config.",
+))
 
-def run(_):
+
+def run(args):
     server = get_config("server")
     token = get_secret("token")
 
     if token and server:
+        data = requests.get(f"https://{server}/api/v1/status/", headers={"Authorization": f"Token {token}"}).json()
+        if data.get("plan") == "anonymous":
+            print("[yellow]Warning: your guest account and all its data will be permanently deleted.[/yellow]")
+
         try:
             requests.post(f"https://{server}/api/v1/auth/logout/", headers={"Authorization": f"Token {token}"})
         except Exception:
@@ -19,12 +28,6 @@ def run(_):
 
     del_secret("token")
     print("[green]✓[/green] Logged out.")
-    
-    
-cmd = register(Command(
-    name="logout",
-    description="Revoke the current bearer token on the server and clear local config.",
-    run=run
-))
 
 
+cmd.run = run
