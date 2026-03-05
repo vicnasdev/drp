@@ -29,7 +29,7 @@ def set_secret(name: str, value: str):
     keyring.set_password("drp", name, value)
     
 def get_secret(name: str) -> str:
-    keyring.get_password("drp", name)
+    return keyring.get_password("drp", name)
 
 def del_secret(name: str):
     keyring.delete_password("drp", name)
