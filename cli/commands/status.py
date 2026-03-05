@@ -24,7 +24,6 @@ def run(args: dict[str, str]):
     data = resp.json()
     print(f"[bold]{data['username']}[/bold] — {data['plan']}")
     print(f"Storage: {data['storage_used_gb']} GB / {data['storage_limit_gb']} GB")
-    print(f"Files: {data['file_count']}")
 
 cmd = register(Command(
     name="status",
