@@ -80,7 +80,6 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.ads",
                 "core.context_processors.domain",
-                "core.context_processors.helpbot",
                 "core.context_processors.plans",
             ],
         },
