@@ -61,7 +61,7 @@ class Command:
     aliases: tuple[str, ...] = ()
     """Alternative names that resolve to this command."""
     
-    run: object = lambda *args: None
+    run: object = None
 
 
 # ── Registry ──────────────────────────────────────────────────────────────────
