@@ -17,8 +17,6 @@ from __future__ import annotations
 
 import hashlib
 import platform
-import sys
-import threading
 import traceback
 from typing import Any
 
@@ -84,28 +82,10 @@ def _post(payload: dict[str, Any], url: str) -> None:
         pass
 
 
-def report(
-    command: str,
-    exc: BaseException,
-    *,
-    url: str,
-    _sync: bool = False,
-) -> str:
-    """
-    Report *exc* to the drp server.
-
-    Returns the fingerprint so callers can reference it if needed.
-    ``_sync=True`` is only used by tests to avoid thread races.
-    """
+def report(command, exc, *, url, _sync=False):
     payload = _build_payload(command, exc)
     fp = payload["fingerprint"]
-
-    if _sync:
-        _post(payload, url)
-    else:
-        t = threading.Thread(target=_post, args=(payload, url), daemon=True)
-        t.start()
-
+    _post(payload, url)  # always sync, crash path can afford to wait
     return fp
 
 
