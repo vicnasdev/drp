@@ -6,11 +6,6 @@ from rich import print
 from . import Command, register
 from cli.config import del_secret, get as get_config, get_secret
 
-cmd = register(Command(
-    name="logout",
-    description="Revoke the current bearer token on the server and clear local config.",
-))
-
 
 def run(args):
     server = get_config("server")
@@ -29,5 +24,8 @@ def run(args):
     del_secret("token")
     print("[green]✓[/green] Logged out.")
 
-
-cmd.run = run
+cmd = register(Command(
+    name="logout",
+    description="Revoke the current bearer token on the server and clear local config.",
+    run=run
+))

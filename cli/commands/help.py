@@ -5,14 +5,6 @@ from rich.table import Table
 
 from . import Arg, Command, register, _COMMANDS
 
-cmd = register(Command(
-    name="help",
-    description="List all commands or show help for a specific command.",
-    args=(
-        Arg("command", "Command to describe"),
-    )
-))
-
 
 def run(args):
     target = args.get("command")
@@ -46,4 +38,11 @@ def run(args):
     print(table)
 
 
-cmd.run = run
+cmd = register(Command(
+    name="help",
+    description="List all commands or show help for a specific command.",
+    args=(
+        Arg("command", "Command to describe"),
+    ),
+    run=run
+))
