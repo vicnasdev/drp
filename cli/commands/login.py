@@ -8,14 +8,18 @@ from cli.config import set as set_config, set_secret, get_secret
 from cli.defaults import server
 from cli.utils import spin
 
+def parse_server(value: str) -> str:
+    from urllib.parse import urlparse
+    if "://" not in value:
+        value = f"https://{value}"
+    return urlparse(value).netloc
+
 def run(args: dict[str, str]):
     if get_secret("token"):
         print("Please logout first")
         return 1
-    
-    from urllib.parse import urlparse
-        
-    args["server"] = urlparse(args["server"]).netloc
+            
+    args["server"] = parse_server(server)
     set_config("server", args["server"])
 
     if args.get("token"):
