@@ -1,6 +1,6 @@
 [tool.pytest.ini_options]
 # ── Test layout ────────────────────────────────────────────────────────────────
-#
+# 
 #   tests/unit/         Fast unit tests — no server, no real DB.
 #                       Run with: pytest tests/unit/
 #
