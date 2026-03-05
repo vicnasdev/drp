@@ -1,2 +1,2 @@
 
-server = "drp.fyi"
+server = "drp.vicnas.me"

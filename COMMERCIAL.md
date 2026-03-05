@@ -152,7 +152,7 @@ Licensor reserves the right to:
 
 **Dispute Resolution:** Any disputes shall be resolved through good-faith negotiation; if unresolved after 30 days, either party may pursue legal remedies.
 
-**Contact:** For license inquiries, support issues, or disputes, contact: licencing@drp.fyi
+**Contact:** For license inquiries, support issues, or disputes, contact: licencing@drp.vicnas.me
 
 ---
 

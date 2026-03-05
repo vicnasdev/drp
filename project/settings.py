@@ -15,7 +15,7 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
 DOMAIN = os.environ.get("DOMAIN")
 if not DOMAIN:
     # Sensible defaults per environment
-    DOMAIN = {"prod": "drp.fyi", "dev": "dev.drp.fyi"}.get(ENVIRONMENT)
+    DOMAIN = {"prod": "drp.vicnas.me", "dev": "dev.drp.vicnas.me"}.get(ENVIRONMENT)
 if DOMAIN:
     ALLOWED_HOSTS        = [DOMAIN]
     CSRF_TRUSTED_ORIGINS = [f"https://{DOMAIN}", f"http://{DOMAIN}"]
@@ -153,7 +153,7 @@ else:
 # ── Email ─────────────────────────────────────────────────────────────────────
 RESEND_API_KEY       = os.environ.get("RESEND_API_KEY", "")
 TEST_RECIPIENT_EMAIL = os.environ.get("TEST_RECIPIENT_EMAIL", "")
-DEFAULT_FROM_EMAIL   = os.environ.get("DEFAULT_FROM_EMAIL", "drp <noreply@drp.fyi>")
+DEFAULT_FROM_EMAIL   = os.environ.get("DEFAULT_FROM_EMAIL", "drp <noreply@drp.vicnas.me>")
 EMAIL_BACKEND        = "django.core.mail.backends.console.EmailBackend"
 
 # ── Lemon Squeezy ─────────────────────────────────────────────────────────────
