@@ -9,7 +9,6 @@ from cli.config import get as get_config, get_secret
 from cli.defaults import server as default_server
 from rich import print
 
-
 import sys
 import shlex
 
@@ -72,7 +71,13 @@ def validate_args(parsed: dict, cmd_func) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
 
-    cmd = args[0] if args else "shell"
+    cmd = args[0] if args else "help"
+
+    # drp <command> --help/-h  →  drp help <command>
+    if len(args) > 1 and args[1] in ("--help", "-h"):
+        _COMMANDS["help"].run({"command": cmd})
+        return 0
+
     cmd_func = _COMMANDS.get(cmd)
 
     if not cmd_func:
@@ -95,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
 
     server = get_config("server")
     token = get_secret("token")
-    if cmd != "login" and not (server and token):
+    if cmd not in ("login", "help") and not (server and token):
         print("[yellow]No server configured.[/yellow] Run:")
         print(f"  [bold]drp login -s {default_server}[/bold]                       — anonymous session")
         print(f"  [bold]drp login -s {default_server} -u user -p pass -d 30d[/bold] — authenticated session")
@@ -105,12 +110,8 @@ def main(argv: list[str] | None = None) -> int:
         cmd_func.run(parsed)
     except Exception as exc:
         from cli.crash.reporter import report
-        try:
-            crash_url = f"https://{server}/api/v1/crash/"
-            fp = report(cmd, exc, url=crash_url)
-            print(f"[red]✗ Unexpected error.[/red] Reported as [bold]{fp}[/bold]")
-        except Exception:
-            print(f"[red]✗ Unexpected error and crash report failed:[/red]")
+        crash_url = f"https://{server}/api/v1/crash/"
+        report(cmd, exc, url=crash_url)
         return 1
 
     return 0

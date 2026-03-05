@@ -11,7 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 
 from api.models import CrashReport
-from core.models import create_guest_user, create_token
+from core.models import create_guest_user, create_token, validate_token
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +19,15 @@ _DEFAULT_TOKEN_DAYS = 30
 
 
 def _parse_duration(value: str | None) -> timedelta:
-    """Parse a duration string like '7d', '2h', '30m'. Falls back to default."""
     units = {"d": "days", "h": "hours", "m": "minutes"}
     if value and value[-1] in units and value[:-1].isdigit():
         return timedelta(**{units[value[-1]]: int(value[:-1])})
     return timedelta(days=_DEFAULT_TOKEN_DAYS)
+
+
+def _auth(request) -> User | None:
+    key = request.headers.get("Authorization", "").removeprefix("Token ").strip()
+    return validate_token(key) if key else None
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -31,7 +35,6 @@ def _parse_duration(value: str | None) -> timedelta:
 @csrf_exempt
 @require_POST
 def guest_login(request):
-    """POST /api/v1/auth/guest/ — create a guest user and return a token."""
     token = create_guest_user()
     return JsonResponse({"token": token})
 
@@ -39,7 +42,6 @@ def guest_login(request):
 @csrf_exempt
 @require_POST
 def login_view(request):
-    """POST /api/v1/auth/login/ — authenticate and return a token."""
     try:
         body = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
@@ -64,6 +66,21 @@ def login_view(request):
 
     token = create_token(user, _parse_duration(body.get("duration")))
     return JsonResponse({"token": token.key})
+
+
+# ── Status ────────────────────────────────────────────────────────────────────
+
+@require_GET
+def status(request):
+    user = _auth(request)
+    if not user:
+        return JsonResponse({"error": "unauthorized"}, status=401)
+    profile = user.profile
+    return JsonResponse({
+        "username": user.username,
+        "plan": profile.plan,
+        "storage_used": profile.storage_used,
+    })
 
 
 # ── Ping ──────────────────────────────────────────────────────────────────────
