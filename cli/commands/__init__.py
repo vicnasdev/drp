@@ -11,9 +11,7 @@ The shell, help page, and help bot all read from this registry.
         print(cmd.name, cmd.description)
 """
 
-from __future__ import annotations
-
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -60,11 +58,10 @@ class Command:
     args: tuple[Arg, ...] = ()
     """Positional arguments and flags, in display order."""
 
-    shell_only: bool = False
-    """If ``True``, the command is only available inside the REPL shell."""
-
     aliases: tuple[str, ...] = ()
     """Alternative names that resolve to this command."""
+    
+    run: object = lambda *args: None
 
 
 # ── Registry ──────────────────────────────────────────────────────────────────
@@ -80,23 +77,13 @@ def register(cmd: Command) -> Command:
     return cmd
 
 
-def _ensure_loaded() -> None:
-    """Import every sibling module so ``register()`` calls execute."""
-    if _COMMANDS:
-        return
-    import importlib
-    import pkgutil
-    for _finder, _name, _ispkg in pkgutil.iter_modules(__path__):
-        importlib.import_module(f"{__name__}.{_name}")
-
-
-def all_commands() -> dict[str, Command]:
-    """Return ``{name: Command}`` for every registered command (no aliases)."""
-    _ensure_loaded()
-    return {n: c for n, c in _COMMANDS.items() if c.name == n}
-
-
 def get_command(name: str) -> Command | None:
     """Look up a command by name or alias."""
-    _ensure_loaded()
     return _COMMANDS.get(name)
+
+
+# Load commands
+import importlib, pkgutil, cli.commands
+
+for _, module_name, _ in pkgutil.iter_modules(cli.commands.__path__):
+    importlib.import_module(f"cli.commands.{module_name}")

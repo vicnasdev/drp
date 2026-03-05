@@ -9,8 +9,5 @@ cmd = register(Command(
         Arg("ref",
             "Key, filename, or folder path to delete.",
             required=True),
-        Arg("--recursive",
-            "Required to delete a non-empty folder.",
-            type="bool"),
     ),
 ))

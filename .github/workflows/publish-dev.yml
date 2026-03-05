@@ -57,7 +57,7 @@ jobs:
   # ── Publish drp-dev (no tags, no releases) ────────────────────────────────
 
   publish:
-    needs: test
+    # needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -6,3 +6,9 @@ cmd = register(Command(
     name="logout",
     description="Revoke the current bearer token on the server and clear local config.",
 ))
+
+def run(_):
+    from cli.config import del_secret
+    del_secret("token")
+    
+cmd.run = run

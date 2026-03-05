@@ -7,11 +7,8 @@ cmd = register(Command(
     description="List files and folders.",
     args=(
         Arg("path",
-            "Drive path to list. Defaults to current directory.",
+            "Drive path to list. Defaults to root.",
             default="."),
-        Arg("--export",
-            "Output as JSON for scripting.",
-            type="bool"),
         Arg("--sort",
             "Sort by field.",
             choices=("name", "size", "exp")),

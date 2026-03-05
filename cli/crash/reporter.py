@@ -64,8 +64,6 @@ def _build_payload(command: str, exc: BaseException) -> dict[str, Any]:
 
 # ── Sending ───────────────────────────────────────────────────────────────────
 
-_DEFAULT_CRASH_URL = "https://drp.fyi/api/v1/crash/"
-
 
 def _post(payload: dict[str, Any], url: str) -> None:
     """Fire-and-forget POST. Failures are silently swallowed."""
@@ -90,7 +88,7 @@ def report(
     command: str,
     exc: BaseException,
     *,
-    url: str = _DEFAULT_CRASH_URL,
+    url: str,
     _sync: bool = False,
 ) -> str:
     """

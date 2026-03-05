@@ -9,7 +9,7 @@ cmd = register(Command(
         Arg("target",
             "Local file path, glob (\"*.py\"), - for stdin, or literal text with --text.",
             required=True, type="path"),
-        Arg("-k/--key",
+        Arg("--key",
             "Custom key. Format: [a-zA-Z0-9_-]{1,64}. Rejected if taken."),
         Arg("--expires",
             "Key expiry: 7d, 24h, 30m. Capped at plan max. Defaults to plan max.",
@@ -31,9 +31,6 @@ cmd = register(Command(
             repeatable=True),
         Arg("--text",
             "Treat target as literal text content, not a filename.",
-            type="bool"),
-        Arg("--fork",
-            "Fork the result immediately after uploading.",
             type="bool"),
     ),
 ))
