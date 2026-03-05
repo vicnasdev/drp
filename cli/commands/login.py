@@ -15,8 +15,8 @@ def run(args: dict[str, str]):
     
     from urllib.parse import urlparse
         
-    server = args["server"]
-    set_config("server", urlparse(server).netloc)
+    args["server"] = urlparse(args["server"]).netloc
+    set_config("server", args["server"])
 
     if args.get("token"):
         set_secret("token", args["token"])
