@@ -12,8 +12,11 @@ def run(args: dict[str, str]):
     if get_secret("token"):
         print("Please logout first")
         return 1
+    
+    from urllib.parse import urlparse
         
-    set_config("server", args["server"])
+    server = args["server"]
+    set_config("server", urlparse(server).netloc)
 
     if args.get("token"):
         set_secret("token", args["token"])
