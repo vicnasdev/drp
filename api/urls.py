@@ -1,6 +1,7 @@
 from django.urls import path
 
 from api import views
+from core.views import logout_view
 
 app_name = "api"
 
@@ -10,4 +11,5 @@ urlpatterns = [
     path("auth/guest/", views.guest_login, name="guest_login"),
     path("auth/login/", views.login_view, name="login"),
     path("auth/status/", views.status, name="status"),
+    path("auth/logout", logout_view, name="logout")
 ]

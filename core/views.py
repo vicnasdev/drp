@@ -1,5 +1,4 @@
 import logging
-import secrets
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
@@ -110,7 +109,7 @@ def logout_view(request):
     user = request.user
     logout(request)
     if is_anonymous(user):
-        delete_account(user)
+        user.delete()
     return redirect("/")
 
 
