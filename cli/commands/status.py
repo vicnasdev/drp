@@ -15,7 +15,7 @@ def run(args: dict[str, str]):
         print("[yellow]Not logged in.[/yellow] Run [bold]drp login[/bold].")
         return
 
-    resp = requests.get(f"https://{server}/api/v1/status/", headers={"Authorization": f"Token {token}"})
+    resp = requests.get(f"https://{server}/api/v1/auth/status/", headers={"Authorization": f"Token {token}"})
     if resp.status_code != 200:
         print("[red]✗[/red] Could not fetch status.")
         return
