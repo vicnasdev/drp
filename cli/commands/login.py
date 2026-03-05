@@ -5,7 +5,6 @@ from rich import print
 
 from . import Arg, Command, register
 from cli.config import set as set_config, set_secret, get_secret
-from cli.defaults import server
 from cli.utils import spin
 
 def parse_server(value: str) -> str:
@@ -19,7 +18,7 @@ def run(args: dict[str, str]):
         print("Please logout first")
         return 1
             
-    args["server"] = parse_server(server)
+    args["server"] = parse_server(args["server"])
     set_config("server", args["server"])
 
     if args.get("token"):
@@ -50,7 +49,7 @@ cmd = register(Command(
     name="login",
     description="Authenticate.",
     args=(
-        Arg("-s/--server", "drp server", required=True, default=server),
+        Arg("-s/--server", "drp server", required=True),
         Arg("-t/--token", "Authentication token"),
         Arg("username", "Username or email"),
         Arg("password", "Password"),
